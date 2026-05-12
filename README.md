@@ -40,7 +40,11 @@ The platform is designed to simulate modern:
 ---
 
 #  Dashboard Features
+# 📊 Dashboard Screenshots
 
+## Main Dashboard
+
+![Dashboard](screenshots/dashboard.png)
 ## Executive Security Dashboard
 
 Provides:
