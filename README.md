@@ -2,13 +2,21 @@
 
 ### AI-Powered Cloud Exposure Management Platform
 
+![Python](https://img.shields.io/badge/Python-3.13-blue)
+![AWS](https://img.shields.io/badge/AWS-Cloud-orange)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
+![OpenAI](https://img.shields.io/badge/OpenAI-AI-green)
+![CAASM](https://img.shields.io/badge/CAASM-Cyber%20Asset%20Visibility-purple)
+
+![Dashboard](screenshots/dashboard.png)
+
 DGS Sentinel AI is an AI-powered cloud exposure management platform designed to provide real-time AWS asset visibility, attack surface analysis, cloud security analytics, and AI-generated remediation guidance aligned with modern CAASM/CSPM concepts.
 
 Built using AWS, Python, Streamlit, Plotly, OpenAI APIs, and Boto3.
 
 ---
 
-# Project Overview
+# 🚀 Project Overview
 
 DGS Sentinel AI automates cloud security visibility and exposure analysis by integrating AWS infrastructure discovery, IAM visibility, risk analytics, and AI-driven security insights into a unified dashboard platform.
 
@@ -22,7 +30,15 @@ The platform is designed to simulate modern:
 
 ---
 
-#  Platform Capabilities
+# 🔥 Why This Project Matters
+
+Modern cloud environments often suffer from visibility gaps across assets, identities, internet exposure conditions, and security configurations.
+
+DGS Sentinel AI demonstrates how AI-driven cloud exposure management platforms can improve visibility, automate risk analysis, and support modern cloud security operations aligned with CAASM and CSPM methodologies.
+
+---
+
+# 🧠 Platform Capabilities
 
 * AWS EC2 Asset Discovery
 * IAM Visibility & Identity Analytics
@@ -39,12 +55,8 @@ The platform is designed to simulate modern:
 
 ---
 
-#  Dashboard Features
-# 📊 Dashboard Screenshots
+# 📊 Dashboard Features
 
-## Main Dashboard
-
-![Dashboard](screenshots/dashboard.png)
 ## Executive Security Dashboard
 
 Provides:
@@ -80,7 +92,7 @@ OpenAI-powered analysis engine provides:
 
 ---
 
-# Platform Architecture
+# 🏗️ Platform Architecture
 
 ```text
 AWS EC2 / IAM
@@ -96,135 +108,3 @@ Python Risk Engine
         ├── Streamlit Dashboard
         │
         └── OpenAI Risk Analysis
-```
-
----
-
-# Tech Stack
-
-| Technology | Purpose                              |
-| ---------- | ------------------------------------ |
-| Python     | Core application logic               |
-| AWS EC2    | Cloud infrastructure visibility      |
-| AWS IAM    | Identity visibility                  |
-| Boto3      | AWS API integration                  |
-| Streamlit  | Dashboard framework                  |
-| Plotly     | Interactive analytics visualizations |
-| OpenAI API | AI-generated risk analysis           |
-| Pandas     | Data processing                      |
-| GitHub     | Version control & portfolio          |
-
----
-
-#  Dashboard Preview
-
-## Main Dashboard
-
-![Dashboard](screenshots/dashboard.png)
-
----
-
-## Risk Analytics
-
-![Risk Analysis](screenshots/risk-analysis.png)
-
----
-
-## IAM Visibility
-
-![IAM Visibility](screenshots/iam-visibility.png)
-
----
-
-# Risk Detection Logic
-
-DGS Sentinel AI evaluates:
-
-* Public IP exposure
-* Internet-accessible security groups
-* Open SSH/RDP ports
-* Cloud attack surface visibility
-* IAM exposure conditions
-* Asset risk severity
-
-### Risk Classification
-
-| Risk Level | Description                            |
-| ---------- | -------------------------------------- |
-| Critical   | Internet exposure with dangerous ports |
-| High       | Public-facing infrastructure           |
-| Medium     | Moderate exposure conditions           |
-| Low        | Private/internal assets                |
-
----
-
-#  Security Use Cases
-
-* Cloud Exposure Management
-* CAASM/CSPM Analytics
-* AWS Asset Intelligence
-* Executive Security Reporting
-* Cloud Security Engineering
-* Attack Surface Management
-* Security Operations Analytics
-* Compliance Visibility
-
----
-
-#  Future Roadmap
-
-Planned enhancements include:
-
-* S3 exposure scanning
-* Multi-account AWS support
-* CVE vulnerability enrichment
-* Compliance mapping (NIST/FedRAMP)
-* AI security chatbot
-* Real-time alerting
-* Automated remediation workflows
-* Graph analytics & attack pathing
-
----
-
-#  How To Run
-
-## Clone Repository
-
-```bash
-git clone https://github.com/dlgul71/ai-cloud-risk-assistant.git
-```
-
----
-
-## Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Run Application
-
-```bash
-streamlit run app.py
-```
-
----
-
-#  Author
-
-David L. Gulledge
-Cybersecurity Consultant | CAASM | Cloud Security Engineer
-
-LinkedIn:
-https://www.linkedin.com/in/david-l-gulledge-8b5a328
-
-GitHub:
-https://github.com/dlgul71
-
----
-
-#  Disclaimer
-
-This project is intended for educational, research, portfolio, and authorized security assessment purposes only.
