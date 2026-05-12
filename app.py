@@ -1,155 +1,137 @@
+# =========================================================
+# DGS SENTINEL AI
+# AI-Powered Cloud Exposure Management Platform
+# =========================================================
+
+# -----------------------------
+# IMPORT REQUIRED LIBRARIES
+# -----------------------------
+
 import os
+from datetime import datetime
+
 import boto3
 import pandas as pd
-import streamlit as st
 import plotly.express as px
+import streamlit as st
+
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# LOAD ENV VARIABLES
+
+# -----------------------------
+# LOAD ENVIRONMENT VARIABLES
+# -----------------------------
+
 load_dotenv()
 
+# AWS Region
 region = os.getenv("AWS_REGION", "us-east-1")
+
+# OpenAI API Key
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# AWS CLIENTS
-ec2 = boto3.client("ec2", region_name=region)
+
+# -----------------------------
+# INITIALIZE AWS CLIENTS
+# -----------------------------
+
+# EC2 Client
+ec2 = boto3.client(
+    "ec2",
+    region_name=region
+)
+
+# IAM Client
 iam = boto3.client("iam")
 
-# OPENAI CLIENT
-client = OpenAI(api_key=openai_key)
 
-# PAGE CONFIG
-st.set_page_config(
-    page_title="DGS Sentinel AI",
-    page_icon="🛡️",
-    layout="wide"
+# -----------------------------
+# INITIALIZE OPENAI CLIENT
+# -----------------------------
+
+client = OpenAI(
+    api_key=openai_key
 )
 
-# CUSTOM CSS
-st.markdown("""
-<style>
 
-.stApp {
-    background-color: #0b1020;
-    color: white;
-}
+# =========================================================
+# FUNCTION:
+# GET EC2 INSTANCES + RISK ANALYSIS
+# =========================================================
 
-h1, h2, h3, h4 {
-    color: white;
-}
-
-div[data-testid="metric-container"] {
-    background: linear-gradient(
-        135deg,
-        #111827,
-        #1f2937
-    );
-    border: 1px solid #374151;
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0 0 15px rgba(0,0,0,0.4);
-}
-
-div.stButton > button {
-    background: linear-gradient(
-        90deg,
-        #2563eb,
-        #7c3aed
-    );
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 12px 24px;
-    font-weight: bold;
-}
-
-div.stButton > button:hover {
-    background: linear-gradient(
-        90deg,
-        #1d4ed8,
-        #6d28d9
-    );
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# SIDEBAR
-with st.sidebar:
-
-    st.title("🛡️ DGS SENTINEL AI")
-
-    st.markdown("---")
-
-    st.write("### Navigation")
-
-    st.write("• Dashboard")
-    st.write("• EC2 Assets")
-    st.write("• IAM Visibility")
-    st.write("• Risk Analysis")
-    st.write("• Reports")
-
-    st.markdown("---")
-
-    st.caption(
-        "AI-Powered Cloud Exposure Management"
-    )
-
-# TITLE
-st.title("🛡️ DGS SENTINEL AI")
-
-st.caption(
-    "AI-Powered Cloud Exposure Management Platform"
-)
-
-# FILTER
-risk_filter = st.sidebar.selectbox(
-    "Filter by Risk",
-    ["All", "Critical", "High", "Medium", "Low"]
-)
-
-# GET EC2 INSTANCES
 def get_ec2_instances():
 
+    # Pull all EC2 instances
     response = ec2.describe_instances()
 
+    # Store all processed assets
     instances = []
 
+    # Loop through reservations
     for reservation in response["Reservations"]:
 
+        # Loop through each instance
         for instance in reservation["Instances"]:
 
+            # Default risk settings
             risk = "Low"
             risk_reason = "Private/internal asset"
 
+            # Store dangerous ports
             dangerous_ports = []
+
+            # Store open ports
             open_ports = []
 
+            # ---------------------------------
             # CHECK SECURITY GROUPS
-            for sg in instance.get("SecurityGroups", []):
+            # ---------------------------------
+
+            for sg in instance.get(
+                "SecurityGroups",
+                []
+            ):
 
                 sg_id = sg["GroupId"]
 
+                # Pull SG details
                 sg_details = ec2.describe_security_groups(
                     GroupIds=[sg_id]
                 )
 
+                # Loop through SG rules
                 for group in sg_details["SecurityGroups"]:
 
-                    for permission in group.get("IpPermissions", []):
+                    for permission in group.get(
+                        "IpPermissions",
+                        []
+                    ):
 
-                        from_port = permission.get("FromPort")
+                        from_port = permission.get(
+                            "FromPort"
+                        )
 
+                        # Save open ports
                         if from_port:
-                            open_ports.append(str(from_port))
+                            open_ports.append(
+                                str(from_port)
+                            )
 
-                        for ip_range in permission.get("IpRanges", []):
+                        # Check exposed CIDRs
+                        for ip_range in permission.get(
+                            "IpRanges",
+                            []
+                        ):
 
-                            cidr = ip_range.get("CidrIp")
+                            cidr = ip_range.get(
+                                "CidrIp"
+                            )
 
+                            # Public internet exposure
                             if cidr == "0.0.0.0/0":
 
+                                # SSH Exposure
                                 if from_port == 22:
 
                                     dangerous_ports.append(
@@ -162,6 +144,7 @@ def get_ec2_instances():
                                         "SSH exposed to internet"
                                     )
 
+                                # RDP Exposure
                                 elif from_port == 3389:
 
                                     dangerous_ports.append(
@@ -174,6 +157,10 @@ def get_ec2_instances():
                                         "RDP exposed to internet"
                                     )
 
+            # ---------------------------------
+            # CHECK PUBLIC IP EXPOSURE
+            # ---------------------------------
+
             if (
                 instance.get("PublicIpAddress")
                 and risk != "Critical"
@@ -185,13 +172,21 @@ def get_ec2_instances():
                     "Public IP exposed to internet"
                 )
 
+            # ---------------------------------
+            # STORE INSTANCE DATA
+            # ---------------------------------
+
             instances.append({
 
-                "InstanceId": instance.get("InstanceId"),
+                "InstanceId": instance.get(
+                    "InstanceId"
+                ),
 
                 "State": instance["State"]["Name"],
 
-                "InstanceType": instance.get("InstanceType"),
+                "InstanceType": instance.get(
+                    "InstanceType"
+                ),
 
                 "PublicIp": instance.get(
                     "PublicIpAddress",
@@ -223,7 +218,9 @@ def get_ec2_instances():
                     ]
                 ),
 
-                "OpenPorts": ", ".join(open_ports),
+                "OpenPorts": ", ".join(
+                    open_ports
+                ),
 
                 "Risk": risk,
 
@@ -232,11 +229,17 @@ def get_ec2_instances():
                 "DangerousPorts": ", ".join(
                     dangerous_ports
                 )
+
             })
 
     return instances
 
+
+# =========================================================
+# FUNCTION:
 # GET IAM USERS
+# =========================================================
+
 def get_iam_users():
 
     response = iam.list_users()
@@ -247,35 +250,48 @@ def get_iam_users():
 
         users.append({
 
-            "UserName": user.get("UserName"),
+            "UserName": user.get(
+                "UserName"
+            ),
 
-            "UserId": user.get("UserId"),
+            "UserId": user.get(
+                "UserId"
+            ),
 
             "CreateDate": str(
                 user.get("CreateDate")
             ),
 
-            "Arn": user.get("Arn")
+            "Arn": user.get(
+                "Arn"
+            )
+
         })
 
     return users
 
-# AI ANALYSIS
+
+# =========================================================
+# FUNCTION:
+# AI SECURITY ANALYSIS
+# =========================================================
+
 def analyze_risk(instances):
 
     prompt = f"""
-    You are a cloud security analyst.
+You are a cloud security analyst.
 
-    Review these AWS EC2 assets and identify:
-    1. Executive summary
-    2. Security risks
-    3. Cloud exposure concerns
-    4. Compliance concerns
-    5. Remediation steps
+Review these AWS EC2 assets and identify:
 
-    Assets:
-    {instances}
-    """
+1. Executive summary
+2. Security risks
+3. Cloud exposure concerns
+4. Compliance concerns
+5. Remediation steps
+
+Assets:
+{instances}
+"""
 
     response = client.chat.completions.create(
 
@@ -285,39 +301,221 @@ def analyze_risk(instances):
 
             {
                 "role": "system",
-                "content":
-                "You are an AWS cloud security expert."
+
+                "content": (
+                    "You are an AWS cloud security and CAASM expert."
+                )
             },
 
             {
                 "role": "user",
+
                 "content": prompt
             }
+
         ]
+
     )
 
     return response.choices[0].message.content
 
-# MAIN BUTTON
+
+# =========================================================
+# STREAMLIT PAGE CONFIG
+# =========================================================
+
+st.set_page_config(
+
+    page_title="DGS Sentinel AI",
+
+    page_icon="🛡️",
+
+    layout="wide"
+
+)
+
+
+# =========================================================
+# CUSTOM CSS STYLING
+# =========================================================
+
+st.markdown(
+    """
+    <style>
+
+    .stApp {
+        background-color: #0b1020;
+        color: white;
+    }
+
+    h1, h2, h3 {
+        color: white;
+    }
+
+    div[data-testid="metric-container"] {
+        background: linear-gradient(
+            135deg,
+            #111827,
+            #1f2937
+        );
+
+        border: 1px solid #374151;
+
+        padding: 20px;
+
+        border-radius: 15px;
+
+        box-shadow: 0 0 15px rgba(0,0,0,0.4);
+    }
+
+    div.stButton > button {
+
+        background: linear-gradient(
+            90deg,
+            #2563eb,
+            #7c3aed
+        );
+
+        color: white;
+
+        border: none;
+
+        border-radius: 10px;
+
+        padding: 12px 24px;
+
+        font-weight: bold;
+    }
+
+    div.stButton > button:hover {
+
+        background: linear-gradient(
+            90deg,
+            #1d4ed8,
+            #6d28d9
+        );
+    }
+
+    </style>
+    """,
+
+    unsafe_allow_html=True
+
+)
+
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+with st.sidebar:
+
+    st.title("🛡️ DGS Sentinel AI")
+
+    st.caption(
+        "AI-Powered Cloud Exposure Management"
+    )
+
+    st.markdown("---")
+
+    st.write("### Navigation")
+
+    st.write("• Overview")
+    st.write("• EC2 Assets")
+    st.write("• IAM Visibility")
+    st.write("• Open Ports")
+    st.write("• AI Risk Analysis")
+    st.write("• Reports")
+
+    st.markdown("---")
+
+    risk_filter = st.selectbox(
+
+        "Filter by Risk",
+
+        [
+            "All",
+            "Critical",
+            "High",
+            "Medium",
+            "Low"
+        ]
+
+    )
+
+    st.markdown("---")
+
+    st.write("**David L. Gulledge**")
+
+    st.caption(
+        "Cybersecurity Consultant | Cloud Security Engineer"
+    )
+
+
+# =========================================================
+# MAIN TITLE
+# =========================================================
+
+st.title("🛡️ DGS Sentinel AI")
+
+st.caption(
+    "AI-Powered Cloud Security Risk Assistant"
+)
+
+st.caption(
+    f"Last Scan: {datetime.now().strftime('%B %d, %Y %I:%M %p')}"
+)
+
+
+# =========================================================
+# MAIN SCAN BUTTON
+# =========================================================
+
 if st.button(
     "Scan AWS Environment",
     key="main_scan_button"
 ):
 
+    # Pull AWS assets
     instances = get_ec2_instances()
 
+    # Check if assets exist
     if instances:
 
+        # Convert to DataFrame
         df = pd.DataFrame(instances)
 
-        # FILTER
+        # Apply risk filter
         if risk_filter != "All":
 
             df = df[
                 df["Risk"] == risk_filter
             ]
 
-        # OVERALL RISK
+        # =================================================
+        # METRICS
+        # =================================================
+
+        total_assets = len(df)
+
+        high_risk_assets = len(
+            df[df["Risk"].isin(
+                ["High", "Critical"]
+            )]
+        )
+
+        public_assets = len(
+            df[df["PublicIp"] != "None"]
+        )
+
+        secure_assets = len(
+            df[df["Risk"] == "Low"]
+        )
+
+        # =================================================
+        # ENVIRONMENT RISK BANNER
+        # =================================================
+
         if "Critical" in df["Risk"].values:
 
             st.error(
@@ -336,22 +534,9 @@ if st.button(
                 "✅ OVERALL ENVIRONMENT RISK: LOW"
             )
 
-        # METRICS
-        total_assets = len(df)
-
-        high_risk_assets = len(
-            df[df["Risk"].isin(
-                ["High", "Critical"]
-            )]
-        )
-
-        public_assets = len(
-            df[df["PublicIp"] != "None"]
-        )
-
-        secure_assets = len(
-            df[df["Risk"] == "Low"]
-        )
+        # =================================================
+        # METRIC CARDS
+        # =================================================
 
         col1, col2, col3, col4 = st.columns(4)
 
@@ -375,7 +560,10 @@ if st.button(
             secure_assets
         )
 
+        # =================================================
         # PIE CHART
+        # =================================================
+
         st.subheader("Risk Distribution")
 
         risk_counts = (
@@ -390,21 +578,17 @@ if st.button(
         ]
 
         fig = px.pie(
-            risk_counts,
-            names="Risk",
-            values="Count",
-            hole=0.5
-        )
 
-        fig.update_traces(
-            marker=dict(
-                colors=[
-                    "#ef4444",
-                    "#f59e0b",
-                    "#10b981",
-                    "#3b82f6"
-                ]
-            )
+            risk_counts,
+
+            names="Risk",
+
+            values="Count",
+
+            hole=0.45,
+
+            title="Cloud Risk Severity Distribution"
+
         )
 
         st.plotly_chart(
@@ -412,51 +596,74 @@ if st.button(
             use_container_width=True
         )
 
-        # AI INSIGHT
-        st.info("""
-🤖 AI SECURITY INSIGHT
+        # =================================================
+        # EXPOSURE BAR CHART
+        # =================================================
 
-1 high-risk public-facing EC2 instance detected.
+        st.subheader(
+            "Asset Exposure Analytics"
+        )
 
-Primary exposure:
-• SSH Port 22 exposed to the internet
+        exposure_df = pd.DataFrame({
 
-Recommended actions:
-• Restrict inbound access to trusted IPs only
-• Use a bastion host or VPN
-• Enforce least privilege IAM
-• Review security group rules
-""")
+            "Category": [
+                "Public Assets",
+                "Private Assets"
+            ],
 
-        # EC2 TABLE
+            "Count": [
+                public_assets,
+                total_assets - public_assets
+            ]
+
+        })
+
+        exposure_fig = px.bar(
+
+            exposure_df,
+
+            x="Category",
+
+            y="Count",
+
+            title="Public vs Private Asset Exposure"
+
+        )
+
+        st.plotly_chart(
+            exposure_fig,
+            use_container_width=True
+        )
+
+        # =================================================
+        # EC2 ASSET TABLE
+        # =================================================
+
         st.subheader(
             "Discovered EC2 Assets"
         )
 
+        # Risk highlighting
         def highlight_risk(val):
 
             if val == "Critical":
                 return (
-                    "background-color: darkred;"
-                    "color: white;"
+                    "background-color: darkred; color: white;"
                 )
 
             elif val == "High":
                 return (
-                    "background-color: red;"
-                    "color: white;"
+                    "background-color: red; color: white;"
                 )
 
             elif val == "Medium":
                 return (
-                    "background-color: orange;"
-                    "color: black;"
+                    "background-color: orange; color: black;"
                 )
 
             elif val == "Low":
                 return (
-                    "background-color: green;"
-                    "color: white;"
+                    "background-color: green; color: white;"
                 )
 
             return ""
@@ -471,17 +678,28 @@ Recommended actions:
             use_container_width=True
         )
 
+        # =================================================
         # CSV EXPORT
+        # =================================================
+
         csv = df.to_csv(index=False)
 
         st.download_button(
+
             label="Download Security Findings CSV",
+
             data=csv,
+
             file_name="aws_security_findings.csv",
+
             mime="text/csv"
+
         )
 
-        # IAM TABLE
+        # =================================================
+        # IAM VISIBILITY
+        # =================================================
+
         st.subheader(
             "IAM User Visibility"
         )
@@ -490,7 +708,9 @@ Recommended actions:
 
         if iam_users:
 
-            iam_df = pd.DataFrame(iam_users)
+            iam_df = pd.DataFrame(
+                iam_users
+            )
 
             st.dataframe(
                 iam_df,
@@ -503,7 +723,25 @@ Recommended actions:
                 "No IAM users found."
             )
 
+        # =================================================
+        # AI INSIGHT CARD
+        # =================================================
+
+        st.info(
+            """
+🤖 AI SECURITY INSIGHT
+
+This dashboard analyzes AWS EC2 exposure,
+IAM visibility, open ports, security groups,
+and risk severity to support cloud exposure
+management and CAASM/CSPM workflows.
+"""
+        )
+
+        # =================================================
         # AI ANALYSIS
+        # =================================================
+
         st.subheader(
             "AI Security Risk Analysis"
         )
@@ -517,6 +755,42 @@ Recommended actions:
             )
 
         st.write(analysis)
+
+        # =================================================
+        # FINAL RISK MESSAGE
+        # =================================================
+
+        if "Critical" in df["Risk"].values:
+
+            st.error(
+                "Critical exposure detected. Immediate remediation recommended."
+            )
+
+        elif "High" in df["Risk"].values:
+
+            st.warning(
+                "High-risk assets detected. Review security groups and access controls."
+            )
+
+        else:
+
+            st.success(
+                "No critical cloud exposures detected."
+            )
+
+        # =================================================
+        # FOOTER
+        # =================================================
+
+        st.markdown("---")
+
+        st.markdown(
+            """
+**DGS Sentinel AI**  
+AI-Powered Cloud Exposure Management Platform  
+© 2026 Data Generated Solutions, LLC
+"""
+        )
 
     else:
 
