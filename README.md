@@ -8,7 +8,7 @@ Built using AWS, Python, Streamlit, Plotly, OpenAI APIs, and Boto3.
 
 ---
 
-# 🚀 Project Overview
+# Project Overview
 
 DGS Sentinel AI automates cloud security visibility and exposure analysis by integrating AWS infrastructure discovery, IAM visibility, risk analytics, and AI-driven security insights into a unified dashboard platform.
 
@@ -22,7 +22,7 @@ The platform is designed to simulate modern:
 
 ---
 
-# 🔥 Platform Capabilities
+#  Platform Capabilities
 
 * AWS EC2 Asset Discovery
 * IAM Visibility & Identity Analytics
@@ -39,7 +39,7 @@ The platform is designed to simulate modern:
 
 ---
 
-# 📊 Dashboard Features
+#  Dashboard Features
 
 ## Executive Security Dashboard
 
@@ -76,7 +76,7 @@ OpenAI-powered analysis engine provides:
 
 ---
 
-# 🏗️ Platform Architecture
+# Platform Architecture
 
 ```text
 AWS EC2 / IAM
@@ -96,7 +96,7 @@ Python Risk Engine
 
 ---
 
-# ⚙️ Tech Stack
+# Tech Stack
 
 | Technology | Purpose                              |
 | ---------- | ------------------------------------ |
@@ -112,7 +112,7 @@ Python Risk Engine
 
 ---
 
-# 📸 Dashboard Preview
+#  Dashboard Preview
 
 ## Main Dashboard
 
@@ -132,7 +132,7 @@ Python Risk Engine
 
 ---
 
-# 🧠 Risk Detection Logic
+# Risk Detection Logic
 
 DGS Sentinel AI evaluates:
 
@@ -154,7 +154,7 @@ DGS Sentinel AI evaluates:
 
 ---
 
-# 🔒 Security Use Cases
+#  Security Use Cases
 
 * Cloud Exposure Management
 * CAASM/CSPM Analytics
@@ -167,7 +167,7 @@ DGS Sentinel AI evaluates:
 
 ---
 
-# 🚀 Future Roadmap
+#  Future Roadmap
 
 Planned enhancements include:
 
@@ -182,7 +182,7 @@ Planned enhancements include:
 
 ---
 
-# ▶️ How To Run
+#  How To Run
 
 ## Clone Repository
 
@@ -208,7 +208,7 @@ streamlit run app.py
 
 ---
 
-# 👨‍💻 Author
+#  Author
 
 David L. Gulledge
 Cybersecurity Consultant | CAASM | Cloud Security Engineer
@@ -221,6 +221,6 @@ https://github.com/dlgul71
 
 ---
 
-# ⚠️ Disclaimer
+#  Disclaimer
 
 This project is intended for educational, research, portfolio, and authorized security assessment purposes only.
