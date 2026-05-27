@@ -1,17 +1,41 @@
-import os
+# ============================================================
+# DGS SENTINEL AI
+# AI-Powered CAASM / CSPM / CNAPP / SIEM Platform
+# Clean Stable Streamlit Application
+# ============================================================
+
 from datetime import datetime
+from io import BytesIO
 
-import boto3
 import pandas as pd
-import plotly.express as px
 import streamlit as st
-from dotenv import load_dotenv
-from openai import OpenAI
+import plotly.express as px
+import plotly.graph_objects as go
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from guardduty_ingest import get_guardduty_findings
+from org_ingest import get_organization_accounts
+
+try:
+    from db import get_all_findings
+except Exception:
+    get_all_findings = None
+
+try:
+    from scan_engine import run_scan
+except Exception:
+    run_scan = None
+
+try:
+    from streamlit_autorefresh import st_autorefresh
+    AUTOREFRESH_AVAILABLE = True
+except Exception:
+    AUTOREFRESH_AVAILABLE = False
 
 
-# ======================================================
+# ============================================================
 # PAGE CONFIG
-# ======================================================
+# ============================================================
 
 st.set_page_config(
     page_title="DGS Sentinel AI",
@@ -20,556 +44,733 @@ st.set_page_config(
 )
 
 
-# ======================================================
-# CUSTOM CSS
-# ======================================================
+# ============================================================
+# CONFIG
+# ============================================================
 
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background: linear-gradient(135deg, #07111f, #111827);
-        color: white;
-    }
+COMPANY_NAME = "Data Generated Solutions, LLC"
 
-    h1, h2, h3, h4 {
-        color: white;
-    }
 
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a, #111827);
-    }
+# ============================================================
+# UTILITY FUNCTIONS
+# ============================================================
 
-    div[data-testid="metric-container"] {
-        background: linear-gradient(135deg, #111827, #1f2937);
-        border: 1px solid #374151;
-        padding: 18px;
-        border-radius: 16px;
-        box-shadow: 0 0 16px rgba(59, 130, 246, 0.15);
-    }
+def safe_get_findings():
+    """Safely load saved findings from db.py."""
+    if get_all_findings is None:
+        return []
 
-    div.stButton > button {
-        background: linear-gradient(90deg, #2563eb, #7c3aed);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 10px 22px;
-        font-weight: 700;
-    }
+    try:
+        return get_all_findings()
+    except Exception as e:
+        st.warning(f"Unable to load saved findings: {e}")
+        return []
 
-    div.stButton > button:hover {
-        background: linear-gradient(90deg, #1d4ed8, #6d28d9);
-        color: white;
-    }
 
-    .ai-insight {
-        background: linear-gradient(135deg, #132238, #0f172a);
-        border-left: 5px solid #3b82f6;
-        padding: 18px;
-        border-radius: 12px;
-        color: white;
-        margin-top: 12px;
-        margin-bottom: 18px;
-        box-shadow: 0 0 18px rgba(59, 130, 246, 0.2);
-    }
+def calculate_risk_rating(avg_risk):
+    if avg_risk >= 75:
+        return "CRITICAL RISK"
+    if avg_risk >= 50:
+        return "HIGH RISK"
+    if avg_risk >= 25:
+        return "MODERATE RISK"
+    return "LOW RISK"
 
-    .footer {
-        color: #94a3b8;
-        font-size: 14px;
-        margin-top: 40px;
-        border-top: 1px solid #334155;
-        padding-top: 15px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
+
+def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative=""):
+    """Generate an executive PDF report."""
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    y = 750
+
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(50, y, "DGS Sentinel AI Executive Report")
+
+    y -= 30
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(50, y, f"Company: {COMPANY_NAME}")
+
+    y -= 15
+    pdf.drawString(50, y, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    y -= 30
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "Executive Metrics")
+
+    y -= 20
+    pdf.setFont("Helvetica", 10)
+
+    for key, value in summary.items():
+        pdf.drawString(50, y, f"{key}: {value}")
+        y -= 15
+        if y < 60:
+            pdf.showPage()
+            y = 750
+            pdf.setFont("Helvetica", 10)
+
+    y -= 20
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "Executive Risk Narrative")
+
+    y -= 20
+    pdf.setFont("Helvetica", 9)
+
+    for line in risk_narrative.splitlines():
+        clean_line = line.strip()
+        if clean_line:
+            pdf.drawString(50, y, clean_line[:115])
+            y -= 14
+            if y < 60:
+                pdf.showPage()
+                y = 750
+                pdf.setFont("Helvetica", 9)
+
+    y -= 20
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "Top Remediation Actions")
+
+    y -= 20
+    pdf.setFont("Helvetica", 9)
+
+    for item in remediation_playbook[:10]:
+        line = (
+            f"{item.get('Priority', '')} | "
+            f"{item.get('CVE ID', item.get('Asset', ''))} | "
+            f"{item.get('Remediation Priority', item.get('Issue', ''))}"
+        )
+        pdf.drawString(50, y, line[:115])
+        y -= 14
+        if y < 60:
+            pdf.showPage()
+            y = 750
+            pdf.setFont("Helvetica", 9)
+
+    y -= 20
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "AI Executive Analysis")
+
+    y -= 20
+    pdf.setFont("Helvetica", 9)
+
+    for line in ai_analysis.splitlines():
+        clean_line = line.strip()
+        if clean_line:
+            pdf.drawString(50, y, clean_line[:115])
+            y -= 14
+            if y < 60:
+                pdf.showPage()
+                y = 750
+                pdf.setFont("Helvetica", 9)
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer
+
+
+def highlight_priority(row):
+    if row["Priority"] == "CRITICAL":
+        return ["background-color: #ffcccc"] * len(row)
+    if row["Priority"] == "HIGH":
+        return ["background-color: #ffe0b3"] * len(row)
+    return [""] * len(row)
+
+
+def build_mitre_mapping(df):
+    mitre_rows = []
+
+    for _, row in df.iterrows():
+        if row["KEV Exploited"] == 1:
+            mitre_rows.append({
+                "CVE ID": row["CVE ID"],
+                "Technique": "T1190 - Exploit Public-Facing Application",
+                "Tactic": "Initial Access",
+                "Priority": row["Priority"],
+                "Risk Score": row["Risk Score"]
+            })
+        else:
+            mitre_rows.append({
+                "CVE ID": row["CVE ID"],
+                "Technique": "T1595 - Active Scanning",
+                "Tactic": "Reconnaissance",
+                "Priority": row["Priority"],
+                "Risk Score": row["Risk Score"]
+            })
+
+    return pd.DataFrame(mitre_rows)
+
+
+def build_remediation_matrix(df):
+    remediation_df = df.copy()
+
+    remediation_df["Remediation Priority"] = remediation_df.apply(
+        lambda row: "Immediate Action"
+        if row["Priority"] == "CRITICAL" and row["KEV Exploited"] == 1
+        else "Standard Remediation",
+        axis=1
+    )
+
+    remediation_df["Business Impact"] = remediation_df["Risk Score"].apply(
+        lambda score: "High Business Risk"
+        if score >= 75
+        else "Moderate Business Risk"
+        if score >= 40
+        else "Low Business Risk"
+    )
+
+    return remediation_df[
+        [
+            "CVE ID",
+            "Priority",
+            "Risk Score",
+            "KEV Exploited",
+            "Known Ransomware",
+            "Remediation Priority",
+            "Business Impact",
+            "Required Action",
+        ]
+    ]
+
+
+# ============================================================
+# MAIN HEADER
+# ============================================================
+
+st.title("🛡️ DGS Sentinel AI")
+st.caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
+
+
+# ============================================================
+# MANUAL AUTONOMOUS SCAN
+# ============================================================
+
+st.subheader("Manual Autonomous Scan")
+
+if "last_scan_status" not in st.session_state:
+    st.session_state["last_scan_status"] = "Idle"
+
+if "last_scan_time" not in st.session_state:
+    st.session_state["last_scan_time"] = "Never"
+
+if st.button("Run DGS Sentinel Scan Now", type="primary"):
+    st.session_state["last_scan_status"] = "Running"
+
+    with st.spinner("Running autonomous scan..."):
+        try:
+            if run_scan is None:
+                raise RuntimeError("scan_engine.run_scan is not available.")
+
+            run_scan()
+
+            st.session_state["last_scan_status"] = "Completed"
+            st.session_state["last_scan_time"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+
+            st.success(
+                "Scan completed successfully. Refresh dashboard to view updated findings."
+            )
+
+        except Exception as e:
+            st.session_state["last_scan_status"] = "Failed"
+            st.error(f"Scan failed: {e}")
+
+st.info(
+    f"""
+Scan Status: {st.session_state['last_scan_status']}
+
+Last Scan Time: {st.session_state['last_scan_time']}
+"""
 )
 
 
-# ======================================================
-# LOAD ENVIRONMENT VARIABLES
-# ======================================================
+# ============================================================
+# SIDEBAR
+# ============================================================
 
-load_dotenv()
+with st.sidebar:
+    st.header("Configuration")
 
-region = os.getenv("AWS_REGION", "us-east-1")
-openai_key = os.getenv("OPENAI_API_KEY")
+    enable_org_discovery = st.toggle(
+        "Discover AWS Organization Accounts",
+        value=False,
+        help="Requires AWS Organizations permissions and a cross-account role.",
+        key="toggle_org_discovery"
+    )
 
+    executive_mode = st.toggle(
+        "Executive Summary Mode",
+        value=False,
+        help="Show a simplified board/client-ready view.",
+        key="toggle_executive_mode"
+    )
 
-# ======================================================
-# AWS / OPENAI CLIENTS
-# ======================================================
+    auto_scan_enabled = st.toggle(
+        "Auto-Refresh Scan Readiness",
+        value=False,
+        help="Refreshes the dashboard page on an interval.",
+        key="toggle_auto_scan_enabled"
+    )
 
-ec2 = boto3.client("ec2", region_name=region)
-iam = boto3.client("iam")
-client = OpenAI(api_key=openai_key)
+    auto_refresh = st.toggle(
+        "Enable Live Dashboard Refresh",
+        value=False,
+        key="live_refresh_toggle"
+    )
 
+    refresh_interval = st.slider(
+        "Refresh Interval (Seconds)",
+        min_value=10,
+        max_value=300,
+        value=60,
+        step=10,
+        key="refresh_interval_slider"
+    )
 
-# ======================================================
-# FUNCTIONS
-# ======================================================
+    st.markdown("---")
+    st.subheader("Autonomous Monitoring")
+    st.write(f"Last Scan: {st.session_state.get('last_scan_time', 'Never')}")
+    st.write(f"Status: {st.session_state.get('last_scan_status', 'Idle')}")
 
-def get_ec2_instances():
-    response = ec2.describe_instances()
-    instances = []
-
-    for reservation in response.get("Reservations", []):
-        for instance in reservation.get("Instances", []):
-
-            risk = "Low"
-            risk_reason = "Private/internal asset"
-            dangerous_ports = []
-            open_ports = []
-
-            for sg in instance.get("SecurityGroups", []):
-                sg_id = sg["GroupId"]
-
-                sg_details = ec2.describe_security_groups(
-                    GroupIds=[sg_id]
-                )
-
-                for group in sg_details.get("SecurityGroups", []):
-                    for permission in group.get("IpPermissions", []):
-
-                        from_port = permission.get("FromPort")
-
-                        if from_port:
-                            open_ports.append(str(from_port))
-
-                        for ip_range in permission.get("IpRanges", []):
-                            cidr = ip_range.get("CidrIp")
-
-                            if cidr == "0.0.0.0/0":
-
-                                if from_port == 22:
-                                    dangerous_ports.append(
-                                        "SSH (22) open to world"
-                                    )
-                                    risk = "Critical"
-                                    risk_reason = "SSH exposed to internet"
-
-                                elif from_port == 3389:
-                                    dangerous_ports.append(
-                                        "RDP (3389) open to world"
-                                    )
-                                    risk = "Critical"
-                                    risk_reason = "RDP exposed to internet"
-
-            if instance.get("PublicIpAddress") and risk != "Critical":
-                risk = "High"
-                risk_reason = "Public IP exposed to internet"
-
-            instances.append({
-                "InstanceId": instance.get("InstanceId"),
-                "State": instance.get("State", {}).get("Name"),
-                "InstanceType": instance.get("InstanceType"),
-                "PublicIp": instance.get("PublicIpAddress", "None"),
-                "PrivateIp": instance.get("PrivateIpAddress", "None"),
-                "SecurityGroups": ", ".join(
-                    [sg["GroupName"] for sg in instance.get("SecurityGroups", [])]
-                ),
-                "SecurityGroupIds": ", ".join(
-                    [sg["GroupId"] for sg in instance.get("SecurityGroups", [])]
-                ),
-                "OpenPorts": ", ".join(sorted(set(open_ports))),
-                "Risk": risk,
-                "RiskReason": risk_reason,
-                "DangerousPorts": ", ".join(dangerous_ports)
-            })
-
-    return instances
+if auto_refresh:
+    if AUTOREFRESH_AVAILABLE:
+        st_autorefresh(
+            interval=refresh_interval * 1000,
+            key="sentinel_auto_refresh"
+        )
+        st.success(
+            f"Live SOC Mode Enabled - Refreshing every {refresh_interval} seconds"
+        )
+    else:
+        st.warning(
+            "streamlit-autorefresh is not installed. Run: pip install streamlit-autorefresh"
+        )
 
 
-def get_iam_users():
-    response = iam.list_users()
-    users = []
+# ============================================================
+# LOAD SAVED FINDINGS
+# ============================================================
 
-    for user in response.get("Users", []):
-        users.append({
-            "UserName": user.get("UserName"),
-            "UserId": user.get("UserId"),
-            "CreateDate": str(user.get("CreateDate")),
-            "Arn": user.get("Arn")
-        })
+rows = safe_get_findings()
 
-    return users
+st.header("Executive Security Overview")
+st.subheader("AWS GuardDuty Threat Intelligence")
 
+guardduty_findings = get_guardduty_findings()
 
-def analyze_risk(instances):
-    prompt = f"""
-You are a cloud security analyst.
+if guardduty_findings:
 
-Review these AWS EC2 assets and identify:
-1. Executive summary
-2. Security risks
-3. Cloud exposure concerns
-4. Compliance concerns
-5. Remediation steps
+    gd_df = pd.DataFrame(guardduty_findings)
 
-Assets:
-{instances}
-"""
+    st.dataframe(
+        gd_df,
+        width="stretch"
+    )
 
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are an AWS cloud security, CAASM, CSPM, and risk management expert."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
+    high_gd = len(
+        gd_df[gd_df["Severity"] >= 7]
+    )
+
+    medium_gd = len(
+        gd_df[
+            (gd_df["Severity"] >= 4) &
+            (gd_df["Severity"] < 7)
         ]
     )
 
-    return response.choices[0].message.content
+    gd_col1, gd_col2 = st.columns(2)
 
-
-def highlight_risk(val):
-    if val == "Critical":
-        return "background-color: darkred; color: white;"
-    if val == "High":
-        return "background-color: red; color: white;"
-    if val == "Medium":
-        return "background-color: orange; color: black;"
-    if val == "Low":
-        return "background-color: green; color: white;"
-    return ""
-
-
-# ======================================================
-# SIDEBAR
-# ======================================================
-
-with st.sidebar:
-    st.title("🛡️ DGS Sentinel AI")
-    st.caption("AI-Powered Cloud Exposure Management")
-
-    st.markdown("---")
-
-    st.markdown("### Navigation")
-    st.markdown("• Overview")
-    st.markdown("• EC2 Assets")
-    st.markdown("• IAM Visibility")
-    st.markdown("• Open Ports")
-    st.markdown("• AI Risk Analysis")
-    st.markdown("• Reports")
-
-    st.markdown("---")
-
-    risk_filter = st.selectbox(
-        "Filter by Risk",
-        ["All", "Critical", "High", "Medium", "Low"]
+    gd_col1.metric(
+        "High Severity Threats",
+        high_gd
     )
 
-    st.markdown("---")
+    gd_col2.metric(
+        "Medium Severity Threats",
+        medium_gd
+    )
 
-    st.markdown("**David L. Gulledge**")
-    st.caption("Cybersecurity Consultant | Cloud Security Engineer")
+else:
 
+    st.info(
+        "No GuardDuty findings available or GuardDuty is not enabled."
+    )
+if rows:
+    df = pd.DataFrame(rows, columns=[
+        "Scan Time",
+        "CVE ID",
+        "Priority",
+        "Risk Score",
+        "KEV Exploited",
+        "Known Ransomware",
+        "Required Action"
+    ])
 
-# ======================================================
-# HEADER
-# ======================================================
+    df["Scan Time"] = pd.to_datetime(
+        df["Scan Time"],
+        errors="coerce"
+    )
 
-st.title("🛡️ DGS Sentinel AI")
-st.caption("AI-Powered Cloud Security Risk Assistant")
+    df = df.dropna(subset=["Scan Time"])
 
-st.write(
-    "Cloud Exposure Management, AWS Asset Visibility, IAM Intelligence, "
-    "Open Port Detection, and AI-Driven Risk Analysis."
-)
+    critical_count = len(df[df["Priority"] == "CRITICAL"])
+    kev_count = len(df[df["KEV Exploited"] == 1])
+    avg_risk = round(df["Risk Score"].mean(), 2)
+    risk_rating = calculate_risk_rating(avg_risk)
 
-st.caption(f"Last Scan Session: {datetime.now().strftime('%B %d, %Y %I:%M %p')}")
+    # AWS visibility summary
+    st.subheader("AWS Account Visibility")
+    # ============================================================
+# AWS ORGANIZATION ACCOUNT AGGREGATION
+# ============================================================
 
+    # ============================================================
+    # AWS ORGANIZATION ACCOUNT AGGREGATION
+    # ============================================================
 
-# ======================================================
-# MAIN DASHBOARD
-# ======================================================
+    st.subheader("AWS Organization Accounts")
 
-if st.button("Scan AWS Environment", key="main_scan_button"):
+    organization_accounts = get_organization_accounts()
 
-    instances = get_ec2_instances()
+    if organization_accounts:
 
-    if not instances:
-        st.warning("No EC2 instances found.")
-
-    else:
-        df = pd.DataFrame(instances)
-
-        if risk_filter != "All":
-            df = df[df["Risk"] == risk_filter]
-
-        total_assets = len(df)
-
-        high_risk_assets = len(
-            df[df["Risk"].isin(["High", "Critical"])]
-        )
-
-        public_assets = len(
-            df[df["PublicIp"] != "None"]
-        )
-
-        secure_assets = len(
-            df[df["Risk"] == "Low"]
-        )
-
-        # ======================================================
-        # RISK BANNER
-        # ======================================================
-
-        if "Critical" in df["Risk"].values:
-            st.error("🚨 OVERALL ENVIRONMENT RISK: CRITICAL")
-            risk_score = 35
-        elif "High" in df["Risk"].values:
-            st.warning("⚠️ OVERALL ENVIRONMENT RISK: HIGH")
-            risk_score = 65
-        else:
-            st.success("✅ OVERALL ENVIRONMENT RISK: LOW")
-            risk_score = 92
-
-        # ======================================================
-        # KPI METRICS
-        # ======================================================
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        col1.metric("Total Assets", total_assets)
-        col2.metric("High/Critical Risk", high_risk_assets)
-        col3.metric("Public Assets", public_assets)
-        col4.metric("Secure Assets", secure_assets)
-        col5.metric("Risk Score", f"{risk_score}/100")
-
-        # ======================================================
-        # RISK DISTRIBUTION DONUT CHART
-        # ======================================================
-
-        st.markdown("## Risk Distribution")
-
-        risk_counts = df["Risk"].value_counts()
-
-        risk_chart_df = pd.DataFrame({
-            "Risk": risk_counts.index,
-            "Count": risk_counts.values
-        })
-
-        donut_fig = px.pie(
-            risk_chart_df,
-            names="Risk",
-            values="Count",
-            hole=0.55,
-            title="Cloud Risk Severity Distribution",
-            color="Risk",
-            color_discrete_map={
-                "Critical": "#7f1d1d",
-                "High": "#ef4444",
-                "Medium": "#f59e0b",
-                "Low": "#10b981"
-            }
-        )
-
-        donut_fig.update_layout(
-            paper_bgcolor="#0b1020",
-            plot_bgcolor="#0b1020",
-            font_color="white",
-            title_font_color="white"
-        )
-
-        st.plotly_chart(
-            donut_fig,
-            use_container_width=True
-        )
-
-        # ======================================================
-        # ASSET EXPOSURE ANALYTICS
-        # ======================================================
-
-        st.markdown("## Asset Exposure Analytics")
-
-        exposure_df = pd.DataFrame({
-            "Category": ["Public Assets", "Private/Secure Assets"],
-            "Count": [public_assets, secure_assets]
-        })
-
-        exposure_fig = px.bar(
-            exposure_df,
-            x="Category",
-            y="Count",
-            color="Category",
-            title="Asset Exposure Overview",
-            color_discrete_map={
-                "Public Assets": "#ef4444",
-                "Private/Secure Assets": "#10b981"
-            }
-        )
-
-        exposure_fig.update_layout(
-            paper_bgcolor="#0b1020",
-            plot_bgcolor="#0b1020",
-            font_color="white",
-            title_font_color="white"
-        )
-
-        st.plotly_chart(
-            exposure_fig,
-            use_container_width=True
-        )
-
-        # ======================================================
-        # OPEN PORT ANALYTICS
-        # ======================================================
-
-        st.markdown("## Open Port Analytics")
-
-        port_counts = {}
-
-        for ports in df["OpenPorts"]:
-            if ports:
-                for port in str(ports).split(","):
-                    port = port.strip()
-
-                    if port:
-                        port_counts[port] = port_counts.get(port, 0) + 1
-
-        if port_counts:
-            ports_df = pd.DataFrame({
-                "Port": list(port_counts.keys()),
-                "Count": list(port_counts.values())
-            })
-
-            port_fig = px.bar(
-                ports_df,
-                x="Port",
-                y="Count",
-                color="Port",
-                title="Detected Open Ports"
-            )
-
-            port_fig.update_layout(
-                paper_bgcolor="#0b1020",
-                plot_bgcolor="#0b1020",
-                font_color="white",
-                title_font_color="white"
-            )
-
-            st.plotly_chart(
-                port_fig,
-                use_container_width=True
-            )
-
-        else:
-            st.success("No open ports detected.")
-
-        # ======================================================
-        # EC2 ASSET TABLE
-        # ======================================================
-
-        st.markdown("## Discovered EC2 Assets")
-
-        styled_df = df.style.map(
-            highlight_risk,
-            subset=["Risk"]
-        )
+        org_df = pd.DataFrame(organization_accounts)
 
         st.dataframe(
-            styled_df,
-            use_container_width=True
+            org_df,
+            width="stretch"
         )
 
-        csv = df.to_csv(index=False)
-
-        st.download_button(
-            label="Download Security Findings CSV",
-            data=csv,
-            file_name="aws_security_findings.csv",
-            mime="text/csv"
+        active_accounts = len(
+            org_df[org_df["Status"] == "ACTIVE"]
         )
 
-        # ======================================================
-        # IAM VISIBILITY
-        # ======================================================
-
-        st.markdown("## IAM User Visibility")
-
-        iam_users = get_iam_users()
-
-        if iam_users:
-            iam_df = pd.DataFrame(iam_users)
-
-            st.dataframe(
-                iam_df,
-                use_container_width=True
-            )
-        else:
-            st.warning("No IAM users found.")
-
-        # ======================================================
-        # AI SECURITY INSIGHT CARD
-        # ======================================================
-
-        st.markdown("## AI Security Insight")
-
-        if high_risk_assets == 0:
-            insight = """
-            No high-risk public exposure detected.
-            No dangerous open ports identified.
-            Cloud posture currently aligns with a low-risk configuration.
-            """
-        else:
-            insight = f"""
-            Public exposure detected on {public_assets} asset(s).
-            High or critical risk assets were identified.
-            Review security group ingress rules, restrict SSH/RDP access,
-            and enforce least privilege IAM controls.
-            """
-
-        st.markdown(
-            f"""
-            <div class="ai-insight">
-                <h4>🤖 AI SECURITY INSIGHT</h4>
-                <p>{insight}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
+        suspended_accounts = len(
+            org_df[org_df["Status"] != "ACTIVE"]
         )
 
-        # ======================================================
-        # OPENAI ANALYSIS
-        # ======================================================
+        org_col1, org_col2, org_col3 = st.columns(3)
 
-        st.markdown("## AI Security Risk Analysis")
+        org_col1.metric(
+            "Organization Accounts",
+            len(org_df)
+        )
 
-        with st.spinner("Analyzing risk with AI..."):
-            analysis = analyze_risk(instances)
+        org_col2.metric(
+            "Active Accounts",
+            active_accounts
+        )
 
-        st.write(analysis)
+        org_col3.metric(
+            "Suspended Accounts",
+            suspended_accounts
+        )
 
-        if "Critical" in df["Risk"].values:
-            st.error(
-                "Critical exposure detected. Immediate remediation recommended."
-            )
-        elif "High" in df["Risk"].values:
-            st.warning(
-                "High-risk assets detected. Review security groups and access controls."
-            )
-        else:
-            st.success(
-                "No critical cloud exposures detected."
-            )
+    else:
 
+        st.info(
+            "No AWS Organization accounts available or Organizations is not enabled."
+        )
+    account_col1, account_col2, account_col3, account_col4 = st.columns(4)
 
-# ======================================================
-# FOOTER
-# ======================================================
+    account_col1.metric("AWS Accounts", 1)
+    account_col2.metric("Assets Discovered", len(df))
+    account_col3.metric("Critical Assets", critical_count)
+    account_col4.metric("KEV Findings", kev_count)
 
-st.markdown(
-    """
-    <div class="footer">
-        DGS Sentinel AI © 2026 | AI-Powered Cloud Exposure Management Platform |
-        Built by David L. Gulledge
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    st.divider()
+
+    # Executive KPIs
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    metric_col1.metric("Critical Findings", critical_count)
+    metric_col2.metric("Known Exploited CVEs", kev_count)
+    metric_col3.metric("Average Risk Score", avg_risk)
+
+    st.subheader("Enterprise Security Risk Gauge")
+
+    gauge_fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=avg_risk,
+        title={"text": "Average Enterprise Risk"},
+        gauge={
+            "axis": {"range": [0, 100]},
+            "bar": {"color": "red"},
+            "steps": [
+                {"range": [0, 25], "color": "green"},
+                {"range": [25, 50], "color": "yellow"},
+                {"range": [50, 75], "color": "orange"},
+                {"range": [75, 100], "color": "red"},
+            ],
+        },
+    ))
+
+    gauge_fig.update_layout(
+        height=350,
+        paper_bgcolor="#0F172A",
+        font_color="white",
+    )
+
+    st.plotly_chart(
+        gauge_fig,
+        use_container_width=True
+    )
+
+    # Findings table
+    st.subheader("Saved Threat Findings")
+
+    st.dataframe(
+        df.style.apply(highlight_priority, axis=1),
+        width="stretch"
+    )
+
+    # Risk trend
+    st.subheader("Risk Trend Over Time")
+
+    risk_trend = (
+        df.groupby("Scan Time")["Risk Score"]
+        .mean()
+        .reset_index()
+    )
+
+    st.line_chart(
+        risk_trend,
+        x="Scan Time",
+        y="Risk Score"
+    )
+
+    # Top threats
+    st.subheader("Top Threats by Risk Score")
+
+    top_threats = (
+        df.sort_values(by="Risk Score", ascending=False)
+        .head(10)
+    )
+
+    st.bar_chart(
+        top_threats,
+        x="CVE ID",
+        y="Risk Score",
+    )
+
+    # Heatmap
+    st.subheader("Live Attack Surface Heatmap")
+
+    heatmap_df = df.copy()
+    heatmap_df["Exposure"] = heatmap_df["KEV Exploited"].apply(
+        lambda x: "Known Exploited" if x == 1 else "Observed"
+    )
+
+    heatmap_chart = px.density_heatmap(
+        heatmap_df,
+        x="Priority",
+        y="Exposure",
+        z="Risk Score",
+        histfunc="avg",
+        color_continuous_scale="Reds",
+        title="Threat Exposure Heatmap"
+    )
+
+    heatmap_chart.update_layout(
+        paper_bgcolor="#0F172A",
+        plot_bgcolor="#0F172A",
+        font_color="white",
+        height=500,
+    )
+
+    st.plotly_chart(
+        heatmap_chart,
+        use_container_width=True
+    )
+
+    # Severity pie
+    st.subheader("Threat Severity Distribution")
+
+    severity_counts = (
+        df["Priority"]
+        .value_counts()
+        .reset_index()
+    )
+
+    severity_counts.columns = ["Priority", "Count"]
+
+    severity_chart = px.pie(
+        severity_counts,
+        names="Priority",
+        values="Count",
+        title="Threat Severity Breakdown",
+        hole=0.45,
+        color="Priority",
+        color_discrete_map={
+            "CRITICAL": "#DC2626",
+            "HIGH": "#F97316",
+            "MODERATE": "#FACC15",
+            "LOW": "#22C55E",
+            "STANDARD": "#94A3B8",
+        }
+    )
+
+    severity_chart.update_layout(
+        paper_bgcolor="#0F172A",
+        font_color="white",
+        height=500,
+    )
+
+    st.plotly_chart(
+        severity_chart,
+        use_container_width=True
+    )
+
+    # Remediation matrix
+    st.subheader("Remediation Priority Matrix")
+
+    matrix_view = build_remediation_matrix(df)
+
+    st.dataframe(
+        matrix_view,
+        width="stretch"
+    )
+
+    # Security timeline
+    st.subheader("Security Operations Timeline")
+
+    timeline_df = df.copy()
+
+    timeline_df["Event"] = timeline_df.apply(
+        lambda row: f"{row['Priority']} - {row['CVE ID']}",
+        axis=1
+    )
+
+    timeline_df["Scan Time"] = pd.to_datetime(
+        timeline_df["Scan Time"],
+        errors="coerce"
+    )
+
+    timeline_df = timeline_df.dropna(subset=["Scan Time"])
+    timeline_df["End Time"] = timeline_df["Scan Time"] + pd.Timedelta(minutes=5)
+
+    timeline_chart = px.timeline(
+        timeline_df,
+        x_start="Scan Time",
+        x_end="End Time",
+        y="Event",
+        color="Priority",
+        title="Threat Detection Timeline",
+        color_discrete_map={
+            "CRITICAL": "#DC2626",
+            "HIGH": "#F97316",
+            "MODERATE": "#FACC15",
+            "LOW": "#22C55E",
+            "STANDARD": "#94A3B8",
+        }
+    )
+
+    timeline_chart.update_layout(
+        paper_bgcolor="#0F172A",
+        plot_bgcolor="#0F172A",
+        font_color="white",
+        height=500,
+    )
+
+    st.plotly_chart(
+        timeline_chart,
+        use_container_width=True
+    )
+
+    # Exports
+    st.subheader("Export Executive Evidence")
+
+    csv_findings = df.to_csv(index=False).encode("utf-8")
+    csv_matrix = matrix_view.to_csv(index=False).encode("utf-8")
+
+    saved_summary = {
+        "security_score": int(max(100 - avg_risk, 0)),
+        "risk_rating": risk_rating,
+        "assets": len(df),
+        "critical_findings": critical_count,
+        "kev_cves": kev_count,
+        "remediation_actions": len(matrix_view),
+    }
+
+    saved_risk_narrative = f"""
+DGS Sentinel AI identified {len(df)} saved threat findings from the autonomous scan history.
+
+The current average risk score is {avg_risk}. The dashboard shows {critical_count} critical findings and {kev_count} known exploited vulnerabilities.
+
+Priority should be given to KEV-exploited vulnerabilities, ransomware-associated findings, and high business impact vulnerabilities.
+"""
+
+    saved_ai_analysis = """
+DGS Sentinel AI recommends prioritizing remediation of critical KEV-exploited vulnerabilities, validating exposure paths, applying vendor patches, documenting remediation evidence, and re-running autonomous scans after remediation.
+"""
+
+    pdf_report = generate_pdf(
+        saved_ai_analysis,
+        saved_summary,
+        matrix_view.to_dict("records"),
+        saved_risk_narrative
+    )
+
+    export_col1, export_col2, export_col3 = st.columns(3)
+
+    export_col1.download_button(
+        label="Threat Findings CSV",
+        data=csv_findings,
+        file_name="dgs_sentinel_threat_findings.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+    export_col2.download_button(
+        label="Remediation Matrix CSV",
+        data=csv_matrix,
+        file_name="dgs_sentinel_remediation_matrix.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+    export_col3.download_button(
+        label="Executive PDF Report",
+        data=pdf_report,
+        file_name="dgs_sentinel_executive_report.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
+
+    # AI remediation summary
+    st.subheader("AI Executive Remediation Summary")
+
+    critical_findings = df[df["Priority"] == "CRITICAL"]
+
+    if not critical_findings.empty:
+        st.markdown("""
+**Executive Risk Summary**
+
+DGS Sentinel AI identified known exploited vulnerability exposure in the environment.  
+These findings should be treated as urgent because they are associated with active exploitation intelligence.
+
+**Recommended Actions**
+
+1. Prioritize remediation of all KEV-exploited CVEs.
+2. Validate whether affected assets are internet-facing.
+3. Apply vendor patches or remove affected systems from the network.
+4. Review ransomware exposure and compensating controls.
+5. Re-run the autonomous scan after remediation.
+""")
+    else:
+        st.success("No critical KEV-exploited findings detected.")
+
+    # MITRE mapping
+    st.subheader("MITRE ATT&CK Mapping")
+
+    mitre_df = build_mitre_mapping(df)
+
+    st.dataframe(
+        mitre_df,
+        width="stretch"
+    )
+
+else:
+    st.warning("No saved findings yet. Run the headless scanner first.")
+    st.code("python headless_scan.py", language="bash")
+    st.info(
+        "Once the headless scan saves results to SQLite, this dashboard will show metrics, charts, remediation guidance, MITRE mapping, and export buttons."
+    )
