@@ -1,43 +1,11 @@
+# 🛡️ DGS Sentinel AI
 
-# 📸 Platform Screenshots
-
-## Executive Security Dashboard
-
-![Dashboard](screenshots/dashboard.png)
-
----
-
-## GuardDuty Threat Intelligence
-
-![GuardDuty](screenshots/guardduty.png)
-
----
-
-## IAM Exposure Analytics
-
-![IAM Analytics](screenshots/iam-analytics.png)
-
----
-
-## Cloud Security Scorecard
-
-![Scorecard](screenshots/scorecard.png)
-
----
-
-## MITRE ATT&CK Mapping
-
-![MITRE](screenshots/mitre-mapping.png)
-
----
-
-## AI Executive Risk Summary
-
-![AI Summary](screenshots/ai-summary.png)# 🛡️ DGS Sentinel AI
+![DGS Sentinel AI Banner](caasm-portfolio-banner.jpg)
 
 Enterprise AI-Powered Cybersecurity Analytics Platform
 
 DGS Sentinel AI is a next-generation cybersecurity analytics and cloud exposure management platform designed to provide real-time visibility across enterprise cloud environments.
+
 
 The platform combines:
 
