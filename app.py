@@ -7,6 +7,7 @@
 from datetime import datetime
 from io import BytesIO
 
+import hmac
 import pandas as pd
 import streamlit as st
 import plotly.express as px
@@ -15,6 +16,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from guardduty_ingest import get_guardduty_findings
 from org_ingest import get_organization_accounts
+from datetime import datetime, timedelta
 
 try:
     from db import get_all_findings
@@ -54,7 +56,67 @@ COMPANY_NAME = "Data Generated Solutions, LLC"
 # ============================================================
 # UTILITY FUNCTIONS
 # ============================================================
+def check_password():
+    """Simple password authentication for DGS Sentinel AI."""
 
+    session_timeout_minutes = 30
+
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if "login_time" not in st.session_state:
+        st.session_state["login_time"] = None
+
+    if (
+        st.session_state["authenticated"]
+        and st.session_state["login_time"] is not None
+    ):
+        session_age = datetime.now() - st.session_state["login_time"]
+
+        if session_age > timedelta(minutes=session_timeout_minutes):
+            st.session_state["authenticated"] = False
+            st.session_state["login_time"] = None
+            st.warning("Session expired. Please login again.")
+            st.rerun()
+
+    if st.session_state["authenticated"]:
+        return True
+
+    st.title("🛡️ DGS Sentinel AI Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        correct_username = st.secrets["auth"]["username"]
+        correct_password = st.secrets["auth"]["password"]
+
+        if (
+            hmac.compare_digest(username, correct_username)
+            and hmac.compare_digest(password, correct_password)
+        ):
+            st.session_state["authenticated"] = True
+            st.session_state["login_time"] = datetime.now()
+            st.rerun()
+        else:
+            st.error("Invalid username or password")
+
+    return False
+
+
+if not check_password():
+    st.stop()
+
+def safe_get_findings():
+    """Safely load saved findings from db.py."""
+    if get_all_findings is None:
+        return []
+
+    try:
+        return get_all_findings()
+    except Exception as e:
+        st.warning(f"Unable to load saved findings: {e}")
+        return []
 def safe_get_findings():
     """Safely load saved findings from db.py."""
     if get_all_findings is None:
@@ -78,22 +140,70 @@ def calculate_risk_rating(avg_risk):
 
 
 def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative=""):
-    """Generate an executive PDF report."""
+    """Generate a branded DGS Sentinel AI executive PDF report."""
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
-    y = 750
 
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(50, y, "DGS Sentinel AI Executive Report")
+    width, height = letter
 
-    y -= 30
+    def add_footer():
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(
+            50,
+            30,
+            "Data Generated Solutions, LLC | DGS Sentinel AI Executive Cyber Risk Assessment"
+        )
+        pdf.drawRightString(
+            width - 50,
+            30,
+            f"Generated {datetime.now().strftime('%Y-%m-%d')}"
+        )
+
+    def new_page():
+        pdf.showPage()
+        add_footer()
+        return height - 60
+
+    y = height - 60
+
+    # Header
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(50, y, "DGS Sentinel AI")
+
+    y -= 25
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(50, y, "Executive Cyber Risk Assessment Report")
+
+    y -= 20
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(50, y, f"Company: {COMPANY_NAME}")
+    pdf.drawString(50, y, f"Prepared by: {COMPANY_NAME}")
 
     y -= 15
-    pdf.drawString(50, y, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    pdf.drawString(
+        50,
+        y,
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
 
-    y -= 30
+    y -= 35
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "Executive Summary")
+
+    y -= 18
+    pdf.setFont("Helvetica", 9)
+
+    intro_lines = [
+        "DGS Sentinel AI provides executive-level visibility into cloud exposure, identity risk,",
+        "threat intelligence, and remediation priorities across monitored cloud environments.",
+        "This report summarizes key risk indicators, business impact areas, and recommended actions."
+    ]
+
+    for line in intro_lines:
+        pdf.drawString(50, y, line)
+        y -= 14
+
+    y -= 20
     pdf.setFont("Helvetica-Bold", 12)
     pdf.drawString(50, y, "Executive Metrics")
 
@@ -101,49 +211,53 @@ def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative=""):
     pdf.setFont("Helvetica", 10)
 
     for key, value in summary.items():
-        pdf.drawString(50, y, f"{key}: {value}")
+        clean_key = str(key).replace("_", " ").title()
+        pdf.drawString(65, y, f"{clean_key}: {value}")
         y -= 15
-        if y < 60:
-            pdf.showPage()
-            y = 750
+
+        if y < 80:
+            y = new_page()
             pdf.setFont("Helvetica", 10)
 
     y -= 20
     pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Executive Risk Narrative")
+    pdf.drawString(50, y, "Risk Narrative")
 
     y -= 20
     pdf.setFont("Helvetica", 9)
 
     for line in risk_narrative.splitlines():
         clean_line = line.strip()
+
         if clean_line:
-            pdf.drawString(50, y, clean_line[:115])
+            pdf.drawString(65, y, clean_line[:110])
             y -= 14
-            if y < 60:
-                pdf.showPage()
-                y = 750
+
+            if y < 80:
+                y = new_page()
                 pdf.setFont("Helvetica", 9)
 
     y -= 20
     pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Top Remediation Actions")
+    pdf.drawString(50, y, "Top Remediation Priorities")
 
     y -= 20
-    pdf.setFont("Helvetica", 9)
+    pdf.setFont("Helvetica", 8)
 
     for item in remediation_playbook[:10]:
         line = (
             f"{item.get('Priority', '')} | "
             f"{item.get('CVE ID', item.get('Asset', ''))} | "
-            f"{item.get('Remediation Priority', item.get('Issue', ''))}"
+            f"{item.get('Remediation Priority', item.get('Issue', ''))} | "
+            f"{item.get('Business Impact', '')}"
         )
-        pdf.drawString(50, y, line[:115])
+
+        pdf.drawString(65, y, line[:115])
         y -= 14
-        if y < 60:
-            pdf.showPage()
-            y = 750
-            pdf.setFont("Helvetica", 9)
+
+        if y < 80:
+            y = new_page()
+            pdf.setFont("Helvetica", 8)
 
     y -= 20
     pdf.setFont("Helvetica-Bold", 12)
@@ -154,16 +268,19 @@ def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative=""):
 
     for line in ai_analysis.splitlines():
         clean_line = line.strip()
+
         if clean_line:
-            pdf.drawString(50, y, clean_line[:115])
+            pdf.drawString(65, y, clean_line[:110])
             y -= 14
-            if y < 60:
-                pdf.showPage()
-                y = 750
+
+            if y < 80:
+                y = new_page()
                 pdf.setFont("Helvetica", 9)
 
+    add_footer()
     pdf.save()
     buffer.seek(0)
+
     return buffer
 
 
@@ -288,6 +405,11 @@ Last Scan Time: {st.session_state['last_scan_time']}
 # ============================================================
 
 with st.sidebar:
+    
+    if st.button("Logout"):
+        st.session_state["authenticated"] = False
+        st.rerun()
+    
     st.header("Configuration")
 
     enable_org_discovery = st.toggle(
