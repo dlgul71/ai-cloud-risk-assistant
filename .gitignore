@@ -29,3 +29,14 @@ scan_snapshots/
 # ============================================================
 
 *.log
+app_backup_phase1.py
+app_before_scan_fix.py
+app_broken_scan_backup.py
+app_fixed_indent.py
+app_phase2_3_working.py
+app_phase2_4_stable.py
+app_phase2_assumerole_working.py
+scan_engine_phase1_working.py
+scan_engine_phase2_3_working.py
+scan_engine_phase2_4_stable.p
+test_client_connection.py
