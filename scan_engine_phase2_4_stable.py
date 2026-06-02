@@ -27,20 +27,7 @@ def enrich_with_kev(cve_id, base_score, kev_map):
     }
 
 
-def run_scan(session=None, client_name="DGS Internal AWS"):
-        if session:
-        print(f"[+] Running scan for client: {client_name}")
-
-        try:
-            sts = session.client("sts")
-            identity = sts.get_caller_identity()
-            print(f"[+] Connected AWS Account: {identity.get('Account')}")
-
-        except Exception as e:
-            print(f"[!] Unable to validate client session: {e}")
-
-    else:
-        print("[+] Running scan with default AWS credentials")
+def run_scan():
 
     print("=" * 60)
     print("DGS SENTINEL AI SCAN ENGINE")
