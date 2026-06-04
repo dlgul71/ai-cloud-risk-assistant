@@ -1,5 +1,13 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from client_accounts import client_boto3_client
+
+
+REGIONS = [
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2"
+]
 
 
 def test_client_identity(role_arn):
@@ -18,7 +26,7 @@ def test_client_identity(role_arn):
         "account": identity.get("Account"),
         "arn": identity.get("Arn"),
         "user_id": identity.get("UserId"),
-        "scan_time": str(datetime.utcnow())
+        "scan_time": str(datetime.now(UTC))
     }
 
 
@@ -46,9 +54,9 @@ def scan_client_ec2(role_arn, region_name="us-east-1"):
     return instances
 
 
-def run_client_scan(role_arn, region_name="us-east-1"):
+def run_client_scan(role_arn):
     print("=" * 60)
-    print("DGS SENTINEL AI PHASE 3 ASSUMEROLE SCAN")
+    print("DGS SENTINEL AI PHASE 3 MULTI-REGION ASSUMEROLE SCAN")
     print("=" * 60)
 
     identity = test_client_identity(role_arn)
@@ -60,17 +68,29 @@ def run_client_scan(role_arn, region_name="us-east-1"):
             "ec2_instances": []
         }
 
-    ec2_instances = scan_client_ec2(role_arn, region_name)
+    ec2_instances = []
+
+    for region in REGIONS:
+        print(f"Scanning EC2 in region: {region}")
+
+        region_instances = scan_client_ec2(
+            role_arn,
+            region_name=region
+        )
+
+        ec2_instances.extend(region_instances)
 
     return {
         "identity": identity,
-        "ec2_instances": ec2_instances
+        "regions_scanned": REGIONS,
+        "ec2_instances": ec2_instances,
+        "ec2_count": len(ec2_instances)
     }
 
-ROLE_ARN = "arn:aws:iam::975049950898:role/DGS-Sentinel-ReadOnly"
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     ROLE_ARN = "arn:aws:iam::975049950898:role/DGS-Sentinel-ReadOnly"
+
     results = run_client_scan(ROLE_ARN)
 
     print("\nSCAN RESULTS")
