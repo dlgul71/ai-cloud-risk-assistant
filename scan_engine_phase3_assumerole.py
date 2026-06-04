@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 from client_accounts import client_boto3_client
-
+from asset_db import init_asset_db, save_asset
 
 REGIONS = [
     "us-east-1",
@@ -39,7 +39,7 @@ def scan_client_ec2(role_arn, region_name="us-east-1"):
     instances = []
 
     response = ec2.describe_instances()
-
+    init_asset_db()
     for reservation in response.get("Reservations", []):
         for instance in reservation.get("Instances", []):
             instances.append({
@@ -68,6 +68,8 @@ def run_client_scan(role_arn):
             "ec2_instances": []
         }
 
+    init_asset_db()
+
     ec2_instances = []
 
     for region in REGIONS:
@@ -79,6 +81,17 @@ def run_client_scan(role_arn):
         )
 
         ec2_instances.extend(region_instances)
+
+        for instance in region_instances:
+            save_asset({
+                "asset_id": instance.get("instance_id"),
+                "asset_type": "EC2",
+                "account_id": identity.get("account"),
+                "region": instance.get("region"),
+                "hostname": instance.get("instance_id"),
+                "ip_address": instance.get("private_ip"),
+                "risk_score": 10
+            })
 
     return {
         "identity": identity,
