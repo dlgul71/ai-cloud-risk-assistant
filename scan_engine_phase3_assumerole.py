@@ -1,6 +1,7 @@
 from datetime import datetime, UTC
 from client_accounts import client_boto3_client
 from asset_db import init_asset_db, save_asset
+from risk_engine import calculate_asset_risk
 
 REGIONS = [
     "us-east-1",
@@ -83,15 +84,21 @@ def run_client_scan(role_arn):
         ec2_instances.extend(region_instances)
 
         for instance in region_instances:
-            save_asset({
+
+            asset_record = {
                 "asset_id": instance.get("instance_id"),
                 "asset_type": "EC2",
                 "account_id": identity.get("account"),
                 "region": instance.get("region"),
                 "hostname": instance.get("instance_id"),
                 "ip_address": instance.get("private_ip"),
-                "risk_score": 10
-            })
+                "public_ip": instance.get("public_ip"),
+                "state": instance.get("state")
+            }
+
+            asset_record["risk_score"] = calculate_asset_risk(asset_record)
+
+            save_asset(asset_record)
 
     return {
         "identity": identity,
