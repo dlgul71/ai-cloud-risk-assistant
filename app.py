@@ -10,6 +10,7 @@ import streamlit as st
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from risk_engine import calculate_unified_risk
+from kev_lookup import check_cve_in_kev, fetch_cisa_kev
 
 
 # ============================================================
@@ -201,6 +202,32 @@ def normalize_findings(rows):
 
     if "Risk Score" in df.columns:
         df["Risk Score"] = pd.to_numeric(df["Risk Score"], errors="coerce").fillna(0)
+
+    # Enrich findings with live CISA KEV intelligence
+    try:
+        kev_map = fetch_cisa_kev()
+
+        if "CVE ID" in df.columns:
+            df["KEV Exploited"] = df["CVE ID"].apply(
+                lambda cve: 1 if cve in kev_map else 0
+            )
+
+            df["Known Ransomware"] = df["CVE ID"].apply(
+                lambda cve: kev_map.get(cve, {}).get("known_ransomware", "Unknown")
+            )
+
+            df["Required Action"] = df["CVE ID"].apply(
+                lambda cve: kev_map.get(cve, {}).get("required_action", "Review and remediate per SLA")
+            )
+
+            df.loc[df["KEV Exploited"] == 1, "Risk Score"] = (
+                df["Risk Score"] + 20
+            ).clip(upper=100)
+
+            df.loc[df["KEV Exploited"] == 1, "Priority"] = "CRITICAL"
+
+    except Exception as e:
+        st.warning(f"CISA KEV enrichment unavailable: {e}")
 
     return df
 
