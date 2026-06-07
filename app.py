@@ -364,7 +364,7 @@ def generate_ai_analysis(summary, remediation_playbook):
     return "\n".join(lines)
 
 
-def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative=""):
+def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative="", asset_summary=None):
     """Generate a branded DGS Sentinel AI executive PDF report."""
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
@@ -443,6 +443,25 @@ def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative=""):
             pdf.setFont("Helvetica", 10)
 
     y -= 20
+
+    if asset_summary:
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(50, y, "Asset & Client Exposure Summary")
+
+        y -= 20
+        pdf.setFont("Helvetica", 10)
+
+        for key, value in asset_summary.items():
+            clean_key = str(key).replace("_", " ").title()
+            pdf.drawString(65, y, f"{clean_key}: {value}")
+            y -= 15
+
+            if y < 80:
+                y = new_page()
+                pdf.setFont("Helvetica", 10)
+
+        y -= 20
+
     pdf.setFont("Helvetica-Bold", 12)
     pdf.drawString(50, y, "Risk Narrative")
 
@@ -1381,11 +1400,59 @@ export_col1, export_col2, export_col3 = st.columns(3)
 
 csv_data = df.to_csv(index=False).encode("utf-8") if not df.empty else b""
 mitre_csv = mitre_df.to_csv(index=False).encode("utf-8") if not mitre_df.empty else b""
+asset_summary = {}
+
+try:
+    from client_db import get_clients
+    from asset_db import get_assets
+
+    pdf_clients = get_clients()
+    pdf_assets = get_assets()
+
+    if pdf_assets:
+        pdf_asset_df = pd.DataFrame(
+            pdf_assets,
+            columns=[
+                "Asset ID",
+                "Asset Type",
+                "Account ID",
+                "Region",
+                "Hostname",
+                "Private IP",
+                "Public IP",
+                "State",
+                "Risk Score",
+                "Last Scan"
+            ]
+        )
+
+        asset_summary = {
+            "Total Clients": len(pdf_clients),
+            "Total Assets": len(pdf_asset_df),
+            "Average Asset Risk": round(pdf_asset_df["Risk Score"].mean(), 2),
+            "Critical Assets": len(pdf_asset_df[pdf_asset_df["Risk Score"] >= 80]),
+            "Public Assets": len(pdf_asset_df[pdf_asset_df["Public IP"].notna() & (pdf_asset_df["Public IP"] != "")]),
+            "Stopped Assets": len(pdf_asset_df[pdf_asset_df["State"] == "stopped"])
+        }
+    else:
+        asset_summary = {
+            "Total Clients": len(pdf_clients),
+            "Total Assets": 0,
+            "Average Asset Risk": 0,
+            "Critical Assets": 0,
+            "Public Assets": 0,
+            "Stopped Assets": 0
+        }
+
+except Exception:
+    asset_summary = {}
+
 pdf_buffer = generate_pdf(
     ai_analysis=ai_analysis,
     summary=summary,
     remediation_playbook=remediation_playbook,
-    risk_narrative=risk_narrative
+    risk_narrative=risk_narrative,
+    asset_summary=asset_summary
 )
 
 export_col1.download_button(
