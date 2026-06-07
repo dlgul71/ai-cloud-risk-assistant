@@ -592,6 +592,7 @@ with st.sidebar:
         "Navigation",
         [
             "Dashboard",
+            "Executive Dashboard",
             "Client Accounts",
             "Asset Dashboard"
         ],
@@ -654,6 +655,68 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 # ============================================================
 # CLIENT ACCOUNTS PAGE
 # ============================================================
+
+if page == "Executive Dashboard":
+
+    from client_db import get_clients
+    from asset_db import get_assets
+    import pandas as pd
+
+    st.title("Executive Dashboard")
+    st.caption("Multi-client executive risk overview")
+
+    clients = get_clients()
+    assets = get_assets()
+
+    total_clients = len(clients)
+    total_assets = len(assets)
+
+    if assets:
+        asset_df = pd.DataFrame(
+            assets,
+            columns=[
+                "Asset ID",
+                "Asset Type",
+                "Account ID",
+                "Region",
+                "Hostname",
+                "Private IP",
+                "Public IP",
+                "State",
+                "Risk Score",
+                "Last Scan"
+            ]
+        )
+
+        avg_risk = round(asset_df["Risk Score"].mean(), 2)
+        critical_assets = len(asset_df[asset_df["Risk Score"] >= 80])
+
+    else:
+        avg_risk = 0
+        critical_assets = 0
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Clients", total_clients)
+    col2.metric("Assets", total_assets)
+    col3.metric("Average Risk", avg_risk)
+    col4.metric("Critical Assets", critical_assets)
+
+    if assets:
+        st.subheader("Highest Risk Assets")
+
+        top_assets = asset_df.sort_values(
+            by="Risk Score",
+            ascending=False
+        ).head(10)
+
+        st.dataframe(
+            top_assets,
+            width="stretch"
+        )
+
+
+
 if page == "Asset Dashboard":
 
     from asset_db import get_assets
