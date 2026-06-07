@@ -657,83 +657,57 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 if page == "Asset Dashboard":
 
     from asset_db import get_assets
-    from asset_correlation import correlate_securityhub_to_assets
-    from asset_correlation import correlate_guardduty_to_assets
     import pandas as pd
 
     st.title("Asset Dashboard")
-    st.caption("CAASM-style asset inventory and Security Hub correlation")
+    st.caption("CAASM-style asset inventory for client AWS assets")
 
     assets = get_assets()
-    
-    correlated_assets = correlate_securityhub_to_assets()
-    
-    guardduty_assets = correlate_guardduty_to_assets()
-    
-    guardduty_map = {
-        item["asset_id"]: item["guardduty_findings"]
-        for item in guardduty_assets
-    }
 
-    st.metric("Total Assets", len(assets))
-
-    risk_scores = [
-        calculate_unified_risk(
-            asset["risk_score"],
-            asset["securityhub_findings"],
-            guardduty_map.get(asset["asset_id"], 0)
-        )
-        for asset in correlated_assets  
+    columns = [
+        "Asset ID",
+        "Asset Type",
+        "Account ID",
+        "Region",
+        "Hostname",
+        "Private IP",
+        "Public IP",
+        "State",
+        "Risk Score",
+        "Last Scan"
     ]
 
+    if assets:
+        asset_df = pd.DataFrame(assets, columns=columns)
 
-    avg_asset_risk = round(sum(risk_scores) / len(risk_scores), 2) if risk_scores else 0
-    critical_assets = len([score for score in risk_scores if score >= 80])
-    securityhub_affected = len([asset for asset in correlated_assets if asset["securityhub_findings"] > 0])
-    guardduty_affected = len([asset for asset in guardduty_assets if asset["guardduty_findings"] > 0])
+        total_assets = len(asset_df)
+        avg_asset_risk = round(asset_df["Risk Score"].mean(), 2)
+        critical_assets = len(asset_df[asset_df["Risk Score"] >= 80])
+        public_assets = len(asset_df[asset_df["Public IP"].notna() & (asset_df["Public IP"] != "")])
 
-    col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("Average Risk", avg_asset_risk)
-    col2.metric("Critical Assets", critical_assets)
-    col3.metric("Security Hub Affected", securityhub_affected)
-    col4.metric("GuardDuty Affected", guardduty_affected)
+        col1.metric("Total Assets", total_assets)
+        col2.metric("Average Risk", avg_asset_risk)
+        col3.metric("Critical Assets", critical_assets)
+        col4.metric("Public Assets", public_assets)
 
-    st.subheader("Top Risky Assets")
+        st.subheader("Cloud Asset Inventory")
 
-    if correlated_assets:
+        asset_df = asset_df.sort_values(
+            by="Risk Score",
+            ascending=False
+        )
 
-        asset_rows = []
+        st.dataframe(
+            asset_df,
+            width='stretch'
+        )
 
-        for asset in correlated_assets:
-            asset_rows.append({
-                "Asset ID": asset["asset_id"],
-                "Type": asset["asset_type"],
-                "Account": asset["account_id"],
-                "Region": asset["region"],
-                "Risk Score": calculate_unified_risk(
-                    asset["risk_score"],
-                    asset["securityhub_findings"],
-                    guardduty_map.get(asset["asset_id"], 0)
-                ),
-                "Security Hub Findings": asset["securityhub_findings"],
-                "GuardDuty Findings": guardduty_map.get(asset["asset_id"], 0)
-            })
+    else:
+        st.info("No assets found yet. Run a Phase 3 client scan first.")
 
-    asset_rows = sorted(
-        asset_rows,
-        key=lambda x: x["Risk Score"],
-        reverse=True
-    )
 
-    st.dataframe(
-        pd.DataFrame(asset_rows),
-        width='stretch'
-    )
-
-else:
-    st.info("No assets found yet. Run a scan first.")
-             
 if page == "Client Accounts":
 
     st.title("🛡️ DGS Sentinel AI")

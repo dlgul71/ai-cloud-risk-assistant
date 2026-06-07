@@ -16,6 +16,8 @@ def init_asset_db():
         region TEXT,
         hostname TEXT,
         ip_address TEXT,
+        public_ip TEXT,
+        state TEXT,
         risk_score INTEGER,
         last_scan TEXT
     )
@@ -37,10 +39,12 @@ def save_asset(asset):
         region,
         hostname,
         ip_address,
+        public_ip,
+        state,
         risk_score,
         last_scan
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         asset.get("asset_id"),
         asset.get("asset_type"),
@@ -48,6 +52,8 @@ def save_asset(asset):
         asset.get("region"),
         asset.get("hostname"),
         asset.get("ip_address"),
+        asset.get("public_ip"),
+        asset.get("state"),
         asset.get("risk_score", 0),
         asset.get("last_scan", str(datetime.now(UTC)))
     ))
