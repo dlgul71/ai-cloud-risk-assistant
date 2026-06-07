@@ -9,6 +9,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from risk_engine import calculate_unified_risk
+
 
 # ============================================================
 # OPTIONAL LOCAL MODULE IMPORTS
@@ -647,6 +649,28 @@ if page == "Asset Dashboard":
 
     st.metric("Total Assets", len(assets))
 
+    risk_scores = [
+        calculate_unified_risk(
+            asset["risk_score"],
+            asset["securityhub_findings"],
+            guardduty_map.get(asset["asset_id"], 0)
+        )
+        for asset in correlated_assets  
+    ]
+
+
+    avg_asset_risk = round(sum(risk_scores) / len(risk_scores), 2) if risk_scores else 0
+    critical_assets = len([score for score in risk_scores if score >= 80])
+    securityhub_affected = len([asset for asset in correlated_assets if asset["securityhub_findings"] > 0])
+    guardduty_affected = len([asset for asset in guardduty_assets if asset["guardduty_findings"] > 0])
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Average Risk", avg_asset_risk)
+    col2.metric("Critical Assets", critical_assets)
+    col3.metric("Security Hub Affected", securityhub_affected)
+    col4.metric("GuardDuty Affected", guardduty_affected)
+
     st.subheader("Top Risky Assets")
 
     if correlated_assets:
@@ -659,24 +683,28 @@ if page == "Asset Dashboard":
                 "Type": asset["asset_type"],
                 "Account": asset["account_id"],
                 "Region": asset["region"],
-                "Risk Score": asset["risk_score"],
+                "Risk Score": calculate_unified_risk(
+                    asset["risk_score"],
+                    asset["securityhub_findings"],
+                    guardduty_map.get(asset["asset_id"], 0)
+                ),
                 "Security Hub Findings": asset["securityhub_findings"],
                 "GuardDuty Findings": guardduty_map.get(asset["asset_id"], 0)
             })
 
-        asset_rows = sorted(
-            asset_rows,
-            key=lambda x: x["Risk Score"],
-            reverse=True
-        )
+    asset_rows = sorted(
+        asset_rows,
+        key=lambda x: x["Risk Score"],
+        reverse=True
+    )
 
-        st.dataframe(
-            pd.DataFrame(asset_rows),
-            use_container_width=True
-        )
+    st.dataframe(
+        pd.DataFrame(asset_rows),
+        use_container_width=True
+    )
 
-    else:
-        st.info("No assets found yet. Run a scan first.")
+else:
+    st.info("No assets found yet. Run a scan first.")
              
 if page == "Client Accounts":
 
@@ -955,6 +983,7 @@ Scan Status: {st.session_state['last_scan_status']}
 Last Scan Time: {st.session_state['last_scan_time']}
 """
 )
+# ===========================================================
 # EXECUTIVE SECURITY OVERVIEW
 # ============================================================
 
