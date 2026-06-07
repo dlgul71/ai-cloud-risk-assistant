@@ -818,6 +818,36 @@ if page == "Asset Dashboard":
             risk_chart_df.set_index("Asset ID")["Risk Score"]
         )
 
+        st.subheader("Exposure Analytics")
+
+        public_assets = len(
+            asset_df[
+                asset_df["Public IP"].notna() &
+                (asset_df["Public IP"] != "")
+            ]
+        )
+
+        stopped_assets = len(
+            asset_df[
+                asset_df["State"] == "stopped"
+            ]
+        )
+
+        exp_col1, exp_col2 = st.columns(2)
+
+        exp_col1.metric("Public Assets", public_assets)
+        exp_col2.metric("Stopped Assets", stopped_assets)
+
+        st.subheader("Assets by Region")
+
+        region_counts = (
+            asset_df.groupby("Region")
+            .size()
+            .sort_values(ascending=False)
+        )
+
+        st.bar_chart(region_counts)
+
         st.subheader("Asset Risk Detail")
 
         selected_asset_id = st.selectbox(
