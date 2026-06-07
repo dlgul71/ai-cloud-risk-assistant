@@ -628,13 +628,22 @@ if page == "Asset Dashboard":
 
     from asset_db import get_assets
     from asset_correlation import correlate_securityhub_to_assets
+    from asset_correlation import correlate_guardduty_to_assets
     import pandas as pd
 
     st.title("Asset Dashboard")
     st.caption("CAASM-style asset inventory and Security Hub correlation")
 
     assets = get_assets()
+    
     correlated_assets = correlate_securityhub_to_assets()
+    
+    guardduty_assets = correlate_guardduty_to_assets()
+    
+    guardduty_map = {
+        item["asset_id"]: item["guardduty_findings"]
+        for item in guardduty_assets
+    }
 
     st.metric("Total Assets", len(assets))
 
@@ -651,7 +660,8 @@ if page == "Asset Dashboard":
                 "Account": asset["account_id"],
                 "Region": asset["region"],
                 "Risk Score": asset["risk_score"],
-                "Security Hub Findings": asset["securityhub_findings"]
+                "Security Hub Findings": asset["securityhub_findings"],
+                "GuardDuty Findings": guardduty_map.get(asset["asset_id"], 0)
             })
 
         asset_rows = sorted(
