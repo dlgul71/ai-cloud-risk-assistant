@@ -562,10 +562,12 @@ with st.sidebar:
         "Navigation",
         [
             "Dashboard",
-            "Client Accounts"
+            "Client Accounts",
+            "Asset Dashboard"
         ],
         key="main_navigation"
     )
+    st.sidebar.write("Selected page:", page)
 
     st.header("Configuration")
 
@@ -622,7 +624,45 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 # ============================================================
 # CLIENT ACCOUNTS PAGE
 # ============================================================
+if page == "Asset Dashboard":
 
+    from asset_dashboard import get_top_risky_assets
+    from asset_db import get_assets
+
+    st.title("Asset Dashboard")
+    st.caption("CAASM-style asset inventory and risk ranking")
+
+    assets = get_assets()
+    risky_assets = get_top_risky_assets()
+
+    st.metric("Total Assets", len(assets))
+
+    st.subheader("Top Risky Assets")
+
+    if risky_assets:
+
+        import pandas as pd
+
+        asset_rows = []
+
+        for asset in risky_assets:
+            asset_rows.append({
+                "Asset ID": asset[0],
+                "Type": asset[1],
+                "Account": asset[2],
+                "Region": asset[3],
+                "IP Address": asset[5],
+                "Risk Score": asset[6],
+                "Last Scan": asset[7]
+            })
+
+        st.dataframe(
+            pd.DataFrame(asset_rows),
+            use_container_width=True
+        )
+
+    else:
+        st.info("No assets found yet. Run a scan first.")
 if page == "Client Accounts":
 
     st.title("🛡️ DGS Sentinel AI")
@@ -787,6 +827,9 @@ else:
 # ============================================================
 # MAIN DASHBOARD HEADER
 # ============================================================
+
+if page != "Dashboard":
+    st.stop()
 
 st.title("🛡️ DGS Sentinel AI")
 st.caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
