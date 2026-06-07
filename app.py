@@ -704,6 +704,55 @@ if page == "Asset Dashboard":
             width='stretch'
         )
 
+        st.subheader("Risk Distribution")
+
+        risk_chart_df = asset_df.copy()
+
+        st.bar_chart(
+            risk_chart_df.set_index("Asset ID")["Risk Score"]
+        )
+
+        st.subheader("Asset Risk Detail")
+
+        selected_asset_id = st.selectbox(
+            "Select an asset to review",
+            asset_df["Asset ID"].tolist()
+        )
+
+        selected_asset = asset_df[
+            asset_df["Asset ID"] == selected_asset_id
+        ].iloc[0]
+
+        st.markdown(f"### {selected_asset['Asset ID']}")
+
+        detail_col1, detail_col2, detail_col3 = st.columns(3)
+
+        detail_col1.metric("Asset Type", selected_asset["Asset Type"])
+        detail_col2.metric("Region", selected_asset["Region"])
+        detail_col3.metric("Risk Score", selected_asset["Risk Score"])
+
+        st.write("**Account ID:**", selected_asset["Account ID"])
+        st.write("**Private IP:**", selected_asset["Private IP"])
+        st.write("**Public IP:**", selected_asset["Public IP"] or "None")
+        st.write("**State:**", selected_asset["State"])
+        st.write("**Last Scan:**", selected_asset["Last Scan"])
+
+        if selected_asset["Public IP"]:
+            st.error(
+                "Exposure Finding: This asset has a public IP address. Review security groups, inbound ports, and business justification."
+            )
+        else:
+            st.success(
+                "Exposure Finding: No public IP detected for this asset."
+            )
+
+        if selected_asset["Risk Score"] >= 80:
+            st.error("Remediation Priority: Critical — immediate review required.")
+        elif selected_asset["Risk Score"] >= 50:
+            st.warning("Remediation Priority: High — remediate within SLA.")
+        else:
+            st.info("Remediation Priority: Standard monitoring.")
+
     else:
         st.info("No assets found yet. Run a Phase 3 client scan first.")
 
