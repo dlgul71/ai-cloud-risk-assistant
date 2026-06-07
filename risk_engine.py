@@ -11,3 +11,14 @@ def calculate_asset_risk(asset):
         score += 10
 
     return score
+def calculate_unified_risk(
+    base_risk,
+    securityhub_count,
+    guardduty_count
+):
+    score = base_risk
+
+    score += securityhub_count * 20
+    score += guardduty_count * 30
+
+    return min(score, 100)
