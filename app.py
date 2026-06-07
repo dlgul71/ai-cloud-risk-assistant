@@ -10,6 +10,7 @@ import streamlit as st
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from risk_engine import calculate_unified_risk
+from scan_engine_phase3_assumerole import run_client_scan
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
 
 
@@ -727,7 +728,7 @@ if page == "Asset Dashboard":
 
     st.dataframe(
         pd.DataFrame(asset_rows),
-        use_container_width=True
+        width='stretch'
     )
 
 else:
@@ -971,17 +972,22 @@ if st.button(
 
             if selected_client_data:
                 role_arn = selected_client_data[3]
-                client_session = assume_client_role(role_arn)
 
-                if client_session is None:
+                results = run_client_scan(role_arn)
+
+                if results.get("identity", {}).get("status") != "SUCCESS":
                     raise RuntimeError(
                         f"Unable to assume role for client: {selected_client_data[1]}"
                     )
 
-                run_scan(
-                    session=client_session,
-                    client_name=selected_client_data[1]
+                st.success(
+                    f"Phase 3 multi-region scan completed. "
+                    f"Regions scanned: {len(results.get('regions_scanned', []))}. "
+                    f"EC2 assets found: {results.get('ec2_count', 0)}."
                 )
+
+                if results.get("ec2_instances"):
+                    st.dataframe(results.get("ec2_instances"), width='stretch')
             else:
                 run_scan()
 
