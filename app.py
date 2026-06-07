@@ -715,6 +715,49 @@ if page == "Executive Dashboard":
             width="stretch"
         )
 
+        st.subheader("Client Risk Ranking")
+
+        client_lookup = {
+            str(client[2]): client[1]
+            for client in clients
+        }
+
+        client_risk_df = (
+            asset_df.groupby("Account ID")
+            .agg(
+                Assets=("Asset ID", "count"),
+                Average_Risk=("Risk Score", "mean"),
+                Critical_Assets=("Risk Score", lambda x: (x >= 80).sum()),
+                Public_Assets=("Public IP", lambda x: x.notna().sum())
+            )
+            .reset_index()
+        )
+
+        client_risk_df["Client Name"] = client_risk_df["Account ID"].map(
+            client_lookup
+        ).fillna("Unknown Client")
+
+        client_risk_df["Average_Risk"] = client_risk_df["Average_Risk"].round(2)
+
+        client_risk_df = client_risk_df[
+            [
+                "Client Name",
+                "Account ID",
+                "Assets",
+                "Average_Risk",
+                "Critical_Assets",
+                "Public_Assets"
+            ]
+        ].sort_values(
+            by="Average_Risk",
+            ascending=False
+        )
+
+        st.dataframe(
+            client_risk_df,
+            width="stretch"
+        )
+
 
 
 if page == "Asset Dashboard":
