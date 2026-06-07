@@ -626,35 +626,39 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 # ============================================================
 if page == "Asset Dashboard":
 
-    from asset_dashboard import get_top_risky_assets
     from asset_db import get_assets
+    from asset_correlation import correlate_securityhub_to_assets
+    import pandas as pd
 
     st.title("Asset Dashboard")
-    st.caption("CAASM-style asset inventory and risk ranking")
+    st.caption("CAASM-style asset inventory and Security Hub correlation")
 
     assets = get_assets()
-    risky_assets = get_top_risky_assets()
+    correlated_assets = correlate_securityhub_to_assets()
 
     st.metric("Total Assets", len(assets))
 
     st.subheader("Top Risky Assets")
 
-    if risky_assets:
-
-        import pandas as pd
+    if correlated_assets:
 
         asset_rows = []
 
-        for asset in risky_assets:
+        for asset in correlated_assets:
             asset_rows.append({
-                "Asset ID": asset[0],
-                "Type": asset[1],
-                "Account": asset[2],
-                "Region": asset[3],
-                "IP Address": asset[5],
-                "Risk Score": asset[6],
-                "Last Scan": asset[7]
+                "Asset ID": asset["asset_id"],
+                "Type": asset["asset_type"],
+                "Account": asset["account_id"],
+                "Region": asset["region"],
+                "Risk Score": asset["risk_score"],
+                "Security Hub Findings": asset["securityhub_findings"]
             })
+
+        asset_rows = sorted(
+            asset_rows,
+            key=lambda x: x["Risk Score"],
+            reverse=True
+        )
 
         st.dataframe(
             pd.DataFrame(asset_rows),
@@ -663,6 +667,7 @@ if page == "Asset Dashboard":
 
     else:
         st.info("No assets found yet. Run a scan first.")
+             
 if page == "Client Accounts":
 
     st.title("🛡️ DGS Sentinel AI")
