@@ -614,6 +614,7 @@ with st.sidebar:
             "Dashboard",
             "Executive Dashboard",
             "Risk Trends",
+            "Remediation Center",
             "Client Accounts",
             "Asset Dashboard"
         ],
@@ -1100,6 +1101,74 @@ if page == "Asset Dashboard":
 
     else:
         st.info("No assets found yet. Run a Phase 3 client scan first.")
+
+
+
+if page == "Remediation Center":
+
+    from remediation_db import get_remediation_items
+    import pandas as pd
+
+    st.title("Remediation Center")
+    st.caption("Autonomous remediation recommendations generated from AWS findings")
+
+    remediation_items = get_remediation_items()
+
+    columns = [
+        "ID",
+        "Created At",
+        "Category",
+        "Priority",
+        "Finding",
+        "Recommendation",
+        "Owner",
+        "Status",
+        "Risk Score"
+    ]
+
+    if remediation_items:
+        remediation_df = pd.DataFrame(
+            remediation_items,
+            columns=columns
+        )
+
+        total_items = len(remediation_df)
+        critical_items = len(remediation_df[remediation_df["Priority"] == "CRITICAL"])
+        high_items = len(remediation_df[remediation_df["Priority"] == "HIGH"])
+        open_items = len(remediation_df[remediation_df["Status"] == "Open"])
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        col1.metric("Total Items", total_items)
+        col2.metric("Critical", critical_items)
+        col3.metric("High", high_items)
+        col4.metric("Open", open_items)
+
+        st.subheader("Remediation Queue")
+
+        remediation_df = remediation_df.sort_values(
+            by="Risk Score",
+            ascending=False
+        )
+
+        st.dataframe(
+            remediation_df,
+            width="stretch"
+        )
+
+        st.subheader("Top Recommendation")
+
+        top_item = remediation_df.iloc[0]
+
+        st.markdown(f"### {top_item['Finding']}")
+        st.write("**Priority:**", top_item["Priority"])
+        st.write("**Category:**", top_item["Category"])
+        st.write("**Owner:**", top_item["Owner"])
+        st.write("**Recommendation:**", top_item["Recommendation"])
+
+    else:
+        st.info("No remediation items found yet. Run a scan to generate recommendations.")
+
 
 
 if page == "Client Accounts":
