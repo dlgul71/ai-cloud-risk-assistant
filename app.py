@@ -730,86 +730,37 @@ if page == "Risk Trends":
         col3.metric("Latest Assets", latest["Assets"])
         col4.metric("Latest Remediation Actions", latest["Remediation Actions"])
 
-        st.subheader("Security Score Over Time")
-        st.line_chart(
-            trend_df.set_index("Scan Time")["Security Score"]
-        )
+        if len(trend_df) >= 2:
+            previous = trend_df.iloc[-2]
 
-        st.subheader("Findings Trend")
+            score_delta = latest["Security Score"] - previous["Security Score"]
+            securityhub_delta = latest["Security Hub Findings"] - previous["Security Hub Findings"]
+            guardduty_delta = latest["GuardDuty Findings"] - previous["GuardDuty Findings"]
+            remediation_delta = latest["Remediation Actions"] - previous["Remediation Actions"]
 
-        findings_trend = trend_df.set_index("Scan Time")[
-            [
-                "Security Hub Findings",
-                "GuardDuty Findings",
-                "KEV CVEs",
-                "Critical Vulnerabilities"
-            ]
-        ]
+            st.subheader("Executive Risk Delta")
 
-        st.line_chart(findings_trend)
+            delta_col1, delta_col2, delta_col3, delta_col4 = st.columns(4)
 
-        st.subheader("Historical Snapshot Table")
-        st.dataframe(
-            trend_df,
-            width="stretch"
-        )
+            delta_col1.metric(
+                "Security Score Change",
+                score_delta
+            )
 
-    else:
-        st.info("No scan snapshots found yet. Run scans to build historical trend data.")
+            delta_col2.metric(
+                "Security Hub Findings Change",
+                securityhub_delta
+            )
 
+            delta_col3.metric(
+                "GuardDuty Findings Change",
+                guardduty_delta
+            )
 
-if page == "Risk Trends":
-
-    import json
-    from pathlib import Path
-    import pandas as pd
-
-    st.title("Risk Trends")
-    st.caption("Historical risk trend analysis from saved scan snapshots")
-
-    snapshot_dir = Path("scan_snapshots")
-    trend_rows = []
-
-    if snapshot_dir.exists():
-        for snapshot_file in sorted(snapshot_dir.glob("*.json")):
-            try:
-                with open(snapshot_file, "r") as f:
-                    data = json.load(f)
-
-                summary_data = data.get("summary", {})
-
-                trend_rows.append({
-                    "Scan Time": data.get("scan_time"),
-                    "Security Score": summary_data.get("security_score", 0),
-                    "Risk Rating": summary_data.get("risk_rating", "UNKNOWN"),
-                    "Assets": summary_data.get("assets", 0),
-                    "EC2 Assets": summary_data.get("ec2_assets", 0),
-                    "IAM Users": summary_data.get("iam_users", 0),
-                    "S3 Buckets": summary_data.get("s3_buckets", 0),
-                    "Security Hub Findings": summary_data.get("securityhub_findings", 0),
-                    "GuardDuty Findings": summary_data.get("guardduty_findings", 0),
-                    "KEV CVEs": summary_data.get("kev_cves", 0),
-                    "Remediation Actions": summary_data.get("remediation_actions", 0),
-                    "Critical Vulnerabilities": summary_data.get("critical_vulnerabilities", 0),
-                    "Snapshot File": snapshot_file.name
-                })
-
-            except Exception as e:
-                st.warning(f"Unable to load snapshot {snapshot_file.name}: {e}")
-
-    if trend_rows:
-        trend_df = pd.DataFrame(trend_rows)
-        trend_df["Scan Time"] = pd.to_datetime(trend_df["Scan Time"], errors="coerce")
-        trend_df = trend_df.dropna(subset=["Scan Time"]).sort_values("Scan Time")
-
-        latest = trend_df.iloc[-1]
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric("Latest Security Score", latest["Security Score"])
-        col2.metric("Latest Risk Rating", latest["Risk Rating"])
-        col3.metric("Latest Assets", latest["Assets"])
-        col4.metric("Latest Remediation Actions", latest["Remediation Actions"])
+            delta_col4.metric(
+                "Remediation Actions Change",
+                remediation_delta
+            )
 
         st.subheader("Security Score Over Time")
         st.line_chart(
