@@ -11,6 +11,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from risk_engine import calculate_unified_risk
 from scan_engine_phase3_assumerole import run_client_scan
+from snapshot_engine import save_scan_snapshot
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
 
 
@@ -1283,6 +1284,53 @@ if st.button(
                     st.dataframe(results.get("ec2_instances"), width='stretch')
             else:
                 run_scan()
+
+            snapshot_assets = []
+
+            try:
+                from asset_db import get_assets
+
+                raw_assets = get_assets()
+
+                for asset in raw_assets:
+                    snapshot_assets.append({
+                        "asset_id": asset[0],
+                        "asset_type": asset[1],
+                        "account_id": asset[2],
+                        "region": asset[3],
+                        "hostname": asset[4],
+                        "private_ip": asset[5],
+                        "public_ip": asset[6],
+                        "state": asset[7],
+                        "risk_score": asset[8],
+                        "last_scan": asset[9]
+                    })
+
+                snapshot_summary = {
+                    "security_score": max(0, 100 - int(avg_risk)),
+                    "risk_rating": risk_rating,
+                    "assets": len(snapshot_assets),
+                    "accounts_scanned": 1,
+                    "ec2_assets": len([a for a in snapshot_assets if a.get("asset_type") == "EC2"]),
+                    "iam_users": 0,
+                    "s3_buckets": 0,
+                    "securityhub_findings": high_count + critical_count,
+                    "guardduty_findings": 0,
+                    "kev_cves": kev_count,
+                    "remediation_actions": len(remediation_playbook),
+                    "critical_vulnerabilities": critical_count
+                }
+
+                snapshot_path = save_scan_snapshot(
+                    summary=snapshot_summary,
+                    assets=snapshot_assets,
+                    remediation=remediation_playbook
+                )
+
+                st.success(f"Snapshot saved: {snapshot_path}")
+
+            except Exception as snapshot_error:
+                st.warning(f"Snapshot save skipped: {snapshot_error}")
 
             st.session_state["last_scan_status"] = "Completed"
             st.session_state["last_scan_time"] = datetime.now().strftime(
