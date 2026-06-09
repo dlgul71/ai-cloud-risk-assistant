@@ -1132,17 +1132,29 @@ if page == "Remediation Center":
             columns=columns
         )
 
+        remediation_df["Created At"] = pd.to_datetime(
+            remediation_df["Created At"],
+            errors="coerce",
+            utc=True
+        )
+
+        remediation_df["Age (Days)"] = (
+            pd.Timestamp.now(tz="UTC") - remediation_df["Created At"]
+        ).dt.days.fillna(0).astype(int)
+
         total_items = len(remediation_df)
         critical_items = len(remediation_df[remediation_df["Priority"] == "CRITICAL"])
         high_items = len(remediation_df[remediation_df["Priority"] == "HIGH"])
         open_items = len(remediation_df[remediation_df["Status"] == "Open"])
+        oldest_item = remediation_df["Age (Days)"].max() if not remediation_df.empty else 0
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         col1.metric("Total Items", total_items)
         col2.metric("Critical", critical_items)
         col3.metric("High", high_items)
         col4.metric("Open", open_items)
+        col5.metric("Oldest Item Days", oldest_item)
 
         st.subheader("Remediation Filters")
 
@@ -1195,6 +1207,13 @@ if page == "Remediation Center":
         with chart_col3:
             st.write("Items by Category")
             st.bar_chart(remediation_df["Category"].value_counts())
+
+        st.subheader("Remediation Aging")
+
+        if not remediation_df.empty:
+            st.bar_chart(
+                remediation_df.set_index("Finding")["Age (Days)"]
+            )
 
         st.subheader("Remediation Queue")
 
