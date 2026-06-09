@@ -1144,9 +1144,45 @@ if page == "Remediation Center":
         col3.metric("High", high_items)
         col4.metric("Open", open_items)
 
+        st.subheader("Remediation Filters")
+
+        filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+        priority_filter = filter_col1.selectbox(
+            "Priority",
+            ["All"] + sorted(remediation_df["Priority"].dropna().unique().tolist())
+        )
+
+        status_filter = filter_col2.selectbox(
+            "Status",
+            ["All"] + sorted(remediation_df["Status"].dropna().unique().tolist())
+        )
+
+        category_filter = filter_col3.selectbox(
+            "Category",
+            ["All"] + sorted(remediation_df["Category"].dropna().unique().tolist())
+        )
+
+        filtered_remediation_df = remediation_df.copy()
+
+        if priority_filter != "All":
+            filtered_remediation_df = filtered_remediation_df[
+                filtered_remediation_df["Priority"] == priority_filter
+            ]
+
+        if status_filter != "All":
+            filtered_remediation_df = filtered_remediation_df[
+                filtered_remediation_df["Status"] == status_filter
+            ]
+
+        if category_filter != "All":
+            filtered_remediation_df = filtered_remediation_df[
+                filtered_remediation_df["Category"] == category_filter
+            ]
+
         st.subheader("Remediation Queue")
 
-        remediation_df = remediation_df.sort_values(
+        remediation_df = filtered_remediation_df.sort_values(
             by="Risk Score",
             ascending=False
         )
