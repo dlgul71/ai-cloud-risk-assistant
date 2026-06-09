@@ -1327,7 +1327,10 @@ if st.button(
                     remediation=remediation_playbook
                 )
 
-                st.success(f"Snapshot saved: {snapshot_path}")
+                st.success(
+                    f"Snapshot saved: {snapshot_path.get('file_path')} "
+                    f"(old snapshots deleted: {snapshot_path.get('deleted_old_snapshots', 0)})"
+                )
 
             except Exception as snapshot_error:
                 st.warning(f"Snapshot save skipped: {snapshot_error}")
