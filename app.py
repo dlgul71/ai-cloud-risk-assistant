@@ -1146,7 +1146,11 @@ if page == "Remediation Center":
         critical_items = len(remediation_df[remediation_df["Priority"] == "CRITICAL"])
         high_items = len(remediation_df[remediation_df["Priority"] == "HIGH"])
         open_items = len(remediation_df[remediation_df["Status"] == "Open"])
+        in_progress_items = len(remediation_df[remediation_df["Status"] == "In Progress"])
+        resolved_items = len(remediation_df[remediation_df["Status"] == "Resolved"])
+        accepted_risk_items = len(remediation_df[remediation_df["Status"] == "Accepted Risk"])
         oldest_item = remediation_df["Age (Days)"].max() if not remediation_df.empty else 0
+        resolution_rate = round((resolved_items / total_items) * 100, 2) if total_items else 0
 
         col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -1155,6 +1159,13 @@ if page == "Remediation Center":
         col3.metric("High", high_items)
         col4.metric("Open", open_items)
         col5.metric("Oldest Item Days", oldest_item)
+
+        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+
+        kpi_col1.metric("In Progress", in_progress_items)
+        kpi_col2.metric("Resolved", resolved_items)
+        kpi_col3.metric("Accepted Risk", accepted_risk_items)
+        kpi_col4.metric("Resolution Rate", f"{resolution_rate}%")
 
         st.subheader("Remediation Filters")
 
