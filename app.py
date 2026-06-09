@@ -1226,6 +1226,34 @@ if page == "Remediation Center":
                 remediation_df.set_index("Finding")["Age (Days)"]
             )
 
+        st.subheader("Remediation SLA Compliance")
+
+        sla_df = remediation_df.copy()
+
+        sla_df["SLA Bucket"] = pd.cut(
+            sla_df["Age (Days)"],
+            bins=[-1, 30, 60, 90, 99999],
+            labels=["0-30 Days", "31-60 Days", "61-90 Days", "90+ Days"]
+        )
+
+        st.bar_chart(
+            sla_df["SLA Bucket"].value_counts().sort_index()
+        )
+
+        overdue_items = len(
+            remediation_df[remediation_df["Age (Days)"] > 90]
+        )
+
+        sla_col1, sla_col2 = st.columns(2)
+
+        sla_col1.metric("Overdue Items", overdue_items)
+
+        sla_col2.metric(
+            "SLA Compliance %",
+            round(((total_items - overdue_items) / total_items) * 100, 2)
+            if total_items else 100
+        )
+
         st.subheader("Remediation Queue")
 
         remediation_df = filtered_remediation_df.sort_values(
