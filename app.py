@@ -613,6 +613,7 @@ with st.sidebar:
         [
             "Dashboard",
             "Executive Dashboard",
+            "SOC Dashboard",
             "Risk Trends",
             "Remediation Center",
             "Client Accounts",
@@ -677,6 +678,124 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 # ============================================================
 # CLIENT ACCOUNTS PAGE
 # ============================================================
+
+
+
+if page == "SOC Dashboard":
+
+    from asset_db import get_assets
+    from remediation_db import get_remediation_items
+    import pandas as pd
+
+    st.title("SOC Dashboard")
+    st.caption("Executive security operations overview")
+
+    assets = get_assets()
+    remediation_items = get_remediation_items()
+
+    asset_count = len(assets)
+    remediation_count = len(remediation_items)
+
+    critical_remediation = 0
+    open_remediation = 0
+    overdue_remediation = 0
+    avg_asset_risk = 0
+
+    if assets:
+        soc_asset_df = pd.DataFrame(
+            assets,
+            columns=[
+                "Asset ID",
+                "Asset Type",
+                "Account ID",
+                "Region",
+                "Hostname",
+                "Private IP",
+                "Public IP",
+                "State",
+                "Risk Score",
+                "Last Scan"
+            ]
+        )
+
+        avg_asset_risk = round(soc_asset_df["Risk Score"].mean(), 2)
+
+    if remediation_items:
+        soc_remediation_df = pd.DataFrame(
+            remediation_items,
+            columns=[
+                "ID",
+                "Created At",
+                "Category",
+                "Priority",
+                "Finding",
+                "Recommendation",
+                "Owner",
+                "Status",
+                "Risk Score"
+            ]
+        )
+
+        soc_remediation_df["Created At"] = pd.to_datetime(
+            soc_remediation_df["Created At"],
+            errors="coerce",
+            utc=True
+        )
+
+        soc_remediation_df["Age (Days)"] = (
+            pd.Timestamp.now(tz="UTC") - soc_remediation_df["Created At"]
+        ).dt.days.fillna(0).astype(int)
+
+        critical_remediation = len(
+            soc_remediation_df[soc_remediation_df["Priority"] == "CRITICAL"]
+        )
+
+        open_remediation = len(
+            soc_remediation_df[soc_remediation_df["Status"] == "Open"]
+        )
+
+        overdue_remediation = len(
+            soc_remediation_df[soc_remediation_df["Age (Days)"] > 90]
+        )
+
+    soc_col1, soc_col2, soc_col3, soc_col4 = st.columns(4)
+
+    soc_col1.metric("Total Assets", asset_count)
+    soc_col2.metric("Average Asset Risk", avg_asset_risk)
+    soc_col3.metric("Open Remediation", open_remediation)
+    soc_col4.metric("Overdue Remediation", overdue_remediation)
+
+    soc_col5, soc_col6 = st.columns(2)
+
+    soc_col5.metric("Critical Remediation", critical_remediation)
+    soc_col6.metric("Total Remediation Items", remediation_count)
+
+    if assets:
+        st.subheader("Top Risk Assets")
+
+        top_soc_assets = soc_asset_df.sort_values(
+            by="Risk Score",
+            ascending=False
+        ).head(10)
+
+        st.dataframe(
+            top_soc_assets,
+            width="stretch"
+        )
+
+    if remediation_items:
+        st.subheader("Top Remediation Items")
+
+        top_soc_remediation = soc_remediation_df.sort_values(
+            by="Risk Score",
+            ascending=False
+        ).head(10)
+
+        st.dataframe(
+            top_soc_remediation,
+            width="stretch"
+        )
+
 
 
 if page == "Risk Trends":
