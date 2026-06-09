@@ -811,6 +811,56 @@ if page == "Risk Trends":
                     mime="application/json"
                 )
 
+            st.subheader("Snapshot Compare View")
+
+            if len(snapshot_files) >= 2:
+                latest_file = snapshot_files[0]
+                previous_file = snapshot_files[1]
+
+                with open(latest_file, "r") as f:
+                    latest_snapshot = json.load(f)
+
+                with open(previous_file, "r") as f:
+                    previous_snapshot = json.load(f)
+
+                latest_summary = latest_snapshot.get("summary", {})
+                previous_summary = previous_snapshot.get("summary", {})
+
+                compare_col1, compare_col2, compare_col3 = st.columns(3)
+
+                compare_col1.metric(
+                    "Security Score Delta",
+                    latest_summary.get("security_score", 0) - previous_summary.get("security_score", 0)
+                )
+
+                compare_col2.metric(
+                    "Assets Delta",
+                    latest_summary.get("assets", 0) - previous_summary.get("assets", 0)
+                )
+
+                compare_col3.metric(
+                    "Remediation Delta",
+                    latest_summary.get("remediation_actions", 0) - previous_summary.get("remediation_actions", 0)
+                )
+
+                compare_col4, compare_col5 = st.columns(2)
+
+                compare_col4.metric(
+                    "Security Hub Findings Delta",
+                    latest_summary.get("securityhub_findings", 0) - previous_summary.get("securityhub_findings", 0)
+                )
+
+                compare_col5.metric(
+                    "GuardDuty Findings Delta",
+                    latest_summary.get("guardduty_findings", 0) - previous_summary.get("guardduty_findings", 0)
+                )
+
+                st.caption(
+                    f"Comparing latest snapshot {latest_file.name} against previous snapshot {previous_file.name}."
+                )
+            else:
+                st.info("At least two snapshots are required for comparison.")
+
     else:
         st.info("No scan snapshots found yet. Run scans to build historical trend data.")
 
