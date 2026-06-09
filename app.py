@@ -787,6 +787,30 @@ if page == "Risk Trends":
             width="stretch"
         )
 
+        st.subheader("Snapshot Download Center")
+
+        snapshot_files = sorted(
+            snapshot_dir.glob("*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True
+        )
+
+        if snapshot_files:
+            selected_snapshot = st.selectbox(
+                "Select snapshot to download",
+                [file.name for file in snapshot_files]
+            )
+
+            selected_snapshot_path = snapshot_dir / selected_snapshot
+
+            with open(selected_snapshot_path, "rb") as snapshot_file:
+                st.download_button(
+                    label="Download Selected Snapshot JSON",
+                    data=snapshot_file,
+                    file_name=selected_snapshot,
+                    mime="application/json"
+                )
+
     else:
         st.info("No scan snapshots found yet. Run scans to build historical trend data.")
 
