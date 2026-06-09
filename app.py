@@ -1309,6 +1309,41 @@ Scan Status: {st.session_state['last_scan_status']}
 Last Scan Time: {st.session_state['last_scan_time']}
 """
 )
+
+st.subheader("Scheduled Scan Readiness")
+
+scan_cadence = st.selectbox(
+    "Suggested scan cadence",
+    [
+        "Every 4 hours",
+        "Every 8 hours",
+        "Every 12 hours",
+        "Every 24 hours"
+    ],
+    index=3
+)
+
+readiness_col1, readiness_col2, readiness_col3 = st.columns(3)
+
+readiness_col1.metric(
+    "Automation Status",
+    "Manual Ready"
+)
+
+readiness_col2.metric(
+    "Selected Cadence",
+    scan_cadence
+)
+
+readiness_col3.metric(
+    "Next Step",
+    "Scheduler Hook"
+)
+
+st.caption(
+    "Scheduled scanning readiness is prepared for future cron, GitHub Actions, or cloud scheduler integration."
+)
+
 # ===========================================================
 # EXECUTIVE SECURITY OVERVIEW
 # ============================================================
