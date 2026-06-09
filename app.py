@@ -1192,6 +1192,15 @@ if page == "Remediation Center":
             width="stretch"
         )
 
+        remediation_csv = remediation_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="Download Filtered Remediation CSV",
+            data=remediation_csv,
+            file_name="dgs_sentinel_remediation_queue.csv",
+            mime="text/csv"
+        )
+
         st.subheader("Top Recommendation")
 
         top_item = remediation_df.iloc[0]
