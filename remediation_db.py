@@ -85,3 +85,22 @@ def get_remediation_items():
     conn.close()
 
     return rows
+
+
+def update_remediation_status(item_id, status):
+    init_remediation_db()
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    UPDATE remediation_items
+    SET status = ?
+    WHERE id = ?
+    """, (
+        status,
+        item_id
+    ))
+
+    conn.commit()
+    conn.close()

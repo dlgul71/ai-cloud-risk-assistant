@@ -1106,7 +1106,7 @@ if page == "Asset Dashboard":
 
 if page == "Remediation Center":
 
-    from remediation_db import get_remediation_items
+    from remediation_db import get_remediation_items, update_remediation_status
     import pandas as pd
 
     st.title("Remediation Center")
@@ -1165,6 +1165,35 @@ if page == "Remediation Center":
         st.write("**Category:**", top_item["Category"])
         st.write("**Owner:**", top_item["Owner"])
         st.write("**Recommendation:**", top_item["Recommendation"])
+
+        st.subheader("Update Remediation Status")
+
+        selected_item_id = st.selectbox(
+            "Select remediation item ID",
+            remediation_df["ID"].tolist()
+        )
+
+        new_status = st.selectbox(
+            "New status",
+            [
+                "Open",
+                "In Progress",
+                "Resolved",
+                "Accepted Risk"
+            ]
+        )
+
+        if st.button("Update Remediation Status"):
+            update_remediation_status(
+                int(selected_item_id),
+                new_status
+            )
+
+            st.success(
+                f"Remediation item {selected_item_id} updated to {new_status}."
+            )
+
+            st.rerun()
 
     else:
         st.info("No remediation items found yet. Run a scan to generate recommendations.")
