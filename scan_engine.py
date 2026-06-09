@@ -6,6 +6,7 @@ from iam_ingest import get_iam_risk_findings
 from s3_ingest import get_s3_exposure_findings
 from securityhub_ingest import get_securityhub_findings
 from guardduty_ingest import get_guardduty_findings
+from remediation_engine import generate_remediation_plan
 
 
 def priority_to_score(priority):
@@ -132,6 +133,15 @@ def run_scan():
     findings.extend(normalize_s3_findings(s3_findings))
     findings.extend(normalize_securityhub_findings(securityhub_findings))
     findings.extend(normalize_guardduty_findings(guardduty_findings))
+
+    remediation_plan = generate_remediation_plan(findings)
+
+    print("\nREMEDIATION PLAN")
+    print("-" * 60)
+
+    for item in remediation_plan[:10]:
+        print(f"{item.get('priority')} | {item.get('category')} | {item.get('finding')}")
+        print(f"Recommendation: {item.get('recommendation')}")
 
     print("\nSCAN SUMMARY")
     print("-" * 60)
