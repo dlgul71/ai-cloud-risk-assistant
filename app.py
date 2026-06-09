@@ -1180,6 +1180,22 @@ if page == "Remediation Center":
                 filtered_remediation_df["Category"] == category_filter
             ]
 
+        st.subheader("Remediation Summary Charts")
+
+        chart_col1, chart_col2, chart_col3 = st.columns(3)
+
+        with chart_col1:
+            st.write("Items by Priority")
+            st.bar_chart(remediation_df["Priority"].value_counts())
+
+        with chart_col2:
+            st.write("Items by Status")
+            st.bar_chart(remediation_df["Status"].value_counts())
+
+        with chart_col3:
+            st.write("Items by Category")
+            st.bar_chart(remediation_df["Category"].value_counts())
+
         st.subheader("Remediation Queue")
 
         remediation_df = filtered_remediation_df.sort_values(
