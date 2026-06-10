@@ -65,3 +65,10 @@ def execute_controlled_action(
             "The request passed guardrails but no AWS modification was performed."
         )
     }
+
+
+def get_adapter_for_action(action_type):
+    return SUPPORTED_ACTIONS.get(
+        action_type,
+        "NO_APPROVED_ADAPTER"
+    )
