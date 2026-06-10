@@ -8,6 +8,7 @@ from securityhub_ingest import get_securityhub_findings
 from guardduty_ingest import get_guardduty_findings
 from remediation_engine import generate_remediation_plan
 from remediation_db import save_remediation_items
+from remediation_execution import create_actions_from_remediation_plan
 
 
 def priority_to_score(priority):
@@ -137,6 +138,12 @@ def run_scan():
 
     remediation_plan = generate_remediation_plan(findings)
     save_remediation_items(remediation_plan)
+
+    execution_actions = create_actions_from_remediation_plan(
+        remediation_plan
+    )
+
+    print(f"\n[+] Execution actions created: {len(execution_actions)}")
 
     print("\nREMEDIATION PLAN")
     print("-" * 60)

@@ -34,6 +34,30 @@ def create_execution_action(finding, action_type, priority="STANDARD", notes="")
     cursor = conn.cursor()
 
     cursor.execute("""
+    SELECT id
+    FROM remediation_actions
+    WHERE finding = ?
+      AND action_type = ?
+      AND execution_status NOT IN ('Completed', 'Failed')
+    ORDER BY id DESC
+    LIMIT 1
+    """, (
+        finding,
+        action_type
+    ))
+
+    existing_action = cursor.fetchone()
+
+    if existing_action:
+        conn.close()
+
+        return {
+            "action_id": existing_action[0],
+            "created": False,
+            "message": "Existing open action reused."
+        }
+
+    cursor.execute("""
     INSERT INTO remediation_actions (
         created_at,
         finding,
@@ -56,15 +80,23 @@ def create_execution_action(finding, action_type, priority="STANDARD", notes="")
         notes
     ))
 
+    action_id = cursor.lastrowid
+
     conn.commit()
     conn.close()
 
     log_remediation_event(
-        action_id=cursor.lastrowid,
+        action_id=action_id,
         event_type="ACTION_CREATED",
         event_detail=f"Created remediation action: {action_type}",
         actor="DGS Sentinel AI"
     )
+
+    return {
+        "action_id": action_id,
+        "created": True,
+        "message": "New remediation action created."
+    }
 
 
 def get_execution_actions():
@@ -187,3 +219,45 @@ def simulate_execution(action_id):
         "finding": finding,
         "action_type": action_type
     }
+
+
+def create_actions_from_remediation_plan(remediation_plan):
+    created_actions = []
+
+    for item in remediation_plan:
+        category = item.get("category", "Monitoring")
+        finding = item.get("finding", "Unknown Finding")
+        priority = item.get("priority", "STANDARD")
+
+        if category == "Identity & Access":
+            action_type = "Generate IAM MFA and Access Key Review Task"
+
+        elif category == "Data Exposure":
+            action_type = "Generate S3 Exposure Remediation Task"
+
+        elif category == "Threat Detection":
+            action_type = "Generate Incident Response Investigation Task"
+
+        elif category == "Security Posture":
+            action_type = "Generate Cloud Security Posture Remediation Task"
+
+        else:
+            action_type = "Generate Monitoring Review Task"
+
+        create_execution_action(
+            finding=finding,
+            action_type=action_type,
+            priority=priority,
+            notes=(
+                "Automatically generated from DGS Sentinel AI remediation plan. "
+                "Simulation mode only. Human approval required."
+            )
+        )
+
+        created_actions.append({
+            "finding": finding,
+            "action_type": action_type,
+            "priority": priority
+        })
+
+    return created_actions
