@@ -1443,6 +1443,7 @@ if page == "Remediation Center":
 if page == "Execution Center":
 
     from remediation_execution import get_execution_actions, update_execution_action
+    from remediation_audit import get_remediation_audit
     import pandas as pd
 
     st.title("Execution Center")
@@ -1538,6 +1539,59 @@ if page == "Execution Center":
             )
 
             st.rerun()
+
+        st.subheader("Execution Audit Trail")
+
+        audit_rows = get_remediation_audit()
+
+        audit_columns = [
+            "Audit ID",
+            "Created At",
+            "Action ID",
+            "Event Type",
+            "Event Detail",
+            "Actor"
+        ]
+
+        if audit_rows:
+            audit_df = pd.DataFrame(
+                audit_rows,
+                columns=audit_columns
+            )
+
+            selected_audit_action = st.selectbox(
+                "Filter audit trail by action ID",
+                ["All"] + sorted(
+                    audit_df["Action ID"]
+                    .dropna()
+                    .astype(int)
+                    .unique()
+                    .tolist()
+                ),
+                key="audit_action_filter"
+            )
+
+            if selected_audit_action != "All":
+                audit_df = audit_df[
+                    audit_df["Action ID"] == int(selected_audit_action)
+                ]
+
+            st.dataframe(
+                audit_df,
+                width="stretch"
+            )
+
+            audit_csv = audit_df.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                label="Download Audit Trail CSV",
+                data=audit_csv,
+                file_name="dgs_sentinel_execution_audit.csv",
+                mime="text/csv"
+            )
+
+        else:
+            st.info("No execution audit events found yet.")
 
     else:
         st.info("No remediation actions have been generated yet.")
