@@ -1934,7 +1934,10 @@ if page == "Axonius CAASM Dashboard":
         get_axonius_assets,
         get_axonius_identities
     )
-    from axonius_risk_engine import calculate_caasm_metrics
+    from axonius_risk_engine import (
+        calculate_caasm_metrics,
+        generate_caasm_policy_findings
+    )
     import pandas as pd
 
     st.title("Axonius CAASM Dashboard")
@@ -1959,6 +1962,11 @@ if page == "Axonius CAASM Dashboard":
             )
 
         metrics = calculate_caasm_metrics(
+            assets=assets,
+            identities=identities
+        )
+
+        policy_findings = generate_caasm_policy_findings(
             assets=assets,
             identities=identities
         )
@@ -2073,6 +2081,63 @@ if page == "Axonius CAASM Dashboard":
 
         else:
             st.info("No Axonius identity records are available.")
+
+        st.subheader("CAASM Policy and Coverage Findings")
+
+        if policy_findings:
+            caasm_findings_df = pd.DataFrame(policy_findings)
+
+            finding_col1, finding_col2, finding_col3 = st.columns(3)
+
+            finding_col1.metric(
+                "Total Policy Findings",
+                len(caasm_findings_df)
+            )
+
+            finding_col2.metric(
+                "Critical Findings",
+                len(
+                    caasm_findings_df[
+                        caasm_findings_df["Priority"] == "CRITICAL"
+                    ]
+                )
+            )
+
+            finding_col3.metric(
+                "High Findings",
+                len(
+                    caasm_findings_df[
+                        caasm_findings_df["Priority"] == "HIGH"
+                    ]
+                )
+            )
+
+            st.dataframe(
+                caasm_findings_df,
+                width="stretch"
+            )
+
+            st.subheader("CAASM Findings by Category")
+
+            st.bar_chart(
+                caasm_findings_df["Category"].value_counts()
+            )
+
+            caasm_csv = (
+                caasm_findings_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            st.download_button(
+                label="Download CAASM Policy Findings CSV",
+                data=caasm_csv,
+                file_name="dgs_sentinel_caasm_policy_findings.csv",
+                mime="text/csv"
+            )
+
+        else:
+            st.success("No CAASM policy or coverage findings detected.")
 
     except Exception as e:
         st.error(f"Unable to load Axonius CAASM analytics: {e}")
