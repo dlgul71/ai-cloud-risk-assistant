@@ -1618,17 +1618,24 @@ if page == "Execution Center":
         )
 
         if st.button("Update Execution Action"):
-            update_execution_action(
-                int(selected_action_id),
-                approval_status=approval_status,
-                execution_status=execution_status
-            )
+            try:
+                update_execution_action(
+                    int(selected_action_id),
+                    approval_status=approval_status,
+                    execution_status=execution_status
+                )
 
-            st.success(
-                f"Execution action {selected_action_id} updated."
-            )
+                st.success(
+                    f"Execution action {selected_action_id} updated."
+                )
 
-            st.rerun()
+                st.rerun()
+
+            except ValueError as e:
+                st.error(f"Workflow update blocked: {e}")
+
+            except Exception as e:
+                st.error(f"Unable to update execution action: {e}")
 
         st.subheader("Run Approved Simulation")
 
