@@ -98,3 +98,53 @@ def build_execution_plan(action_type, finding):
             "No AWS resource changes were performed."
         )
     }
+
+
+def get_adapter_readiness_matrix():
+    return [
+        {
+            "Adapter": "IAM_REVIEW",
+            "Action Type": "Generate IAM MFA and Access Key Review Task",
+            "Resource Type": "IAM_USER",
+            "Simulation Ready": True,
+            "Live Execution": "Blocked",
+            "Approval Required": True,
+            "Readiness": "Simulation Only"
+        },
+        {
+            "Adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "Action Type": "Generate S3 Exposure Remediation Task",
+            "Resource Type": "S3_BUCKET",
+            "Simulation Ready": True,
+            "Live Execution": "Blocked",
+            "Approval Required": True,
+            "Readiness": "Candidate for Controlled Testing"
+        },
+        {
+            "Adapter": "INCIDENT_RESPONSE_TASK",
+            "Action Type": "Generate Incident Response Investigation Task",
+            "Resource Type": "SECURITY_INCIDENT",
+            "Simulation Ready": True,
+            "Live Execution": "Blocked",
+            "Approval Required": True,
+            "Readiness": "Workflow Only"
+        },
+        {
+            "Adapter": "CSPM_REMEDIATION_TASK",
+            "Action Type": "Generate Cloud Security Posture Remediation Task",
+            "Resource Type": "CSPM_FINDING",
+            "Simulation Ready": True,
+            "Live Execution": "Blocked",
+            "Approval Required": True,
+            "Readiness": "Workflow Only"
+        },
+        {
+            "Adapter": "MONITORING_REVIEW_TASK",
+            "Action Type": "Generate Monitoring Review Task",
+            "Resource Type": "MONITORING_FINDING",
+            "Simulation Ready": True,
+            "Live Execution": "Blocked",
+            "Approval Required": True,
+            "Readiness": "Workflow Only"
+        }
+    ]

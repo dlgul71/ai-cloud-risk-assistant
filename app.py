@@ -1452,7 +1452,8 @@ if page == "Execution Center":
     from remediation_guardrails import GUARDRAILS
     from remediation_live_actions import (
         get_adapter_for_action,
-        build_execution_plan
+        build_execution_plan,
+        get_adapter_readiness_matrix
     )
     import pandas as pd
 
@@ -1487,6 +1488,22 @@ if page == "Execution Center":
             "Safe mode is active. Live AWS remediation is disabled. "
             "Execution Center actions remain in simulation mode."
         )
+
+    st.subheader("Live Adapter Readiness Matrix")
+
+    adapter_matrix_df = pd.DataFrame(
+        get_adapter_readiness_matrix()
+    )
+
+    st.dataframe(
+        adapter_matrix_df,
+        width="stretch"
+    )
+
+    st.caption(
+        "All adapters remain locked to simulation or workflow-only mode. "
+        "No live AWS remediation adapters are enabled."
+    )
 
     actions = get_execution_actions()
 
