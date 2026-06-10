@@ -527,6 +527,190 @@ def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative="", 
     return buffer
 
 
+def generate_caasm_pdf(
+    connector_mode,
+    metrics,
+    identity_governance_metrics,
+    coverage_gap_metrics,
+    policy_findings,
+    coverage_gap_findings
+):
+    """Generate a client-ready executive CAASM assessment PDF."""
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+
+    width, height = letter
+    y = height - 60
+
+    def add_footer():
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(
+            50,
+            30,
+            "Data Generated Solutions, LLC | DGS Sentinel AI Executive CAASM Assessment"
+        )
+        pdf.drawRightString(
+            width - 50,
+            30,
+            f"Generated {datetime.now().strftime('%Y-%m-%d')}"
+        )
+
+    def new_page():
+        pdf.showPage()
+        add_footer()
+        return height - 60
+
+    def write_section(title):
+        nonlocal y
+
+        if y < 110:
+            y = new_page()
+
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(50, y, title)
+        y -= 18
+        pdf.setFont("Helvetica", 9)
+
+    def write_key_value(key, value):
+        nonlocal y
+
+        if y < 80:
+            y = new_page()
+            pdf.setFont("Helvetica", 9)
+
+        clean_key = str(key).replace("_", " ").title()
+        pdf.drawString(65, y, f"{clean_key}: {value}")
+        y -= 14
+
+    def write_wrapped_line(line, indent=65, max_chars=105):
+        nonlocal y
+
+        clean_line = str(line).strip()
+
+        while clean_line:
+            if y < 80:
+                y = new_page()
+                pdf.setFont("Helvetica", 8)
+
+            segment = clean_line[:max_chars]
+            pdf.drawString(indent, y, segment)
+            clean_line = clean_line[max_chars:]
+            y -= 13
+
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(50, y, "DGS Sentinel AI")
+
+    y -= 25
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(50, y, "Executive CAASM Assessment Report")
+
+    y -= 18
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(50, y, f"Prepared by: {COMPANY_NAME}")
+
+    y -= 14
+    pdf.drawString(
+        50,
+        y,
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    y -= 14
+    pdf.drawString(
+        50,
+        y,
+        f"Axonius Connector Mode: {connector_mode}"
+    )
+
+    y -= 30
+    write_section("Executive CAASM Scorecard")
+
+    for key, value in metrics.items():
+        write_key_value(key, value)
+
+    y -= 12
+    write_section("Identity Governance Summary")
+
+    for key, value in identity_governance_metrics.items():
+        write_key_value(key, value)
+
+    y -= 12
+    write_section("Connector Coverage Summary")
+
+    for key, value in coverage_gap_metrics.items():
+        write_key_value(key, value)
+
+    y -= 12
+    write_section("Top CAASM Policy Findings")
+
+    if policy_findings:
+        for item in policy_findings[:10]:
+            line = (
+                f"{item.get('Priority', 'STANDARD')} | "
+                f"{item.get('Category', 'Unknown')} | "
+                f"{item.get('Finding', 'Unknown Finding')} | "
+                f"Resource: {item.get('Resource', 'Unknown')}"
+            )
+
+            write_wrapped_line(line)
+
+            recommendation = (
+                f"Recommendation: "
+                f"{item.get('Recommendation', 'Review and remediate per SLA.')}"
+            )
+
+            write_wrapped_line(recommendation, indent=75, max_chars=95)
+            y -= 5
+
+    else:
+        write_wrapped_line("No CAASM policy findings detected.")
+
+    y -= 12
+    write_section("Connector Coverage Gaps")
+
+    if coverage_gap_findings:
+        for item in coverage_gap_findings[:10]:
+            line = (
+                f"{item.get('Priority', 'STANDARD')} | "
+                f"{item.get('Source', 'Unknown Source')} | "
+                f"Coverage: {item.get('Coverage %', 0)}% | "
+                f"Connected: {item.get('Connected', False)}"
+            )
+
+            write_wrapped_line(line)
+
+            recommendation = (
+                f"Recommendation: "
+                f"{item.get('Recommendation', 'Review connector coverage.')}"
+            )
+
+            write_wrapped_line(recommendation, indent=75, max_chars=95)
+            y -= 5
+
+    else:
+        write_wrapped_line("No connector coverage gaps detected.")
+
+    y -= 12
+    write_section("Recommended Executive Priorities")
+
+    priorities = [
+        "1. Address orphaned and privileged accounts without MFA.",
+        "2. Resolve unmanaged asset visibility gaps.",
+        "3. Establish missing connector integrations.",
+        "4. Review critical and high-risk CAASM findings.",
+        "5. Validate improvements through recurring CAASM assessments."
+    ]
+
+    for priority in priorities:
+        write_wrapped_line(priority)
+
+    add_footer()
+    pdf.save()
+    buffer.seek(0)
+
+    return buffer
+
+
 def get_guardduty_data():
     """Safely load GuardDuty findings."""
     if get_guardduty_findings is None:
@@ -2306,6 +2490,24 @@ if page == "Axonius CAASM Dashboard":
 
         else:
             st.success("No CAASM policy or coverage findings detected.")
+
+        st.subheader("Executive CAASM Export")
+
+        caasm_pdf_buffer = generate_caasm_pdf(
+            connector_mode=connector_mode,
+            metrics=metrics,
+            identity_governance_metrics=identity_governance_metrics,
+            coverage_gap_metrics=coverage_gap_metrics,
+            policy_findings=policy_findings,
+            coverage_gap_findings=coverage_gap_findings
+        )
+
+        st.download_button(
+            label="Download Executive CAASM PDF Report",
+            data=caasm_pdf_buffer,
+            file_name="dgs_sentinel_executive_caasm_report.pdf",
+            mime="application/pdf"
+        )
 
     except Exception as e:
         st.error(f"Unable to load Axonius CAASM analytics: {e}")
