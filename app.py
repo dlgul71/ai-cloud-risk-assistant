@@ -1936,7 +1936,9 @@ if page == "Axonius CAASM Dashboard":
     )
     from axonius_risk_engine import (
         calculate_caasm_metrics,
-        generate_caasm_policy_findings
+        generate_caasm_policy_findings,
+        calculate_identity_governance_metrics,
+        generate_identity_governance_rows
     )
     import pandas as pd
 
@@ -1968,6 +1970,14 @@ if page == "Axonius CAASM Dashboard":
 
         policy_findings = generate_caasm_policy_findings(
             assets=assets,
+            identities=identities
+        )
+
+        identity_governance_metrics = calculate_identity_governance_metrics(
+            identities=identities
+        )
+
+        identity_governance_rows = generate_identity_governance_rows(
             identities=identities
         )
 
@@ -2081,6 +2091,78 @@ if page == "Axonius CAASM Dashboard":
 
         else:
             st.info("No Axonius identity records are available.")
+
+        st.subheader("Identity Governance Dashboard")
+
+        identity_col1, identity_col2, identity_col3 = st.columns(3)
+
+        identity_col1.metric(
+            "Privileged Accounts",
+            identity_governance_metrics.get("Privileged Accounts", 0)
+        )
+
+        identity_col2.metric(
+            "Orphaned Accounts",
+            identity_governance_metrics.get("Orphaned Accounts", 0)
+        )
+
+        identity_col3.metric(
+            "MFA Exceptions",
+            identity_governance_metrics.get("MFA Exceptions", 0)
+        )
+
+        identity_col4, identity_col5, identity_col6 = st.columns(3)
+
+        identity_col4.metric(
+            "Privileged Without MFA",
+            identity_governance_metrics.get("Privileged Without MFA", 0)
+        )
+
+        identity_col5.metric(
+            "High-Risk Identities",
+            identity_governance_metrics.get("High-Risk Identities", 0)
+        )
+
+        identity_col6.metric(
+            "Identity Compliance Rate %",
+            identity_governance_metrics.get("Identity Compliance Rate %", 0)
+        )
+
+        if identity_governance_rows:
+            identity_governance_df = pd.DataFrame(
+                identity_governance_rows
+            )
+
+            st.subheader("Identity Governance Exceptions")
+
+            st.dataframe(
+                identity_governance_df,
+                width="stretch"
+            )
+
+            st.subheader("Identity Risk Scores")
+
+            st.bar_chart(
+                identity_governance_df.set_index("Username")[
+                    "Risk Score"
+                ]
+            )
+
+            identity_governance_csv = (
+                identity_governance_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            st.download_button(
+                label="Download Identity Governance CSV",
+                data=identity_governance_csv,
+                file_name="dgs_sentinel_identity_governance.csv",
+                mime="text/csv"
+            )
+
+        else:
+            st.info("No identity-governance records are available.")
 
         st.subheader("CAASM Policy and Coverage Findings")
 

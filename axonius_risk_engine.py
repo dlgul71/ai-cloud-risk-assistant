@@ -150,3 +150,95 @@ def generate_caasm_policy_findings(assets, identities):
         key=lambda item: item.get("Risk Score", 0),
         reverse=True
     )
+
+
+def calculate_identity_governance_metrics(identities):
+    total_identities = len(identities)
+
+    privileged_accounts = len([
+        identity for identity in identities
+        if identity.get("privileged", False)
+    ])
+
+    orphaned_accounts = len([
+        identity for identity in identities
+        if identity.get("orphaned", False)
+    ])
+
+    mfa_exceptions = len([
+        identity for identity in identities
+        if not identity.get("mfa_enabled", False)
+    ])
+
+    privileged_without_mfa = len([
+        identity for identity in identities
+        if identity.get("privileged", False)
+        and not identity.get("mfa_enabled", False)
+    ])
+
+    high_risk_identities = len([
+        identity for identity in identities
+        if identity.get("risk_score", 0) >= 75
+    ])
+
+    compliant_identities = len([
+        identity for identity in identities
+        if identity.get("mfa_enabled", False)
+        and not identity.get("orphaned", False)
+    ])
+
+    identity_compliance_rate = round(
+        (compliant_identities / total_identities) * 100,
+        2
+    ) if total_identities else 0
+
+    return {
+        "Total Identities": total_identities,
+        "Privileged Accounts": privileged_accounts,
+        "Orphaned Accounts": orphaned_accounts,
+        "MFA Exceptions": mfa_exceptions,
+        "Privileged Without MFA": privileged_without_mfa,
+        "High-Risk Identities": high_risk_identities,
+        "Identity Compliance Rate %": identity_compliance_rate
+    }
+
+
+def generate_identity_governance_rows(identities):
+    rows = []
+
+    for identity in identities:
+        username = identity.get("username", "Unknown Identity")
+        privileged = identity.get("privileged", False)
+        mfa_enabled = identity.get("mfa_enabled", False)
+        orphaned = identity.get("orphaned", False)
+        risk_score = identity.get("risk_score", 0)
+
+        exceptions = []
+
+        if orphaned:
+            exceptions.append("Orphaned Account")
+
+        if privileged and not mfa_enabled:
+            exceptions.append("Privileged Account Without MFA")
+
+        elif not mfa_enabled:
+            exceptions.append("MFA Not Enabled")
+
+        if risk_score >= 75:
+            exceptions.append("High-Risk Identity")
+
+        rows.append({
+            "Username": username,
+            "Identity Type": identity.get("identity_type", "Unknown"),
+            "Privileged": privileged,
+            "MFA Enabled": mfa_enabled,
+            "Orphaned": orphaned,
+            "Risk Score": risk_score,
+            "Governance Exceptions": ", ".join(exceptions) if exceptions else "None"
+        })
+
+    return sorted(
+        rows,
+        key=lambda item: item.get("Risk Score", 0),
+        reverse=True
+    )
