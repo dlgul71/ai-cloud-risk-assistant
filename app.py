@@ -1442,7 +1442,7 @@ if page == "Remediation Center":
 
 if page == "Execution Center":
 
-    from remediation_execution import get_execution_actions
+    from remediation_execution import get_execution_actions, update_execution_action
     import pandas as pd
 
     st.title("Execution Center")
@@ -1498,6 +1498,46 @@ if page == "Execution Center":
             actions_df,
             width="stretch"
         )
+
+        st.subheader("Execution Approval Workflow")
+
+        selected_action_id = st.selectbox(
+            "Select action ID",
+            actions_df["ID"].tolist()
+        )
+
+        approval_status = st.selectbox(
+            "Approval status",
+            [
+                "Pending Approval",
+                "Approved",
+                "Rejected"
+            ]
+        )
+
+        execution_status = st.selectbox(
+            "Execution status",
+            [
+                "Not Started",
+                "Ready",
+                "Executing",
+                "Completed",
+                "Failed"
+            ]
+        )
+
+        if st.button("Update Execution Action"):
+            update_execution_action(
+                int(selected_action_id),
+                approval_status=approval_status,
+                execution_status=execution_status
+            )
+
+            st.success(
+                f"Execution action {selected_action_id} updated."
+            )
+
+            st.rerun()
 
     else:
         st.info("No remediation actions have been generated yet.")
