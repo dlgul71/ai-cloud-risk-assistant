@@ -1523,16 +1523,107 @@ if page == "Execution Center":
             ]
         )
 
-        col1, col2, col3 = st.columns(3)
+        failed_actions = len(
+            actions_df[
+                actions_df["Execution Status"] == "Failed"
+            ]
+        )
+
+        total_actions = len(actions_df)
+
+        completion_rate = round(
+            (completed_actions / total_actions) * 100,
+            2
+        ) if total_actions else 0
+
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         col1.metric("Pending Approval", pending_approval)
         col2.metric("Approved", approved_actions)
         col3.metric("Completed", completed_actions)
+        col4.metric("Failed", failed_actions)
+        col5.metric("Completion Rate", f"{completion_rate}%")
+
+        st.subheader("Execution Analytics")
+
+        analytics_df = actions_df.copy()
+
+        analytics_df["Adapter"] = analytics_df[
+            "Action Type"
+        ].apply(get_adapter_for_action)
+
+        analytics_col1, analytics_col2 = st.columns(2)
+
+        with analytics_col1:
+            st.write("Actions by Execution Status")
+            st.bar_chart(
+                analytics_df["Execution Status"].value_counts()
+            )
+
+        with analytics_col2:
+            st.write("Actions by Adapter")
+            st.bar_chart(
+                analytics_df["Adapter"].value_counts()
+            )
+
+        st.subheader("Execution Queue Filters")
+
+        queue_filter_col1, queue_filter_col2, queue_filter_col3 = st.columns(3)
+
+        approval_filter = queue_filter_col1.selectbox(
+            "Filter by approval",
+            ["All"] + sorted(
+                actions_df["Approval Status"]
+                .dropna()
+                .unique()
+                .tolist()
+            ),
+            key="execution_approval_filter"
+        )
+
+        execution_filter = queue_filter_col2.selectbox(
+            "Filter by execution status",
+            ["All"] + sorted(
+                actions_df["Execution Status"]
+                .dropna()
+                .unique()
+                .tolist()
+            ),
+            key="execution_status_filter"
+        )
+
+        adapter_filter = queue_filter_col3.selectbox(
+            "Filter by adapter",
+            ["All"] + sorted(
+                analytics_df["Adapter"]
+                .dropna()
+                .unique()
+                .tolist()
+            ),
+            key="execution_adapter_filter"
+        )
+
+        filtered_actions_df = analytics_df.copy()
+
+        if approval_filter != "All":
+            filtered_actions_df = filtered_actions_df[
+                filtered_actions_df["Approval Status"] == approval_filter
+            ]
+
+        if execution_filter != "All":
+            filtered_actions_df = filtered_actions_df[
+                filtered_actions_df["Execution Status"] == execution_filter
+            ]
+
+        if adapter_filter != "All":
+            filtered_actions_df = filtered_actions_df[
+                filtered_actions_df["Adapter"] == adapter_filter
+            ]
 
         st.subheader("Execution Queue")
 
         st.dataframe(
-            actions_df,
+            filtered_actions_df,
             width="stretch"
         )
 
