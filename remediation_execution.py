@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime, UTC
 from remediation_audit import log_remediation_event
+from remediation_live_actions import execute_controlled_action
 
 DB_NAME = "remediation_actions.db"
 
@@ -182,12 +183,29 @@ def simulate_execution(action_id):
         conn.close()
         raise ValueError(f"Action ID {action_id} was not found.")
 
-    _, finding, action_type, approval_status, _, execution_mode = action
+    (
+        _,
+        finding,
+        action_type,
+        approval_status,
+        execution_status,
+        execution_mode
+    ) = action
 
-    if approval_status != "Approved":
+    controlled_result = execute_controlled_action(
+        action_type=action_type,
+        finding=finding,
+        approval_status=approval_status,
+        execution_mode="Simulation"
+    )
+
+    if controlled_result.get("status") != "SIMULATED":
         conn.close()
         raise ValueError(
-            "Action must be approved before simulated execution."
+            controlled_result.get(
+                "message",
+                "Simulation was blocked by remediation guardrails."
+            )
         )
 
     cursor.execute("""
@@ -204,10 +222,12 @@ def simulate_execution(action_id):
 
     log_remediation_event(
         action_id=action_id,
-        event_type="SIMULATION_COMPLETED",
+        event_type="CONTROLLED_SIMULATION_COMPLETED",
         event_detail=(
-            f"Simulated remediation completed. "
-            f"Finding={finding}; Action={action_type}; Mode={execution_mode}"
+            f"Adapter={controlled_result.get('adapter')}; "
+            f"Finding={finding}; "
+            f"Action={action_type}; "
+            f"Result={controlled_result.get('message')}"
         ),
         actor="DGS Sentinel AI"
     )
@@ -216,10 +236,11 @@ def simulate_execution(action_id):
         "action_id": action_id,
         "status": "Completed",
         "mode": "Simulation",
+        "adapter": controlled_result.get("adapter"),
         "finding": finding,
-        "action_type": action_type
+        "action_type": action_type,
+        "message": controlled_result.get("message")
     }
-
 
 def create_actions_from_remediation_plan(remediation_plan):
     created_actions = []
