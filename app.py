@@ -616,6 +616,7 @@ with st.sidebar:
             "SOC Dashboard",
             "Risk Trends",
             "Remediation Center",
+            "Execution Center",
             "Client Accounts",
             "Asset Dashboard"
         ],
@@ -1435,6 +1436,71 @@ if page == "Remediation Center":
 
     else:
         st.info("No remediation items found yet. Run a scan to generate recommendations.")
+
+
+
+
+if page == "Execution Center":
+
+    from remediation_execution import get_execution_actions
+    import pandas as pd
+
+    st.title("Execution Center")
+    st.caption("Autonomous remediation execution queue")
+
+    actions = get_execution_actions()
+
+    columns = [
+        "ID",
+        "Created At",
+        "Finding",
+        "Action Type",
+        "Priority",
+        "Approval Status",
+        "Execution Status",
+        "Execution Mode",
+        "Notes"
+    ]
+
+    if actions:
+        actions_df = pd.DataFrame(
+            actions,
+            columns=columns
+        )
+
+        pending_approval = len(
+            actions_df[
+                actions_df["Approval Status"] == "Pending Approval"
+            ]
+        )
+
+        approved_actions = len(
+            actions_df[
+                actions_df["Approval Status"] == "Approved"
+            ]
+        )
+
+        completed_actions = len(
+            actions_df[
+                actions_df["Execution Status"] == "Completed"
+            ]
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Pending Approval", pending_approval)
+        col2.metric("Approved", approved_actions)
+        col3.metric("Completed", completed_actions)
+
+        st.subheader("Execution Queue")
+
+        st.dataframe(
+            actions_df,
+            width="stretch"
+        )
+
+    else:
+        st.info("No remediation actions have been generated yet.")
 
 
 
