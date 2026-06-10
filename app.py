@@ -1932,13 +1932,16 @@ if page == "Axonius CAASM Dashboard":
     from axonius_connector import (
         axonius_configured,
         get_axonius_assets,
-        get_axonius_identities
+        get_axonius_identities,
+        get_axonius_coverage_sources
     )
     from axonius_risk_engine import (
         calculate_caasm_metrics,
         generate_caasm_policy_findings,
         calculate_identity_governance_metrics,
-        generate_identity_governance_rows
+        generate_identity_governance_rows,
+        calculate_coverage_gap_metrics,
+        generate_coverage_gap_findings
     )
     import pandas as pd
 
@@ -1950,10 +1953,12 @@ if page == "Axonius CAASM Dashboard":
     try:
         asset_response = get_axonius_assets()
         identity_response = get_axonius_identities()
+        coverage_response = get_axonius_coverage_sources()
 
         connector_mode = asset_response.get("mode", "Unknown")
         assets = asset_response.get("assets", [])
         identities = identity_response.get("identities", [])
+        coverage_sources = coverage_response.get("coverage_sources", [])
 
         if connector_mode == "Live" and axonius_configured():
             st.success("Axonius connector mode: Live API")
@@ -1979,6 +1984,14 @@ if page == "Axonius CAASM Dashboard":
 
         identity_governance_rows = generate_identity_governance_rows(
             identities=identities
+        )
+
+        coverage_gap_metrics = calculate_coverage_gap_metrics(
+            coverage_sources=coverage_sources
+        )
+
+        coverage_gap_findings = generate_coverage_gap_findings(
+            coverage_sources=coverage_sources
         )
 
         st.subheader("Executive CAASM Scorecard")
@@ -2163,6 +2176,79 @@ if page == "Axonius CAASM Dashboard":
 
         else:
             st.info("No identity-governance records are available.")
+
+        st.subheader("Coverage Gap Dashboard")
+
+        coverage_col1, coverage_col2, coverage_col3 = st.columns(3)
+
+        coverage_col1.metric(
+            "Connected Sources",
+            coverage_gap_metrics.get("Connected Sources", 0)
+        )
+
+        coverage_col2.metric(
+            "Disconnected Sources",
+            coverage_gap_metrics.get("Disconnected Sources", 0)
+        )
+
+        coverage_col3.metric(
+            "Average Coverage %",
+            coverage_gap_metrics.get("Average Coverage %", 0)
+        )
+
+        coverage_col4, coverage_col5 = st.columns(2)
+
+        coverage_col4.metric(
+            "Total Sources",
+            coverage_gap_metrics.get("Total Sources", 0)
+        )
+
+        coverage_col5.metric(
+            "Critical Coverage Gaps",
+            coverage_gap_metrics.get("Critical Coverage Gaps", 0)
+        )
+
+        if coverage_gap_findings:
+            coverage_gap_df = pd.DataFrame(
+                coverage_gap_findings
+            )
+
+            st.subheader("Connector Coverage Findings")
+
+            st.dataframe(
+                coverage_gap_df,
+                width="stretch"
+            )
+
+            st.subheader("Coverage Percentage by Source")
+
+            st.bar_chart(
+                coverage_gap_df.set_index("Source")[
+                    "Coverage %"
+                ]
+            )
+
+            st.subheader("Connector Priority Distribution")
+
+            st.bar_chart(
+                coverage_gap_df["Priority"].value_counts()
+            )
+
+            coverage_gap_csv = (
+                coverage_gap_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            st.download_button(
+                label="Download Coverage Gap Findings CSV",
+                data=coverage_gap_csv,
+                file_name="dgs_sentinel_caasm_coverage_gaps.csv",
+                mime="text/csv"
+            )
+
+        else:
+            st.success("No connector coverage gaps detected.")
 
         st.subheader("CAASM Policy and Coverage Findings")
 

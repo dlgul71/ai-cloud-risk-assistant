@@ -127,3 +127,64 @@ def get_axonius_identities():
         "mode": "Live",
         "identities": response.json()
     }
+
+
+def get_mock_coverage_sources():
+    return [
+        {
+            "source": "AWS",
+            "category": "Cloud",
+            "connected": True,
+            "assets_discovered": 120,
+            "coverage_percent": 95
+        },
+        {
+            "source": "Active Directory",
+            "category": "Identity",
+            "connected": True,
+            "assets_discovered": 85,
+            "coverage_percent": 88
+        },
+        {
+            "source": "Endpoint Security",
+            "category": "Endpoint",
+            "connected": True,
+            "assets_discovered": 75,
+            "coverage_percent": 72
+        },
+        {
+            "source": "Vulnerability Management",
+            "category": "Vulnerability",
+            "connected": False,
+            "assets_discovered": 0,
+            "coverage_percent": 0
+        },
+        {
+            "source": "Identity Provider",
+            "category": "Identity",
+            "connected": True,
+            "assets_discovered": 90,
+            "coverage_percent": 84
+        },
+        {
+            "source": "MDM",
+            "category": "Endpoint",
+            "connected": False,
+            "assets_discovered": 0,
+            "coverage_percent": 0
+        },
+        {
+            "source": "SIEM",
+            "category": "Monitoring",
+            "connected": True,
+            "assets_discovered": 68,
+            "coverage_percent": 65
+        }
+    ]
+
+
+def get_axonius_coverage_sources():
+    return {
+        "mode": "Mock",
+        "coverage_sources": get_mock_coverage_sources()
+    }

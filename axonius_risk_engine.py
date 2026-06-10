@@ -242,3 +242,76 @@ def generate_identity_governance_rows(identities):
         key=lambda item: item.get("Risk Score", 0),
         reverse=True
     )
+
+
+def calculate_coverage_gap_metrics(coverage_sources):
+    total_sources = len(coverage_sources)
+
+    connected_sources = len([
+        source for source in coverage_sources
+        if source.get("connected", False)
+    ])
+
+    disconnected_sources = total_sources - connected_sources
+
+    avg_coverage = round(
+        sum(
+            source.get("coverage_percent", 0)
+            for source in coverage_sources
+        ) / total_sources,
+        2
+    ) if total_sources else 0
+
+    critical_gaps = len([
+        source for source in coverage_sources
+        if source.get("coverage_percent", 0) < 50
+    ])
+
+    return {
+        "Total Sources": total_sources,
+        "Connected Sources": connected_sources,
+        "Disconnected Sources": disconnected_sources,
+        "Average Coverage %": avg_coverage,
+        "Critical Coverage Gaps": critical_gaps
+    }
+
+
+def generate_coverage_gap_findings(coverage_sources):
+    findings = []
+
+    for source in coverage_sources:
+        coverage = source.get("coverage_percent", 0)
+        connected = source.get("connected", False)
+
+        if not connected:
+            priority = "CRITICAL"
+            recommendation = (
+                "Establish connector integration and validate asset ingestion."
+            )
+
+        elif coverage < 75:
+            priority = "HIGH"
+            recommendation = (
+                "Investigate visibility gaps and reconcile missing assets."
+            )
+
+        else:
+            priority = "STANDARD"
+            recommendation = (
+                "Monitor connector health and validate coverage regularly."
+            )
+
+        findings.append({
+            "Source": source.get("source"),
+            "Category": source.get("category"),
+            "Connected": connected,
+            "Assets Discovered": source.get("assets_discovered", 0),
+            "Coverage %": coverage,
+            "Priority": priority,
+            "Recommendation": recommendation
+        })
+
+    return sorted(
+        findings,
+        key=lambda item: item.get("Coverage %", 0)
+    )
