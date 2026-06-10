@@ -617,6 +617,7 @@ with st.sidebar:
             "Risk Trends",
             "Remediation Center",
             "Execution Center",
+            "Axonius CAASM Dashboard",
             "Client Accounts",
             "Asset Dashboard"
         ],
@@ -1924,6 +1925,157 @@ if page == "Execution Center":
     else:
         st.info("No remediation actions have been generated yet.")
 
+
+
+if page == "Axonius CAASM Dashboard":
+
+    from axonius_connector import (
+        axonius_configured,
+        get_axonius_assets,
+        get_axonius_identities
+    )
+    from axonius_risk_engine import calculate_caasm_metrics
+    import pandas as pd
+
+    st.title("Axonius CAASM Dashboard")
+    st.caption(
+        "Cyber asset attack surface management and identity-risk analytics"
+    )
+
+    try:
+        asset_response = get_axonius_assets()
+        identity_response = get_axonius_identities()
+
+        connector_mode = asset_response.get("mode", "Unknown")
+        assets = asset_response.get("assets", [])
+        identities = identity_response.get("identities", [])
+
+        if connector_mode == "Live" and axonius_configured():
+            st.success("Axonius connector mode: Live API")
+        else:
+            st.info(
+                "Axonius connector mode: Mock data. "
+                "Add API credentials later to enable the live connector."
+            )
+
+        metrics = calculate_caasm_metrics(
+            assets=assets,
+            identities=identities
+        )
+
+        st.subheader("Executive CAASM Scorecard")
+
+        score_col1, score_col2, score_col3 = st.columns(3)
+
+        score_col1.metric(
+            "CAASM Score",
+            metrics.get("CAASM Score", 0)
+        )
+
+        score_col2.metric(
+            "Asset Coverage %",
+            metrics.get("Asset Coverage %", 0)
+        )
+
+        score_col3.metric(
+            "MFA Coverage %",
+            metrics.get("MFA Coverage %", 0)
+        )
+
+        risk_col1, risk_col2, risk_col3 = st.columns(3)
+
+        risk_col1.metric(
+            "Unmanaged Assets",
+            metrics.get("Unmanaged Assets", 0)
+        )
+
+        risk_col2.metric(
+            "Orphaned Accounts",
+            metrics.get("Orphaned Accounts", 0)
+        )
+
+        risk_col3.metric(
+            "Privileged Users",
+            metrics.get("Privileged Users", 0)
+        )
+
+        st.subheader("Asset Inventory")
+
+        if assets:
+            axonius_asset_df = pd.DataFrame(assets)
+
+            axonius_asset_df = axonius_asset_df.sort_values(
+                by="risk_score",
+                ascending=False
+            )
+
+            st.dataframe(
+                axonius_asset_df,
+                width="stretch"
+            )
+
+            st.subheader("Asset Coverage Analytics")
+
+            coverage_df = pd.DataFrame(
+                {
+                    "Coverage Status": [
+                        "Managed Assets",
+                        "Unmanaged Assets"
+                    ],
+                    "Count": [
+                        metrics.get("Managed Assets", 0),
+                        metrics.get("Unmanaged Assets", 0)
+                    ]
+                }
+            )
+
+            st.bar_chart(
+                coverage_df.set_index("Coverage Status")["Count"]
+            )
+
+        else:
+            st.info("No Axonius asset records are available.")
+
+        st.subheader("Identity Risk Table")
+
+        if identities:
+            axonius_identity_df = pd.DataFrame(identities)
+
+            axonius_identity_df = axonius_identity_df.sort_values(
+                by="risk_score",
+                ascending=False
+            )
+
+            st.dataframe(
+                axonius_identity_df,
+                width="stretch"
+            )
+
+            st.subheader("Identity Risk Analytics")
+
+            identity_metric_col1, identity_metric_col2 = st.columns(2)
+
+            with identity_metric_col1:
+                st.write("Identity Risk Scores")
+                st.bar_chart(
+                    axonius_identity_df.set_index("username")[
+                        "risk_score"
+                    ]
+                )
+
+            with identity_metric_col2:
+                st.write("Identity Type Distribution")
+                st.bar_chart(
+                    axonius_identity_df[
+                        "identity_type"
+                    ].value_counts()
+                )
+
+        else:
+            st.info("No Axonius identity records are available.")
+
+    except Exception as e:
+        st.error(f"Unable to load Axonius CAASM analytics: {e}")
 
 
 if page == "Client Accounts":
