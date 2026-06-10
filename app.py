@@ -1445,7 +1445,8 @@ if page == "Execution Center":
     from remediation_execution import (
         get_execution_actions,
         update_execution_action,
-        simulate_execution
+        simulate_execution,
+        simulate_all_approved_actions
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
@@ -1575,24 +1576,45 @@ if page == "Execution Center":
 
         st.subheader("Execution Approval Workflow")
 
+        approval_options = [
+            "Pending Approval",
+            "Approved",
+            "Rejected"
+        ]
+
+        execution_options = [
+            "Not Started",
+            "Ready",
+            "Executing",
+            "Completed",
+            "Failed"
+        ]
+
+        current_approval = selected_action["Approval Status"]
+        current_execution = selected_action["Execution Status"]
+
+        approval_index = (
+            approval_options.index(current_approval)
+            if current_approval in approval_options
+            else 0
+        )
+
+        execution_index = (
+            execution_options.index(current_execution)
+            if current_execution in execution_options
+            else 0
+        )
+
         approval_status = st.selectbox(
             "Approval status",
-            [
-                "Pending Approval",
-                "Approved",
-                "Rejected"
-            ]
+            approval_options,
+            index=approval_index
         )
 
         execution_status = st.selectbox(
             "Execution status",
-            [
-                "Not Started",
-                "Ready",
-                "Executing",
-                "Completed",
-                "Failed"
-            ]
+            execution_options,
+            index=execution_index
         )
 
         if st.button("Update Execution Action"):
@@ -1632,6 +1654,31 @@ if page == "Execution Center":
 
             except Exception as e:
                 st.error(f"Simulation failed: {e}")
+
+        st.subheader("Bulk Approved Simulation")
+
+        st.caption(
+            "Runs all approved actions that are not already completed or failed. "
+            "Simulation mode does not modify AWS resources."
+        )
+
+        if st.button("Run All Approved Simulations"):
+            bulk_results = simulate_all_approved_actions()
+
+            if bulk_results:
+                st.success(
+                    f"Processed {len(bulk_results)} approved remediation actions."
+                )
+
+                st.dataframe(
+                    pd.DataFrame(bulk_results),
+                    width="stretch"
+                )
+
+                st.rerun()
+
+            else:
+                st.info("No approved pending actions are available.")
 
         st.subheader("Execution Audit Trail")
 

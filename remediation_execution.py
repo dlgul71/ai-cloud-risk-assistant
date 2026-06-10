@@ -134,19 +134,55 @@ def update_execution_action(action_id, approval_status=None, execution_status=No
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    if approval_status:
-        cursor.execute("""
-        UPDATE remediation_actions
-        SET approval_status = ?
-        WHERE id = ?
-        """, (approval_status, action_id))
+    cursor.execute("""
+    SELECT approval_status, execution_status
+    FROM remediation_actions
+    WHERE id = ?
+    """, (action_id,))
 
-    if execution_status:
-        cursor.execute("""
-        UPDATE remediation_actions
-        SET execution_status = ?
-        WHERE id = ?
-        """, (execution_status, action_id))
+    current_action = cursor.fetchone()
+
+    if not current_action:
+        conn.close()
+        raise ValueError(f"Action ID {action_id} was not found.")
+
+    current_approval, current_execution = current_action
+
+    requested_approval = approval_status or current_approval
+    requested_execution = execution_status or current_execution
+
+    if current_execution == "Completed":
+        if requested_execution != "Completed":
+            conn.close()
+            raise ValueError(
+                "Completed actions cannot move backward to an earlier execution status."
+            )
+
+        if requested_approval != "Approved":
+            conn.close()
+            raise ValueError(
+                "Completed actions must remain approved."
+            )
+
+    if (
+        requested_execution in ["Ready", "Executing", "Completed"]
+        and requested_approval != "Approved"
+    ):
+        conn.close()
+        raise ValueError(
+            "An action must be approved before it can move to Ready, Executing, or Completed."
+        )
+
+    cursor.execute("""
+    UPDATE remediation_actions
+    SET approval_status = ?,
+        execution_status = ?
+    WHERE id = ?
+    """, (
+        requested_approval,
+        requested_execution,
+        action_id
+    ))
 
     conn.commit()
     conn.close()
@@ -154,9 +190,18 @@ def update_execution_action(action_id, approval_status=None, execution_status=No
     log_remediation_event(
         action_id=action_id,
         event_type="ACTION_UPDATED",
-        event_detail=f"Approval={approval_status}, Execution={execution_status}",
+        event_detail=(
+            f"Approval={requested_approval}, "
+            f"Execution={requested_execution}"
+        ),
         actor="DGS Sentinel AI"
     )
+
+    return {
+        "action_id": action_id,
+        "approval_status": requested_approval,
+        "execution_status": requested_execution
+    }
 
 
 def simulate_execution(action_id):
@@ -282,3 +327,46 @@ def create_actions_from_remediation_plan(remediation_plan):
         })
 
     return created_actions
+
+
+def simulate_all_approved_actions():
+    init_execution_db()
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT id
+    FROM remediation_actions
+    WHERE approval_status = 'Approved'
+      AND execution_status NOT IN ('Completed', 'Failed')
+    ORDER BY id
+    """)
+
+    action_ids = [
+        row[0]
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+
+    results = []
+
+    for action_id in action_ids:
+        try:
+            result = simulate_execution(action_id)
+            results.append(result)
+
+        except Exception as e:
+            results.append({
+                "action_id": action_id,
+                "status": "Failed",
+                "message": str(e)
+            })
+
+            update_execution_action(
+                action_id=action_id,
+                execution_status="Failed"
+            )
+
+    return results
