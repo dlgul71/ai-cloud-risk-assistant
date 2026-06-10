@@ -1647,16 +1647,34 @@ if page == "Execution Center":
             width="stretch"
         )
 
+        execution_export_df = filtered_actions_df.copy()
+
+        execution_export_df["Resource Type"] = execution_export_df.apply(
+            lambda row: build_execution_plan(
+                action_type=row["Action Type"],
+                finding=row["Finding"]
+            ).get("resource_type", "UNKNOWN"),
+            axis=1
+        )
+
+        execution_export_df["Resource ID"] = execution_export_df.apply(
+            lambda row: build_execution_plan(
+                action_type=row["Action Type"],
+                finding=row["Finding"]
+            ).get("resource_id", "UNKNOWN"),
+            axis=1
+        )
+
         execution_queue_csv = (
-            filtered_actions_df
+            execution_export_df
             .to_csv(index=False)
             .encode("utf-8")
         )
 
         st.download_button(
-            label="Download Filtered Execution Queue CSV",
+            label="Download Filtered Execution Summary CSV",
             data=execution_queue_csv,
-            file_name="dgs_sentinel_execution_queue.csv",
+            file_name="dgs_sentinel_execution_summary.csv",
             mime="text/csv"
         )
 
