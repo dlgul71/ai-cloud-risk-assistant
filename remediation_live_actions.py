@@ -72,3 +72,29 @@ def get_adapter_for_action(action_type):
         action_type,
         "NO_APPROVED_ADAPTER"
     )
+
+
+def build_execution_plan(action_type, finding):
+    from remediation_targeting import extract_resource_target
+
+    target = extract_resource_target(
+        action_type=action_type,
+        finding=finding
+    )
+
+    adapter = get_adapter_for_action(action_type)
+
+    return {
+        "adapter": adapter,
+        "action_type": action_type,
+        "finding": finding,
+        "resource_type": target.get("resource_type"),
+        "resource_id": target.get("resource_id"),
+        "target_supported": target.get("supported", False),
+        "execution_mode": "Simulation",
+        "live_execution_enabled": False,
+        "message": (
+            "Dry-run execution plan created. "
+            "No AWS resource changes were performed."
+        )
+    }
