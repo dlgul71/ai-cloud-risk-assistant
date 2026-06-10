@@ -2491,6 +2491,102 @@ if page == "Axonius CAASM Dashboard":
         else:
             st.success("No CAASM policy or coverage findings detected.")
 
+        st.subheader("CAASM Snapshot History")
+
+        from caasm_snapshot_engine import (
+            save_caasm_snapshot,
+            load_caasm_snapshots
+        )
+
+        if st.button("Save Current CAASM Snapshot"):
+            snapshot_path = save_caasm_snapshot(
+                connector_mode=connector_mode,
+                metrics=metrics,
+                identity_governance_metrics=identity_governance_metrics,
+                coverage_gap_metrics=coverage_gap_metrics,
+                policy_findings=policy_findings,
+                coverage_gap_findings=coverage_gap_findings
+            )
+
+            st.success(f"CAASM snapshot saved: {snapshot_path}")
+
+        caasm_snapshots = load_caasm_snapshots()
+
+        if caasm_snapshots:
+            caasm_trend_rows = []
+
+            for snapshot in caasm_snapshots:
+                snapshot_metrics = snapshot.get("metrics", {})
+                identity_metrics = snapshot.get(
+                    "identity_governance_metrics",
+                    {}
+                )
+                coverage_metrics = snapshot.get(
+                    "coverage_gap_metrics",
+                    {}
+                )
+
+                caasm_trend_rows.append({
+                    "Scan Time": snapshot.get("scan_time"),
+                    "CAASM Score": snapshot_metrics.get("CAASM Score", 0),
+                    "Asset Coverage %": snapshot_metrics.get("Asset Coverage %", 0),
+                    "MFA Coverage %": snapshot_metrics.get("MFA Coverage %", 0),
+                    "Unmanaged Assets": snapshot_metrics.get("Unmanaged Assets", 0),
+                    "Orphaned Accounts": identity_metrics.get("Orphaned Accounts", 0),
+                    "Privileged Without MFA": identity_metrics.get("Privileged Without MFA", 0),
+                    "Critical Coverage Gaps": coverage_metrics.get("Critical Coverage Gaps", 0),
+                    "Snapshot File": snapshot.get("snapshot_file")
+                })
+
+            caasm_trend_df = pd.DataFrame(caasm_trend_rows)
+
+            caasm_trend_df["Scan Time"] = pd.to_datetime(
+                caasm_trend_df["Scan Time"],
+                errors="coerce",
+                utc=True
+            )
+
+            caasm_trend_df = caasm_trend_df.dropna(
+                subset=["Scan Time"]
+            ).sort_values("Scan Time")
+
+            st.subheader("CAASM Score Trend")
+
+            st.line_chart(
+                caasm_trend_df.set_index("Scan Time")[
+                    [
+                        "CAASM Score",
+                        "Asset Coverage %",
+                        "MFA Coverage %"
+                    ]
+                ]
+            )
+
+            st.subheader("CAASM Risk Trend")
+
+            st.line_chart(
+                caasm_trend_df.set_index("Scan Time")[
+                    [
+                        "Unmanaged Assets",
+                        "Orphaned Accounts",
+                        "Privileged Without MFA",
+                        "Critical Coverage Gaps"
+                    ]
+                ]
+            )
+
+            st.subheader("CAASM Snapshot Table")
+
+            st.dataframe(
+                caasm_trend_df,
+                width="stretch"
+            )
+
+        else:
+            st.info(
+                "No CAASM snapshots found yet. Save a snapshot to begin trending."
+            )
+
         st.subheader("Executive CAASM Export")
 
         caasm_pdf_buffer = generate_caasm_pdf(
