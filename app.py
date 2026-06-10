@@ -1449,6 +1449,7 @@ if page == "Execution Center":
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
+    from remediation_live_actions import get_adapter_for_action
     import pandas as pd
 
     st.title("Execution Center")
@@ -1534,12 +1535,45 @@ if page == "Execution Center":
             width="stretch"
         )
 
-        st.subheader("Execution Approval Workflow")
+        st.subheader("Execution Action Detail")
 
         selected_action_id = st.selectbox(
             "Select action ID",
             actions_df["ID"].tolist()
         )
+
+        selected_action = actions_df[
+            actions_df["ID"] == selected_action_id
+        ].iloc[0]
+
+        selected_adapter = get_adapter_for_action(
+            selected_action["Action Type"]
+        )
+
+        detail_col1, detail_col2, detail_col3 = st.columns(3)
+
+        detail_col1.metric(
+            "Priority",
+            selected_action["Priority"]
+        )
+
+        detail_col2.metric(
+            "Approval Status",
+            selected_action["Approval Status"]
+        )
+
+        detail_col3.metric(
+            "Execution Status",
+            selected_action["Execution Status"]
+        )
+
+        st.write("**Finding:**", selected_action["Finding"])
+        st.write("**Action Type:**", selected_action["Action Type"])
+        st.write("**Controlled Adapter:**", selected_adapter)
+        st.write("**Execution Mode:**", selected_action["Execution Mode"])
+        st.write("**Notes:**", selected_action["Notes"])
+
+        st.subheader("Execution Approval Workflow")
 
         approval_status = st.selectbox(
             "Approval status",
