@@ -1627,6 +1627,19 @@ if page == "Execution Center":
             width="stretch"
         )
 
+        execution_queue_csv = (
+            filtered_actions_df
+            .to_csv(index=False)
+            .encode("utf-8")
+        )
+
+        st.download_button(
+            label="Download Filtered Execution Queue CSV",
+            data=execution_queue_csv,
+            file_name="dgs_sentinel_execution_queue.csv",
+            mime="text/csv"
+        )
+
         st.subheader("Execution Action Detail")
 
         selected_action_id = st.selectbox(
