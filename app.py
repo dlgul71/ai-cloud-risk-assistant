@@ -1450,7 +1450,10 @@ if page == "Execution Center":
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
-    from remediation_live_actions import get_adapter_for_action
+    from remediation_live_actions import (
+        get_adapter_for_action,
+        build_execution_plan
+    )
     import pandas as pd
 
     st.title("Execution Center")
@@ -1677,6 +1680,45 @@ if page == "Execution Center":
         st.write("**Controlled Adapter:**", selected_adapter)
         st.write("**Execution Mode:**", selected_action["Execution Mode"])
         st.write("**Notes:**", selected_action["Notes"])
+
+        st.subheader("Dry-Run Execution Plan")
+
+        try:
+            execution_plan = build_execution_plan(
+                action_type=selected_action["Action Type"],
+                finding=selected_action["Finding"]
+            )
+
+            plan_col1, plan_col2, plan_col3 = st.columns(3)
+
+            plan_col1.metric(
+                "Resource Type",
+                execution_plan.get("resource_type", "UNKNOWN")
+            )
+
+            plan_col2.metric(
+                "Resource ID",
+                execution_plan.get("resource_id", "UNKNOWN")
+            )
+
+            plan_col3.metric(
+                "Target Supported",
+                "Yes" if execution_plan.get("target_supported") else "No"
+            )
+
+            st.json(execution_plan)
+
+            if execution_plan.get("live_execution_enabled"):
+                st.warning(
+                    "Live execution is enabled for this action. Review carefully."
+                )
+            else:
+                st.success(
+                    "Dry-run only. No AWS resources will be modified."
+                )
+
+        except Exception as e:
+            st.error(f"Unable to build dry-run execution plan: {e}")
 
         st.subheader("Execution Approval Workflow")
 
