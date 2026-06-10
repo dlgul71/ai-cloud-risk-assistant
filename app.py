@@ -1448,10 +1448,40 @@ if page == "Execution Center":
         simulate_execution
     )
     from remediation_audit import get_remediation_audit
+    from remediation_guardrails import GUARDRAILS
     import pandas as pd
 
     st.title("Execution Center")
     st.caption("Autonomous remediation execution queue")
+
+    st.subheader("Remediation Guardrail Status")
+
+    guardrail_col1, guardrail_col2, guardrail_col3 = st.columns(3)
+
+    guardrail_col1.metric(
+        "Live AWS Execution",
+        "Enabled" if GUARDRAILS.live_execution_enabled else "Disabled"
+    )
+
+    guardrail_col2.metric(
+        "Human Approval Required",
+        "Yes" if GUARDRAILS.require_human_approval else "No"
+    )
+
+    guardrail_col3.metric(
+        "Confirmation Phrase Required",
+        "Yes" if GUARDRAILS.require_confirmation_phrase else "No"
+    )
+
+    if GUARDRAILS.live_execution_enabled:
+        st.warning(
+            "Live AWS remediation is enabled. Approved actions may modify AWS resources."
+        )
+    else:
+        st.success(
+            "Safe mode is active. Live AWS remediation is disabled. "
+            "Execution Center actions remain in simulation mode."
+        )
 
     actions = get_execution_actions()
 
