@@ -1442,7 +1442,11 @@ if page == "Remediation Center":
 
 if page == "Execution Center":
 
-    from remediation_execution import get_execution_actions, update_execution_action
+    from remediation_execution import (
+        get_execution_actions,
+        update_execution_action,
+        simulate_execution
+    )
     from remediation_audit import get_remediation_audit
     import pandas as pd
 
@@ -1539,6 +1543,31 @@ if page == "Execution Center":
             )
 
             st.rerun()
+
+        st.subheader("Run Approved Simulation")
+
+        st.caption(
+            "Simulation mode does not modify AWS resources. "
+            "It validates the remediation workflow and creates an audit record."
+        )
+
+        if st.button("Run Approved Simulation"):
+            try:
+                simulation_result = simulate_execution(
+                    int(selected_action_id)
+                )
+
+                st.success(
+                    f"Simulation completed for action "
+                    f"{simulation_result.get('action_id')}."
+                )
+
+                st.json(simulation_result)
+
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Simulation failed: {e}")
 
         st.subheader("Execution Audit Trail")
 
