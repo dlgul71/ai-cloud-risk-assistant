@@ -124,3 +124,66 @@ def update_execution_action(action_id, approval_status=None, execution_status=No
         event_detail=f"Approval={approval_status}, Execution={execution_status}",
         actor="DGS Sentinel AI"
     )
+
+
+def simulate_execution(action_id):
+    init_execution_db()
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT
+        id,
+        finding,
+        action_type,
+        approval_status,
+        execution_status,
+        execution_mode
+    FROM remediation_actions
+    WHERE id = ?
+    """, (action_id,))
+
+    action = cursor.fetchone()
+
+    if not action:
+        conn.close()
+        raise ValueError(f"Action ID {action_id} was not found.")
+
+    _, finding, action_type, approval_status, _, execution_mode = action
+
+    if approval_status != "Approved":
+        conn.close()
+        raise ValueError(
+            "Action must be approved before simulated execution."
+        )
+
+    cursor.execute("""
+    UPDATE remediation_actions
+    SET execution_status = ?
+    WHERE id = ?
+    """, (
+        "Completed",
+        action_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    log_remediation_event(
+        action_id=action_id,
+        event_type="SIMULATION_COMPLETED",
+        event_detail=(
+            f"Simulated remediation completed. "
+            f"Finding={finding}; Action={action_type}; Mode={execution_mode}"
+        ),
+        actor="DGS Sentinel AI"
+    )
+
+    return {
+        "action_id": action_id,
+        "status": "Completed",
+        "mode": "Simulation",
+        "finding": finding,
+        "action_type": action_type
+    }
