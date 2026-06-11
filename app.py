@@ -2882,7 +2882,8 @@ if page == "Ask Sentinel AI":
     from sentinel_ai_analyst import (
         build_security_context,
         calculate_analyst_metrics,
-        generate_local_analyst_response
+        generate_local_analyst_response,
+        generate_executive_security_summary
     )
 
     st.title("Ask Sentinel AI")
@@ -2921,8 +2922,30 @@ if page == "Ask Sentinel AI":
 
     st.subheader("Ask a Security Question")
 
+    question_templates = [
+        "Custom Question",
+        "What are my top risks?",
+        "What should I fix first?",
+        "Summarize my CAASM posture.",
+        "What identity risks need attention?",
+        "Which remediation items are critical?",
+        "What security-tool coverage gaps should leadership address?"
+    ]
+
+    selected_template = st.selectbox(
+        "Choose a question template",
+        question_templates
+    )
+
+    default_question = (
+        ""
+        if selected_template == "Custom Question"
+        else selected_template
+    )
+
     question = st.text_area(
         "Enter your question",
+        value=default_question,
         placeholder=(
             "Examples:\n"
             "What are my top risks?\n"
@@ -2960,6 +2983,20 @@ if page == "Ask Sentinel AI":
 
         else:
             st.warning("Enter a security question before running the analyst.")
+
+    st.subheader("Executive Summary Export")
+
+    executive_summary = generate_executive_security_summary()
+
+    st.download_button(
+        label="Download Executive Security Summary",
+        data=executive_summary.encode("utf-8"),
+        file_name="dgs_sentinel_ai_executive_security_summary.txt",
+        mime="text/plain"
+    )
+
+    with st.expander("Preview Executive Security Summary"):
+        st.text(executive_summary)
 
     st.subheader("Suggested Questions")
 

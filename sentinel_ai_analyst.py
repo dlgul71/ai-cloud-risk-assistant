@@ -243,3 +243,57 @@ if __name__ == "__main__":
 
     print()
     print(generate_local_analyst_response(question))
+
+
+def generate_executive_security_summary():
+    context = build_security_context()
+    metrics = calculate_analyst_metrics(context)
+    top_items = get_top_remediation_items(context, limit=5)
+
+    lines = [
+        "DGS SENTINEL AI EXECUTIVE SECURITY SUMMARY",
+        "=" * 55,
+        "",
+        "Executive Metrics",
+        "-" * 55
+    ]
+
+    for key, value in metrics.items():
+        lines.append(f"{key}: {value}")
+
+    lines.extend([
+        "",
+        "Top Remediation Priorities",
+        "-" * 55
+    ])
+
+    if top_items:
+        for index, item in enumerate(top_items, start=1):
+            lines.append(
+                f"{index}. {item.get('priority')} | "
+                f"{item.get('category')} | "
+                f"{item.get('finding')}"
+            )
+
+            lines.append(
+                f"   Recommendation: "
+                f"{item.get('recommendation')}"
+            )
+
+    else:
+        lines.append("No saved remediation items are available.")
+
+    lines.extend([
+        "",
+        "Executive Focus Areas",
+        "-" * 55,
+        "1. Review critical and high-risk remediation items.",
+        "2. Resolve pending execution approvals.",
+        "3. Address orphaned accounts and privileged identities without MFA.",
+        "4. Improve security-tool coverage gaps.",
+        "5. Validate progress through recurring scans and CAASM snapshots.",
+        "",
+        "Note: This summary is generated from saved DGS Sentinel AI platform data."
+    ])
+
+    return "\n".join(lines)
