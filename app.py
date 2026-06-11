@@ -2697,6 +2697,128 @@ if page == "Axonius CAASM Dashboard":
                 width="stretch"
             )
 
+            st.subheader("CAASM Snapshot Download Center")
+
+            from pathlib import Path
+
+            caasm_snapshot_dir = Path("caasm_snapshots")
+
+            snapshot_files = sorted(
+                caasm_snapshot_dir.glob("caasm_snapshot_*.json"),
+                key=lambda file_path: file_path.stat().st_mtime,
+                reverse=True
+            )
+
+            if snapshot_files:
+                selected_caasm_snapshot = st.selectbox(
+                    "Select CAASM snapshot to download",
+                    [file_path.name for file_path in snapshot_files],
+                    key="caasm_snapshot_download_select"
+                )
+
+                selected_caasm_snapshot_path = (
+                    caasm_snapshot_dir / selected_caasm_snapshot
+                )
+
+                with open(selected_caasm_snapshot_path, "rb") as snapshot_file:
+                    st.download_button(
+                        label="Download Selected CAASM Snapshot JSON",
+                        data=snapshot_file.read(),
+                        file_name=selected_caasm_snapshot,
+                        mime="application/json"
+                    )
+
+            if len(caasm_trend_df) >= 2:
+                latest_comparison = caasm_trend_df.iloc[-1]
+                previous_comparison = caasm_trend_df.iloc[-2]
+
+                comparison_rows = [
+                    {
+                        "Metric": "CAASM Score",
+                        "Previous": previous_comparison["CAASM Score"],
+                        "Latest": latest_comparison["CAASM Score"],
+                        "Change": round(
+                            latest_comparison["CAASM Score"]
+                            - previous_comparison["CAASM Score"],
+                            2
+                        )
+                    },
+                    {
+                        "Metric": "Asset Coverage %",
+                        "Previous": previous_comparison["Asset Coverage %"],
+                        "Latest": latest_comparison["Asset Coverage %"],
+                        "Change": round(
+                            latest_comparison["Asset Coverage %"]
+                            - previous_comparison["Asset Coverage %"],
+                            2
+                        )
+                    },
+                    {
+                        "Metric": "MFA Coverage %",
+                        "Previous": previous_comparison["MFA Coverage %"],
+                        "Latest": latest_comparison["MFA Coverage %"],
+                        "Change": round(
+                            latest_comparison["MFA Coverage %"]
+                            - previous_comparison["MFA Coverage %"],
+                            2
+                        )
+                    },
+                    {
+                        "Metric": "Unmanaged Assets",
+                        "Previous": previous_comparison["Unmanaged Assets"],
+                        "Latest": latest_comparison["Unmanaged Assets"],
+                        "Change": int(
+                            latest_comparison["Unmanaged Assets"]
+                            - previous_comparison["Unmanaged Assets"]
+                        )
+                    },
+                    {
+                        "Metric": "Orphaned Accounts",
+                        "Previous": previous_comparison["Orphaned Accounts"],
+                        "Latest": latest_comparison["Orphaned Accounts"],
+                        "Change": int(
+                            latest_comparison["Orphaned Accounts"]
+                            - previous_comparison["Orphaned Accounts"]
+                        )
+                    },
+                    {
+                        "Metric": "Critical Coverage Gaps",
+                        "Previous": previous_comparison["Critical Coverage Gaps"],
+                        "Latest": latest_comparison["Critical Coverage Gaps"],
+                        "Change": int(
+                            latest_comparison["Critical Coverage Gaps"]
+                            - previous_comparison["Critical Coverage Gaps"]
+                        )
+                    }
+                ]
+
+                caasm_comparison_df = pd.DataFrame(comparison_rows)
+
+                st.subheader("Latest Snapshot vs Previous Snapshot")
+
+                st.dataframe(
+                    caasm_comparison_df,
+                    width="stretch"
+                )
+
+                caasm_comparison_csv = (
+                    caasm_comparison_df
+                    .to_csv(index=False)
+                    .encode("utf-8")
+                )
+
+                st.download_button(
+                    label="Download CAASM Comparison CSV",
+                    data=caasm_comparison_csv,
+                    file_name="dgs_sentinel_caasm_snapshot_comparison.csv",
+                    mime="text/csv"
+                )
+
+            else:
+                st.info(
+                    "Save at least two CAASM snapshots to export a comparison."
+                )
+
         else:
             st.info(
                 "No CAASM snapshots found yet. Save a snapshot to begin trending."
