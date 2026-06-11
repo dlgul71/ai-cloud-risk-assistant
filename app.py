@@ -1068,7 +1068,9 @@ if page == "SOC Dashboard":
                 "Recommendation",
                 "Owner",
                 "Status",
-                "Risk Score"
+                "Risk Score",
+                "Occurrence Count",
+                "Last Seen At"
             ]
         )
 
