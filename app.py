@@ -2125,7 +2125,8 @@ if page == "Axonius CAASM Dashboard":
         calculate_identity_governance_metrics,
         generate_identity_governance_rows,
         calculate_coverage_gap_metrics,
-        generate_coverage_gap_findings
+        generate_coverage_gap_findings,
+        generate_caasm_executive_recommendations
     )
     import pandas as pd
 
@@ -2176,6 +2177,14 @@ if page == "Axonius CAASM Dashboard":
 
         coverage_gap_findings = generate_coverage_gap_findings(
             coverage_sources=coverage_sources
+        )
+
+        executive_recommendations = generate_caasm_executive_recommendations(
+            metrics=metrics,
+            identity_governance_metrics=identity_governance_metrics,
+            coverage_gap_metrics=coverage_gap_metrics,
+            policy_findings=policy_findings,
+            coverage_gap_findings=coverage_gap_findings
         )
 
         st.subheader("Executive CAASM Scorecard")
@@ -2670,6 +2679,34 @@ if page == "Axonius CAASM Dashboard":
             st.info(
                 "No CAASM snapshots found yet. Save a snapshot to begin trending."
             )
+
+        st.subheader("Executive CAASM Recommendations")
+
+        if executive_recommendations:
+            executive_recommendations_df = pd.DataFrame(
+                executive_recommendations
+            )
+
+            st.dataframe(
+                executive_recommendations_df,
+                width="stretch"
+            )
+
+            executive_recommendations_csv = (
+                executive_recommendations_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            st.download_button(
+                label="Download Executive CAASM Recommendations CSV",
+                data=executive_recommendations_csv,
+                file_name="dgs_sentinel_caasm_executive_recommendations.csv",
+                mime="text/csv"
+            )
+
+        else:
+            st.info("No executive CAASM recommendations available.")
 
         st.subheader("Executive CAASM Export")
 

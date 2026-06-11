@@ -315,3 +315,147 @@ def generate_coverage_gap_findings(coverage_sources):
         findings,
         key=lambda item: item.get("Coverage %", 0)
     )
+
+
+def generate_caasm_executive_recommendations(
+    metrics,
+    identity_governance_metrics,
+    coverage_gap_metrics,
+    policy_findings,
+    coverage_gap_findings
+):
+    recommendations = []
+
+    orphaned_accounts = identity_governance_metrics.get(
+        "Orphaned Accounts",
+        0
+    )
+
+    privileged_without_mfa = identity_governance_metrics.get(
+        "Privileged Without MFA",
+        0
+    )
+
+    unmanaged_assets = metrics.get(
+        "Unmanaged Assets",
+        0
+    )
+
+    critical_coverage_gaps = coverage_gap_metrics.get(
+        "Critical Coverage Gaps",
+        0
+    )
+
+    caasm_score = metrics.get(
+        "CAASM Score",
+        0
+    )
+
+    if orphaned_accounts > 0:
+        recommendations.append({
+            "Priority": "CRITICAL",
+            "Category": "Identity Governance",
+            "Recommendation": (
+                f"Investigate and remediate {orphaned_accounts} orphaned account(s). "
+                "Validate ownership and disable accounts that no longer have a business need."
+            )
+        })
+
+    if privileged_without_mfa > 0:
+        recommendations.append({
+            "Priority": "CRITICAL",
+            "Category": "Privileged Access",
+            "Recommendation": (
+                f"Enforce MFA for {privileged_without_mfa} privileged account(s) "
+                "and review least-privilege alignment."
+            )
+        })
+
+    if unmanaged_assets > 0:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Asset Coverage",
+            "Recommendation": (
+                f"Investigate {unmanaged_assets} unmanaged asset(s), confirm ownership, "
+                "and enroll them in approved security controls."
+            )
+        })
+
+    if critical_coverage_gaps > 0:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Connector Coverage",
+            "Recommendation": (
+                f"Resolve {critical_coverage_gaps} critical connector coverage gap(s) "
+                "to improve enterprise asset visibility."
+            )
+        })
+
+    if caasm_score < 50:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Executive Risk",
+            "Recommendation": (
+                f"The current CAASM score is {caasm_score}. "
+                "Create a 30-day visibility and identity-risk improvement plan."
+            )
+        })
+
+    critical_policy_findings = [
+        item
+        for item in policy_findings
+        if item.get("Priority") == "CRITICAL"
+    ]
+
+    if critical_policy_findings:
+        recommendations.append({
+            "Priority": "CRITICAL",
+            "Category": "Policy Findings",
+            "Recommendation": (
+                f"Review and remediate {len(critical_policy_findings)} "
+                "critical CAASM policy finding(s)."
+            )
+        })
+
+    disconnected_sources = [
+        item
+        for item in coverage_gap_findings
+        if not item.get("Connected", True)
+    ]
+
+    if disconnected_sources:
+        source_names = ", ".join(
+            item.get("Source", "Unknown")
+            for item in disconnected_sources
+        )
+
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Connector Integration",
+            "Recommendation": (
+                f"Establish missing connector integrations for: {source_names}."
+            )
+        })
+
+    if not recommendations:
+        recommendations.append({
+            "Priority": "STANDARD",
+            "Category": "Monitoring",
+            "Recommendation": (
+                "Maintain recurring CAASM assessments and validate connector health regularly."
+            )
+        })
+
+    priority_rank = {
+        "CRITICAL": 0,
+        "HIGH": 1,
+        "STANDARD": 2
+    }
+
+    return sorted(
+        recommendations,
+        key=lambda item: priority_rank.get(
+            item.get("Priority", "STANDARD"),
+            99
+        )
+    )
