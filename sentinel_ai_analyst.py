@@ -211,7 +211,7 @@ def generate_local_analyst_response(question):
         or "highest risk client" in question_text
         or "client risk ranking" in question_text
     ):
-        return generate_client_risk_ranking_summary()
+        return generate_combined_client_risk_ranking_summary()
 
     if (
         "what changed" in question_text
@@ -696,6 +696,181 @@ def generate_client_risk_ranking_summary():
         (
             "Note: This ranking currently uses saved AWS asset-inventory risk. "
             "Client-specific remediation correlation will be added later."
+        )
+    ])
+
+    return "\n".join(lines)
+
+
+def compare_clients_by_combined_risk():
+    context = build_security_context()
+
+    assets = context.get("assets", [])
+
+    remediation_items = context.get(
+        "remediation_items_with_context",
+        []
+    )
+
+    clients = get_available_clients()
+
+    client_rows = []
+
+    for client in clients:
+        account_id = str(
+            client.get("aws_account_id", "")
+        )
+
+        client_assets = [
+            asset
+            for asset in assets
+            if str(asset.get("account_id")) == account_id
+        ]
+
+        client_remediation = [
+            item
+            for item in remediation_items
+            if str(item.get("aws_account_id")) == account_id
+        ]
+
+        risk_scores = [
+            asset.get("risk_score", 0) or 0
+            for asset in client_assets
+        ]
+
+        avg_asset_risk = round(
+            sum(risk_scores) / len(risk_scores),
+            2
+        ) if risk_scores else 0
+
+        highest_asset_risk = max(
+            risk_scores
+        ) if risk_scores else 0
+
+        public_assets = len([
+            asset
+            for asset in client_assets
+            if asset.get("public_ip")
+        ])
+
+        critical_assets = len([
+            asset
+            for asset in client_assets
+            if (asset.get("risk_score", 0) or 0) >= 80
+        ])
+
+        critical_remediation = len([
+            item
+            for item in client_remediation
+            if item.get("priority") == "CRITICAL"
+        ])
+
+        high_remediation = len([
+            item
+            for item in client_remediation
+            if item.get("priority") == "HIGH"
+        ])
+
+        open_remediation = len([
+            item
+            for item in client_remediation
+            if item.get("status") == "Open"
+        ])
+
+        combined_risk_score = round(
+            min(
+                100,
+                (highest_asset_risk * 0.40)
+                + (avg_asset_risk * 0.20)
+                + min(20, critical_remediation * 10)
+                + min(10, high_remediation * 5)
+                + min(10, public_assets * 10)
+            ),
+            2
+        )
+
+        client_rows.append({
+            "Client": client.get("client_name"),
+            "AWS Account ID": account_id,
+            "Environment": client.get("environment"),
+            "Total Assets": len(client_assets),
+            "Average Asset Risk": avg_asset_risk,
+            "Highest Asset Risk": highest_asset_risk,
+            "Public Assets": public_assets,
+            "Critical Assets": critical_assets,
+            "Open Remediation": open_remediation,
+            "Critical Remediation": critical_remediation,
+            "High Remediation": high_remediation,
+            "Combined Risk Score": combined_risk_score
+        })
+
+    return sorted(
+        client_rows,
+        key=lambda item: item.get(
+            "Combined Risk Score",
+            0
+        ),
+        reverse=True
+    )
+
+
+def generate_combined_client_risk_ranking_summary():
+    client_rows = compare_clients_by_combined_risk()
+
+    lines = [
+        "DGS Sentinel AI — Client Risk Ranking",
+        "=" * 60,
+        "",
+        "Combined Asset and Remediation Risk Comparison",
+        "-" * 60
+    ]
+
+    if not client_rows:
+        lines.append(
+            "No saved client accounts are available."
+        )
+
+        return "\n".join(lines)
+
+    for index, client in enumerate(
+        client_rows,
+        start=1
+    ):
+        lines.append(
+            f"{index}. {client.get('Client')} "
+            f"| Account: {client.get('AWS Account ID')} "
+            f"| Combined Risk Score: {client.get('Combined Risk Score')} "
+            f"| Assets: {client.get('Total Assets')} "
+            f"| Public Assets: {client.get('Public Assets')} "
+            f"| Critical Assets: {client.get('Critical Assets')} "
+            f"| Critical Remediation: {client.get('Critical Remediation')} "
+            f"| High Remediation: {client.get('High Remediation')}"
+        )
+
+    highest_risk_client = client_rows[0]
+
+    lines.extend([
+        "",
+        "Highest Priority Client",
+        "-" * 60,
+        (
+            f"{highest_risk_client.get('Client')} "
+            f"({highest_risk_client.get('AWS Account ID')}) "
+            f"currently has the highest combined risk score: "
+            f"{highest_risk_client.get('Combined Risk Score')}."
+        ),
+        "",
+        "Recommended Focus",
+        "-" * 60,
+        "1. Review critical remediation findings.",
+        "2. Review public-facing and critical assets.",
+        "3. Validate IAM, MFA, and credential hygiene.",
+        "4. Review unresolved Security Hub and GuardDuty findings.",
+        "5. Run recurring client scans and compare risk trends.",
+        "",
+        (
+            "Note: The combined score is a DGS Sentinel AI prioritization metric "
+            "based on saved asset exposure and client-specific remediation findings."
         )
     ])
 
