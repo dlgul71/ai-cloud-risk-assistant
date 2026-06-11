@@ -182,6 +182,14 @@ def generate_local_analyst_response(question):
         lines.append(f"{key}: {value}")
 
     if (
+        "what changed" in question_text
+        or "since the last" in question_text
+        or "snapshot comparison" in question_text
+        or "posture change" in question_text
+    ):
+        return generate_caasm_change_summary()
+
+    if (
         "top risk" in question_text
         or "fix first" in question_text
         or "priority" in question_text
@@ -294,6 +302,128 @@ def generate_executive_security_summary():
         "5. Validate progress through recurring scans and CAASM snapshots.",
         "",
         "Note: This summary is generated from saved DGS Sentinel AI platform data."
+    ])
+
+    return "\n".join(lines)
+
+
+def compare_latest_caasm_snapshots():
+    snapshots = load_caasm_snapshots()
+
+    if len(snapshots) < 2:
+        return {
+            "available": False,
+            "message": (
+                "At least two CAASM snapshots are required "
+                "to calculate posture changes."
+            )
+        }
+
+    previous_snapshot = snapshots[-2]
+    latest_snapshot = snapshots[-1]
+
+    previous_metrics = previous_snapshot.get("metrics", {})
+    latest_metrics = latest_snapshot.get("metrics", {})
+
+    previous_identity = previous_snapshot.get(
+        "identity_governance_metrics",
+        {}
+    )
+
+    latest_identity = latest_snapshot.get(
+        "identity_governance_metrics",
+        {}
+    )
+
+    previous_coverage = previous_snapshot.get(
+        "coverage_gap_metrics",
+        {}
+    )
+
+    latest_coverage = latest_snapshot.get(
+        "coverage_gap_metrics",
+        {}
+    )
+
+    comparison = {
+        "CAASM Score Change": round(
+            latest_metrics.get("CAASM Score", 0)
+            - previous_metrics.get("CAASM Score", 0),
+            2
+        ),
+        "Asset Coverage % Change": round(
+            latest_metrics.get("Asset Coverage %", 0)
+            - previous_metrics.get("Asset Coverage %", 0),
+            2
+        ),
+        "MFA Coverage % Change": round(
+            latest_metrics.get("MFA Coverage %", 0)
+            - previous_metrics.get("MFA Coverage %", 0),
+            2
+        ),
+        "Unmanaged Assets Change": (
+            latest_metrics.get("Unmanaged Assets", 0)
+            - previous_metrics.get("Unmanaged Assets", 0)
+        ),
+        "Orphaned Accounts Change": (
+            latest_identity.get("Orphaned Accounts", 0)
+            - previous_identity.get("Orphaned Accounts", 0)
+        ),
+        "Privileged Without MFA Change": (
+            latest_identity.get("Privileged Without MFA", 0)
+            - previous_identity.get("Privileged Without MFA", 0)
+        ),
+        "Critical Coverage Gaps Change": (
+            latest_coverage.get("Critical Coverage Gaps", 0)
+            - previous_coverage.get("Critical Coverage Gaps", 0)
+        )
+    }
+
+    return {
+        "available": True,
+        "previous_scan_time": previous_snapshot.get("scan_time"),
+        "latest_scan_time": latest_snapshot.get("scan_time"),
+        "comparison": comparison
+    }
+
+
+def generate_caasm_change_summary():
+    result = compare_latest_caasm_snapshots()
+
+    if not result.get("available"):
+        return result.get(
+            "message",
+            "CAASM comparison data is unavailable."
+        )
+
+    comparison = result.get("comparison", {})
+
+    lines = [
+        "DGS Sentinel AI — CAASM Snapshot Comparison",
+        "=" * 55,
+        "",
+        f"Previous Snapshot: {result.get('previous_scan_time')}",
+        f"Latest Snapshot: {result.get('latest_scan_time')}",
+        "",
+        "Posture Changes",
+        "-" * 55
+    ]
+
+    for key, value in comparison.items():
+        lines.append(f"{key}: {value}")
+
+    lines.extend([
+        "",
+        "Interpretation",
+        "-" * 55,
+        (
+            "Positive CAASM score, asset-coverage, and MFA-coverage "
+            "changes represent improvement."
+        ),
+        (
+            "Negative unmanaged-asset, orphaned-account, privileged-access, "
+            "and critical-gap changes represent improvement."
+        )
     ])
 
     return "\n".join(lines)

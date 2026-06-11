@@ -2927,6 +2927,7 @@ if page == "Ask Sentinel AI":
         "What are my top risks?",
         "What should I fix first?",
         "Summarize my CAASM posture.",
+        "What changed since the last CAASM snapshot?",
         "What identity risks need attention?",
         "Which remediation items are critical?",
         "What security-tool coverage gaps should leadership address?"
