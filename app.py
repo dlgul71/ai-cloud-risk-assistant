@@ -2550,6 +2550,90 @@ if page == "Axonius CAASM Dashboard":
                 subset=["Scan Time"]
             ).sort_values("Scan Time")
 
+            st.subheader("CAASM Risk Delta Summary")
+
+            if len(caasm_trend_df) >= 2:
+                latest_caasm = caasm_trend_df.iloc[-1]
+                previous_caasm = caasm_trend_df.iloc[-2]
+
+                caasm_score_delta = round(
+                    latest_caasm["CAASM Score"]
+                    - previous_caasm["CAASM Score"],
+                    2
+                )
+
+                asset_coverage_delta = round(
+                    latest_caasm["Asset Coverage %"]
+                    - previous_caasm["Asset Coverage %"],
+                    2
+                )
+
+                mfa_coverage_delta = round(
+                    latest_caasm["MFA Coverage %"]
+                    - previous_caasm["MFA Coverage %"],
+                    2
+                )
+
+                unmanaged_assets_delta = int(
+                    latest_caasm["Unmanaged Assets"]
+                    - previous_caasm["Unmanaged Assets"]
+                )
+
+                orphaned_accounts_delta = int(
+                    latest_caasm["Orphaned Accounts"]
+                    - previous_caasm["Orphaned Accounts"]
+                )
+
+                critical_gap_delta = int(
+                    latest_caasm["Critical Coverage Gaps"]
+                    - previous_caasm["Critical Coverage Gaps"]
+                )
+
+                delta_col1, delta_col2, delta_col3 = st.columns(3)
+
+                delta_col1.metric(
+                    "CAASM Score Change",
+                    caasm_score_delta
+                )
+
+                delta_col2.metric(
+                    "Asset Coverage Change",
+                    f"{asset_coverage_delta}%"
+                )
+
+                delta_col3.metric(
+                    "MFA Coverage Change",
+                    f"{mfa_coverage_delta}%"
+                )
+
+                delta_col4, delta_col5, delta_col6 = st.columns(3)
+
+                delta_col4.metric(
+                    "Unmanaged Assets Change",
+                    unmanaged_assets_delta
+                )
+
+                delta_col5.metric(
+                    "Orphaned Accounts Change",
+                    orphaned_accounts_delta
+                )
+
+                delta_col6.metric(
+                    "Critical Coverage Gaps Change",
+                    critical_gap_delta
+                )
+
+                st.caption(
+                    "Positive CAASM, asset-coverage, and MFA-coverage changes "
+                    "represent improvement. Negative unmanaged-asset, orphaned-account, "
+                    "and critical-gap changes represent improvement."
+                )
+
+            else:
+                st.info(
+                    "Save at least two CAASM snapshots to calculate risk deltas."
+                )
+
             st.subheader("CAASM Score Trend")
 
             st.line_chart(
