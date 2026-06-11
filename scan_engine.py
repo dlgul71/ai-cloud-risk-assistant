@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+import boto3
 
 from db import init_db, save_findings
 from ec2_ingest import get_ec2_assets
@@ -116,6 +117,19 @@ def normalize_s3_findings(findings):
     return normalized
 
 
+
+def get_current_aws_account_id():
+    try:
+        sts = boto3.client("sts")
+        identity = sts.get_caller_identity()
+
+        return str(identity.get("Account", "Unknown"))
+
+    except Exception as e:
+        print(f"Unable to determine AWS account ID: {e}")
+
+        return "Unknown"
+
 def run_scan():
 
     print("=" * 60)
@@ -137,7 +151,14 @@ def run_scan():
     findings.extend(normalize_guardduty_findings(guardduty_findings))
 
     remediation_plan = generate_remediation_plan(findings)
-    save_remediation_items(remediation_plan)
+
+    current_aws_account_id = get_current_aws_account_id()
+
+    save_remediation_items(
+        remediation_plan,
+        aws_account_id=current_aws_account_id,
+        client_name="DGS Internal AWS"
+    )
 
     execution_actions = create_actions_from_remediation_plan(
         remediation_plan

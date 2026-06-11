@@ -21,11 +21,34 @@ def init_remediation_db():
     )
     """)
 
+    cursor.execute("PRAGMA table_info(remediation_items)")
+
+    existing_columns = {
+        row[1]
+        for row in cursor.fetchall()
+    }
+
+    if "aws_account_id" not in existing_columns:
+        cursor.execute("""
+        ALTER TABLE remediation_items
+        ADD COLUMN aws_account_id TEXT
+        """)
+
+    if "client_name" not in existing_columns:
+        cursor.execute("""
+        ALTER TABLE remediation_items
+        ADD COLUMN client_name TEXT
+        """)
+
     conn.commit()
     conn.close()
 
 
-def save_remediation_items(items):
+def save_remediation_items(
+    items,
+    aws_account_id=None,
+    client_name=None
+):
     init_remediation_db()
 
     conn = sqlite3.connect(DB_NAME)
@@ -41,9 +64,11 @@ def save_remediation_items(items):
             recommendation,
             owner,
             status,
-            risk_score
+            risk_score,
+            aws_account_id,
+            client_name
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             item.get("created_at"),
             item.get("category"),
@@ -52,7 +77,9 @@ def save_remediation_items(items):
             item.get("recommendation"),
             item.get("owner"),
             item.get("status"),
-            item.get("risk_score", 0)
+            item.get("risk_score", 0),
+            aws_account_id or item.get("aws_account_id"),
+            client_name or item.get("client_name")
         ))
 
     conn.commit()
@@ -60,6 +87,10 @@ def save_remediation_items(items):
 
 
 def get_remediation_items():
+    """
+    Preserve the original nine-column return format for the existing
+    Remediation Center dashboard.
+    """
     init_remediation_db()
 
     conn = sqlite3.connect(DB_NAME)
@@ -76,6 +107,39 @@ def get_remediation_items():
         owner,
         status,
         risk_score
+    FROM remediation_items
+    ORDER BY risk_score DESC, id DESC
+    """)
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return rows
+
+
+def get_remediation_items_with_client_context():
+    """
+    Return account and client fields for Sentinel AI analyst correlation.
+    """
+    init_remediation_db()
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT
+        id,
+        created_at,
+        category,
+        priority,
+        finding,
+        recommendation,
+        owner,
+        status,
+        risk_score,
+        aws_account_id,
+        client_name
     FROM remediation_items
     ORDER BY risk_score DESC, id DESC
     """)
