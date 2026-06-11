@@ -1,5 +1,6 @@
 from io import BytesIO
 from datetime import datetime
+from demo_mode import sanitize_text
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -19,11 +20,22 @@ def generate_client_analyst_pdf(
     client_name,
     aws_account_id
 ):
+    real_client_name = client_name
+    real_aws_account_id = aws_account_id
+
+    display_client_name = sanitize_text(
+        real_client_name
+    )
+
+    display_aws_account_id = sanitize_text(
+        real_aws_account_id
+    )
+
     context = build_security_context()
 
     filtered_context = filter_context_by_account(
         context=context,
-        aws_account_id=aws_account_id
+        aws_account_id=real_aws_account_id
     )
 
     metrics = calculate_analyst_metrics(
@@ -99,8 +111,8 @@ def generate_client_analyst_pdf(
     ):
         nonlocal y
 
-        remaining_text = str(
-            line
+        remaining_text = sanitize_text(
+            str(line)
         ).strip()
 
         while remaining_text:
@@ -170,7 +182,7 @@ def generate_client_analyst_pdf(
     pdf.drawString(
         50,
         y,
-        f"Client: {client_name}"
+        f"Client: {display_client_name}"
     )
 
     y -= 15
@@ -178,7 +190,7 @@ def generate_client_analyst_pdf(
     pdf.drawString(
         50,
         y,
-        f"AWS Account ID: {aws_account_id}"
+        f"AWS Account ID: {display_aws_account_id}"
     )
 
     y -= 15
