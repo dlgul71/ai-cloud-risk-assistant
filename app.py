@@ -3102,6 +3102,38 @@ if page == "Ask Sentinel AI":
     with st.expander("Preview Executive Security Summary"):
         st.text(executive_summary)
 
+    if selected_client:
+        st.subheader("Selected Client PDF Export")
+
+        from client_analyst_report import (
+            generate_client_analyst_pdf
+        )
+
+        client_pdf_buffer = generate_client_analyst_pdf(
+            client_name=selected_client.get("client_name"),
+            aws_account_id=selected_client.get("aws_account_id")
+        )
+
+        safe_client_name = (
+            selected_client.get("client_name", "client")
+            .lower()
+            .replace(" ", "_")
+        )
+
+        st.download_button(
+            label="Download Selected Client Security Report PDF",
+            data=client_pdf_buffer,
+            file_name=(
+                f"dgs_sentinel_{safe_client_name}_security_report.pdf"
+            ),
+            mime="application/pdf"
+        )
+
+        st.caption(
+            "The selected-client report is generated from saved read-only "
+            "assessment data for the selected AWS account."
+        )
+
     st.subheader("Suggested Questions")
 
     st.markdown(
