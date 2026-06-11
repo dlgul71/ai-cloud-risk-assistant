@@ -1547,6 +1547,56 @@ if page == "Remediation Center":
         kpi_col3.metric("Accepted Risk", accepted_risk_items)
         kpi_col4.metric("Resolution Rate", f"{resolution_rate}%")
 
+        st.subheader("Persistent Open Findings")
+
+        persistent_findings_df = remediation_df[
+            (remediation_df["Status"] == "Open")
+            & (remediation_df["Occurrence Count"] >= 2)
+        ].copy()
+
+        if not persistent_findings_df.empty:
+            persistent_findings_df = persistent_findings_df.sort_values(
+                by=[
+                    "Occurrence Count",
+                    "Risk Score"
+                ],
+                ascending=[
+                    False,
+                    False
+                ]
+            )
+
+            st.dataframe(
+                persistent_findings_df[
+                    [
+                        "Priority",
+                        "Category",
+                        "Finding",
+                        "Owner",
+                        "Risk Score",
+                        "Occurrence Count",
+                        "Last Seen At"
+                    ]
+                ],
+                width="stretch"
+            )
+
+            persistent_findings_csv = (
+                persistent_findings_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            st.download_button(
+                label="Download Persistent Findings CSV",
+                data=persistent_findings_csv,
+                file_name="dgs_sentinel_persistent_findings.csv",
+                mime="text/csv"
+            )
+
+        else:
+            st.success("No recurring open findings detected.")
+
         st.subheader("Remediation Filters")
 
         filter_col1, filter_col2, filter_col3 = st.columns(3)
