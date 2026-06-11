@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from asset_db import get_assets
-from remediation_db import get_remediation_items
+from remediation_db import (
+    get_remediation_items,
+    get_remediation_items_with_client_context
+)
 from remediation_execution import get_execution_actions
 from caasm_snapshot_engine import load_caasm_snapshots
 
@@ -9,6 +12,9 @@ from caasm_snapshot_engine import load_caasm_snapshots
 def build_security_context():
     assets = get_assets()
     remediation_items = get_remediation_items()
+    remediation_items_with_context = (
+        get_remediation_items_with_client_context()
+    )
     execution_actions = get_execution_actions()
     caasm_snapshots = load_caasm_snapshots()
 
@@ -49,6 +55,23 @@ def build_security_context():
             "risk_score": item[8]
         })
 
+    remediation_rows_with_context = []
+
+    for item in remediation_items_with_context:
+        remediation_rows_with_context.append({
+            "id": item[0],
+            "created_at": item[1],
+            "category": item[2],
+            "priority": item[3],
+            "finding": item[4],
+            "recommendation": item[5],
+            "owner": item[6],
+            "status": item[7],
+            "risk_score": item[8],
+            "aws_account_id": item[9],
+            "client_name": item[10]
+        })
+
     execution_rows = []
 
     for action in execution_actions:
@@ -67,6 +90,7 @@ def build_security_context():
     return {
         "assets": asset_rows,
         "remediation_items": remediation_rows,
+        "remediation_items_with_context": remediation_rows_with_context,
         "execution_actions": execution_rows,
         "latest_caasm_snapshot": latest_caasm_snapshot,
         "caasm_snapshot_count": len(caasm_snapshots)
@@ -470,6 +494,15 @@ def filter_context_by_account(context, aws_account_id=None):
         if str(asset.get("account_id")) == str(aws_account_id)
     ]
 
+    filtered_context["remediation_items"] = [
+        item
+        for item in context.get(
+            "remediation_items_with_context",
+            []
+        )
+        if str(item.get("aws_account_id")) == str(aws_account_id)
+    ]
+
     return filtered_context
 
 
@@ -482,6 +515,11 @@ def generate_client_security_summary(client_name, aws_account_id):
     )
 
     metrics = calculate_analyst_metrics(filtered_context)
+
+    top_client_remediation = get_top_remediation_items(
+        filtered_context,
+        limit=5
+    )
 
     lines = [
         f"DGS Sentinel AI — Client Security Summary",
@@ -496,6 +534,35 @@ def generate_client_security_summary(client_name, aws_account_id):
 
     for key, value in metrics.items():
         lines.append(f"{key}: {value}")
+
+    lines.extend([
+        "",
+        "Top Client Remediation Items",
+        "-" * 55
+    ])
+
+    if top_client_remediation:
+        for index, item in enumerate(
+            top_client_remediation,
+            start=1
+        ):
+            lines.append(
+                f"{index}. {item.get('priority')} | "
+                f"{item.get('category')} | "
+                f"{item.get('finding')} | "
+                f"Risk Score: {item.get('risk_score')}"
+            )
+
+            lines.append(
+                f"   Recommendation: "
+                f"{item.get('recommendation')}"
+            )
+
+    else:
+        lines.append(
+            "No client-specific remediation records are available yet. "
+            "Run a new scan for this account first."
+        )
 
     lines.extend([
         "",
