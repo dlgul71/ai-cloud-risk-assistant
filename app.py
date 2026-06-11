@@ -824,6 +824,7 @@ with st.sidebar:
             "Remediation Center",
             "Execution Center",
             "Axonius CAASM Dashboard",
+            "Ask Sentinel AI",
             "Client Accounts",
             "Asset Dashboard"
         ],
@@ -2873,6 +2874,105 @@ if page == "Axonius CAASM Dashboard":
 
     except Exception as e:
         st.error(f"Unable to load Axonius CAASM analytics: {e}")
+
+
+
+if page == "Ask Sentinel AI":
+
+    from sentinel_ai_analyst import (
+        build_security_context,
+        calculate_analyst_metrics,
+        generate_local_analyst_response
+    )
+
+    st.title("Ask Sentinel AI")
+    st.caption(
+        "Grounded cloud-security and CAASM analysis based on saved DGS Sentinel AI platform data"
+    )
+
+    st.info(
+        "This analyst currently uses local platform data only. "
+        "It does not modify AWS resources."
+    )
+
+    analyst_context = build_security_context()
+    analyst_metrics = calculate_analyst_metrics(
+        analyst_context
+    )
+
+    st.subheader("Analyst Data Coverage")
+
+    coverage_col1, coverage_col2, coverage_col3 = st.columns(3)
+
+    coverage_col1.metric(
+        "Assets Loaded",
+        analyst_metrics.get("Total Assets", 0)
+    )
+
+    coverage_col2.metric(
+        "Open Remediation Items",
+        analyst_metrics.get("Open Remediation Items", 0)
+    )
+
+    coverage_col3.metric(
+        "CAASM Snapshots",
+        analyst_context.get("caasm_snapshot_count", 0)
+    )
+
+    st.subheader("Ask a Security Question")
+
+    question = st.text_area(
+        "Enter your question",
+        placeholder=(
+            "Examples:\n"
+            "What are my top risks?\n"
+            "What should I fix first?\n"
+            "Summarize my CAASM posture.\n"
+            "What identity risks need attention?"
+        ),
+        height=140
+    )
+
+    if st.button(
+        "Analyze Security Posture",
+        type="primary"
+    ):
+        if question.strip():
+            with st.spinner("Analyzing saved platform data..."):
+                analyst_response = generate_local_analyst_response(
+                    question
+                )
+
+            st.subheader("Sentinel AI Analyst Response")
+
+            st.text_area(
+                "Grounded analysis",
+                value=analyst_response,
+                height=500
+            )
+
+            st.download_button(
+                label="Download Analyst Response",
+                data=analyst_response.encode("utf-8"),
+                file_name="dgs_sentinel_ai_analyst_response.txt",
+                mime="text/plain"
+            )
+
+        else:
+            st.warning("Enter a security question before running the analyst.")
+
+    st.subheader("Suggested Questions")
+
+    st.markdown(
+        """
+        - What are my top risks?
+        - What should I fix first?
+        - Summarize my CAASM posture.
+        - What identity risks need attention?
+        - Which remediation items are critical?
+        - What security-tool coverage gaps should leadership address?
+        """
+    )
 
 
 if page == "Client Accounts":
