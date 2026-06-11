@@ -52,7 +52,9 @@ def build_security_context():
             "recommendation": item[5],
             "owner": item[6],
             "status": item[7],
-            "risk_score": item[8]
+            "risk_score": item[8],
+            "occurrence_count": item[9] if len(item) > 9 else 1,
+            "last_seen_at": item[10] if len(item) > 10 else None
         })
 
     remediation_rows_with_context = []
@@ -1010,3 +1012,28 @@ def generate_client_analyst_response(
     ])
 
     return "\n".join(lines)
+
+
+def get_persistent_remediation_items(context, minimum_occurrences=2, limit=10):
+    remediation_items = context.get(
+        "remediation_items",
+        []
+    )
+
+    persistent_items = [
+        item
+        for item in remediation_items
+        if (
+            item.get("status") == "Open"
+            and (item.get("occurrence_count", 1) or 1) >= minimum_occurrences
+        )
+    ]
+
+    return sorted(
+        persistent_items,
+        key=lambda item: (
+            item.get("occurrence_count", 1) or 1,
+            item.get("risk_score", 0) or 0
+        ),
+        reverse=True
+    )[:limit]

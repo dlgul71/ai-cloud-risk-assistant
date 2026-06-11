@@ -5,6 +5,7 @@ from sentinel_ai_analyst import (
     build_security_context,
     calculate_analyst_metrics,
     get_top_remediation_items,
+    get_persistent_remediation_items,
     compare_latest_caasm_snapshots
 )
 
@@ -33,6 +34,12 @@ def build_grounded_narrative_payload():
         limit=10
     )
 
+    persistent_items = get_persistent_remediation_items(
+        context,
+        minimum_occurrences=2,
+        limit=10
+    )
+
     snapshot_comparison = (
         compare_latest_caasm_snapshots()
     )
@@ -40,6 +47,7 @@ def build_grounded_narrative_payload():
     return {
         "executive_metrics": metrics,
         "top_remediation_items": top_items,
+        "persistent_open_findings": persistent_items,
         "caasm_snapshot_comparison": snapshot_comparison,
         "instructions": (
             "Use only the supplied DGS Sentinel AI platform data. "
@@ -74,7 +82,8 @@ def generate_openai_executive_narrative():
             "grounded platform data below. "
             "Use only the supplied data. "
             "Clearly separate: Executive Summary, Highest Risks, "
-            "Recommended Priorities, CAASM Posture, and Next Steps. "
+            "Persistent Findings, Recommended Priorities, CAASM Posture, and Next Steps. "
+            "Use occurrence_count and last_seen_at to identify recurring unresolved findings. "
             "Do not claim live remediation occurred. "
             "Do not invent data.\n\n"
             + json.dumps(
