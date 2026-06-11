@@ -1451,7 +1451,9 @@ if page == "Remediation Center":
         "Recommendation",
         "Owner",
         "Status",
-        "Risk Score"
+        "Risk Score",
+        "Occurrence Count",
+        "Last Seen At"
     ]
 
     if remediation_items:
@@ -1474,6 +1476,32 @@ if page == "Remediation Center":
         critical_items = len(remediation_df[remediation_df["Priority"] == "CRITICAL"])
         high_items = len(remediation_df[remediation_df["Priority"] == "HIGH"])
         open_items = len(remediation_df[remediation_df["Status"] == "Open"])
+
+        persistent_items = len(
+            remediation_df[
+                remediation_df["Occurrence Count"] >= 2
+            ]
+        )
+
+        recurring_critical_items = len(
+            remediation_df[
+                (remediation_df["Priority"] == "CRITICAL")
+                & (remediation_df["Occurrence Count"] >= 2)
+            ]
+        )
+
+        total_historical_observations = int(
+            remediation_df["Occurrence Count"].fillna(1).sum()
+        )
+
+        most_repeated_finding = (
+            remediation_df.sort_values(
+                by="Occurrence Count",
+                ascending=False
+            ).iloc[0]
+            if not remediation_df.empty
+            else None
+        )
         in_progress_items = len(remediation_df[remediation_df["Status"] == "In Progress"])
         resolved_items = len(remediation_df[remediation_df["Status"] == "Resolved"])
         accepted_risk_items = len(remediation_df[remediation_df["Status"] == "Accepted Risk"])
@@ -1486,6 +1514,30 @@ if page == "Remediation Center":
         col2.metric("Critical", critical_items)
         col3.metric("High", high_items)
         col4.metric("Open", open_items)
+
+        persistence_col1, persistence_col2, persistence_col3 = st.columns(3)
+
+        persistence_col1.metric(
+            "Persistent Findings",
+            persistent_items
+        )
+
+        persistence_col2.metric(
+            "Recurring Critical Findings",
+            recurring_critical_items
+        )
+
+        persistence_col3.metric(
+            "Historical Observations",
+            total_historical_observations
+        )
+
+        if most_repeated_finding is not None:
+            st.info(
+                "Most repeated finding: "
+                f"{most_repeated_finding['Finding']} "
+                f"({int(most_repeated_finding['Occurrence Count'])} observations)"
+            )
         col5.metric("Oldest Item Days", oldest_item)
 
         kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
@@ -3087,6 +3139,70 @@ if page == "Ask Sentinel AI":
 
         else:
             st.warning("Enter a security question before running the analyst.")
+
+    st.subheader("OpenAI Executive Narrative")
+
+    from sentinel_ai_openai import (
+        openai_configured,
+        generate_openai_executive_narrative
+    )
+
+    if openai_configured():
+        st.success(
+            "OpenAI narrative layer is configured. "
+            "Grounded DGS Sentinel AI platform data will be used."
+        )
+    else:
+        st.info(
+            "OpenAI narrative layer is not configured. "
+            "The local grounded analyst remains available."
+        )
+
+    if st.button("Generate OpenAI Executive Narrative"):
+        with st.spinner(
+            "Generating grounded executive narrative..."
+        ):
+            narrative_result = (
+                generate_openai_executive_narrative()
+            )
+
+        if narrative_result.get("success"):
+            narrative_text = narrative_result.get(
+                "narrative",
+                ""
+            )
+
+            st.success(
+                "OpenAI executive narrative generated successfully."
+            )
+
+            st.text_area(
+                "CISO-level executive narrative",
+                value=narrative_text,
+                height=650
+            )
+
+            st.download_button(
+                label="Download OpenAI Executive Narrative",
+                data=narrative_text.encode("utf-8"),
+                file_name=(
+                    "dgs_sentinel_openai_executive_narrative.txt"
+                ),
+                mime="text/plain"
+            )
+
+        else:
+            st.warning(
+                "OpenAI narrative generation was unavailable. "
+                "The local grounded analyst remains active."
+            )
+
+            st.error(
+                narrative_result.get(
+                    "message",
+                    "Unknown OpenAI narrative error."
+                )
+            )
 
     st.subheader("Executive Summary Export")
 
