@@ -2885,7 +2885,8 @@ if page == "Ask Sentinel AI":
         generate_local_analyst_response,
         generate_executive_security_summary,
         get_available_clients,
-        generate_client_security_summary
+        generate_client_security_summary,
+        compare_clients_by_combined_risk
     )
 
     st.title("Ask Sentinel AI")
@@ -2951,6 +2952,65 @@ if page == "Ask Sentinel AI":
             f"Analyst context selected: "
             f"{selected_client.get('client_name')} "
             f"({selected_client.get('aws_account_id')})"
+        )
+
+    st.subheader("Executive Client Risk Ranking")
+
+    client_risk_rows = compare_clients_by_combined_risk()
+
+    if client_risk_rows:
+        client_risk_df = pd.DataFrame(
+            client_risk_rows
+        )
+
+        st.dataframe(
+            client_risk_df,
+            width="stretch"
+        )
+
+        ranking_col1, ranking_col2, ranking_col3 = st.columns(3)
+
+        highest_risk_client = client_risk_df.iloc[0]
+
+        ranking_col1.metric(
+            "Highest-Risk Client",
+            highest_risk_client["Client"]
+        )
+
+        ranking_col2.metric(
+            "Highest Combined Risk Score",
+            highest_risk_client["Combined Risk Score"]
+        )
+
+        ranking_col3.metric(
+            "Open Remediation Items",
+            int(
+                client_risk_df["Open Remediation"].sum()
+            )
+        )
+
+        client_risk_csv = (
+            client_risk_df
+            .to_csv(index=False)
+            .encode("utf-8")
+        )
+
+        st.download_button(
+            label="Download Client Risk Ranking CSV",
+            data=client_risk_csv,
+            file_name="dgs_sentinel_client_risk_ranking.csv",
+            mime="text/csv"
+        )
+
+        st.caption(
+            "Combined risk ranking uses saved asset exposure and "
+            "client-specific remediation findings."
+        )
+
+    else:
+        st.info(
+            "No saved client-risk ranking data is available. "
+            "Run client scans first."
         )
 
     st.subheader("Ask a Security Question")
