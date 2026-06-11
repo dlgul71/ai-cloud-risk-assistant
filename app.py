@@ -2883,7 +2883,9 @@ if page == "Ask Sentinel AI":
         build_security_context,
         calculate_analyst_metrics,
         generate_local_analyst_response,
-        generate_executive_security_summary
+        generate_executive_security_summary,
+        get_available_clients,
+        generate_client_security_summary
     )
 
     st.title("Ask Sentinel AI")
@@ -2919,6 +2921,37 @@ if page == "Ask Sentinel AI":
         "CAASM Snapshots",
         analyst_context.get("caasm_snapshot_count", 0)
     )
+
+    st.subheader("Client Context")
+
+    available_clients = get_available_clients()
+
+    client_options = ["All Saved Data"] + [
+        f"{client.get('client_name')} | {client.get('aws_account_id')}"
+        for client in available_clients
+    ]
+
+    selected_client_context = st.selectbox(
+        "Select analyst context",
+        client_options
+    )
+
+    selected_client = None
+
+    if selected_client_context != "All Saved Data":
+        selected_client_index = client_options.index(
+            selected_client_context
+        ) - 1
+
+        selected_client = available_clients[
+            selected_client_index
+        ]
+
+        st.info(
+            f"Analyst context selected: "
+            f"{selected_client.get('client_name')} "
+            f"({selected_client.get('aws_account_id')})"
+        )
 
     st.subheader("Ask a Security Question")
 
@@ -2963,9 +2996,16 @@ if page == "Ask Sentinel AI":
     ):
         if question.strip():
             with st.spinner("Analyzing saved platform data..."):
-                analyst_response = generate_local_analyst_response(
-                    question
-                )
+                if selected_client:
+                    analyst_response = generate_client_security_summary(
+                        client_name=selected_client.get("client_name"),
+                        aws_account_id=selected_client.get("aws_account_id")
+                    )
+
+                else:
+                    analyst_response = generate_local_analyst_response(
+                        question
+                    )
 
             st.subheader("Sentinel AI Analyst Response")
 

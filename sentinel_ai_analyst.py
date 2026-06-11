@@ -427,3 +427,77 @@ def generate_caasm_change_summary():
     ])
 
     return "\n".join(lines)
+
+
+def get_available_clients():
+    try:
+        from client_db import get_clients
+
+        rows = get_clients()
+
+        return [
+            {
+                "id": row[0],
+                "client_name": row[1],
+                "aws_account_id": row[2],
+                "role_arn": row[3],
+                "environment": row[4]
+            }
+            for row in rows
+        ]
+
+    except Exception:
+        return []
+
+
+def filter_context_by_account(context, aws_account_id=None):
+    if not aws_account_id:
+        return context
+
+    filtered_context = dict(context)
+
+    filtered_context["assets"] = [
+        asset
+        for asset in context.get("assets", [])
+        if str(asset.get("account_id")) == str(aws_account_id)
+    ]
+
+    return filtered_context
+
+
+def generate_client_security_summary(client_name, aws_account_id):
+    context = build_security_context()
+
+    filtered_context = filter_context_by_account(
+        context=context,
+        aws_account_id=aws_account_id
+    )
+
+    metrics = calculate_analyst_metrics(filtered_context)
+
+    lines = [
+        f"DGS Sentinel AI — Client Security Summary",
+        "=" * 55,
+        "",
+        f"Client: {client_name}",
+        f"AWS Account ID: {aws_account_id}",
+        "",
+        "Client Metrics",
+        "-" * 55
+    ]
+
+    for key, value in metrics.items():
+        lines.append(f"{key}: {value}")
+
+    lines.extend([
+        "",
+        "Recommended Focus",
+        "-" * 55,
+        "1. Review public-facing assets.",
+        "2. Review critical and high-risk remediation items.",
+        "3. Validate IAM, MFA, and credential hygiene.",
+        "4. Review Security Hub and GuardDuty findings.",
+        "5. Run recurring scans and compare historical trends."
+    ])
+
+    return "\n".join(lines)
