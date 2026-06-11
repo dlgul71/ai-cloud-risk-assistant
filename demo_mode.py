@@ -70,7 +70,10 @@ def sanitize_value(value):
             for item in value
         )
 
-    return sanitize_text(value)
+    if isinstance(value, str):
+        return sanitize_text(value)
+
+    return value
 
 
 def sanitize_record(record):

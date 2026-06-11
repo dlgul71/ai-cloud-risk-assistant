@@ -1,5 +1,6 @@
 import json
 import os
+from demo_mode import sanitize_value
 
 from sentinel_ai_analyst import (
     build_security_context,
@@ -44,7 +45,7 @@ def build_grounded_narrative_payload():
         compare_latest_caasm_snapshots()
     )
 
-    return {
+    payload = {
         "executive_metrics": metrics,
         "top_remediation_items": top_items,
         "persistent_open_findings": persistent_items,
@@ -54,6 +55,8 @@ def build_grounded_narrative_payload():
             "Do not invent findings, assets, clients, or remediation actions."
         )
     }
+
+    return sanitize_value(payload)
 
 
 def generate_openai_executive_narrative():

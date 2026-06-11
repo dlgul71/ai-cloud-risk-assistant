@@ -1,4 +1,5 @@
 from pathlib import Path
+from demo_mode import sanitize_text
 
 from asset_db import get_assets
 from remediation_db import (
@@ -277,7 +278,7 @@ def generate_local_analyst_response(question):
         "Note: This response is generated only from saved DGS Sentinel AI platform data."
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 if __name__ == "__main__":
@@ -338,7 +339,7 @@ def generate_executive_security_summary():
         "Note: This summary is generated from saved DGS Sentinel AI platform data."
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 def compare_latest_caasm_snapshots():
@@ -460,7 +461,7 @@ def generate_caasm_change_summary():
         )
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 def get_available_clients():
@@ -577,7 +578,7 @@ def generate_client_security_summary(client_name, aws_account_id):
         "5. Run recurring scans and compare historical trends."
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 def compare_clients_by_asset_risk():
@@ -671,7 +672,7 @@ def generate_client_risk_ranking_summary():
             "No client assets are available. Run client scans first."
         )
 
-        return "\n".join(lines)
+        return sanitize_text("\n".join(lines))
 
     for index, client in enumerate(
         client_rows,
@@ -701,7 +702,7 @@ def generate_client_risk_ranking_summary():
         )
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 def compare_clients_by_combined_risk():
@@ -832,7 +833,7 @@ def generate_combined_client_risk_ranking_summary():
             "No saved client accounts are available."
         )
 
-        return "\n".join(lines)
+        return sanitize_text("\n".join(lines))
 
     for index, client in enumerate(
         client_rows,
@@ -876,7 +877,7 @@ def generate_combined_client_risk_ranking_summary():
         )
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 def generate_client_analyst_response(
@@ -1011,7 +1012,7 @@ def generate_client_analyst_response(
         "Note: This response is grounded in saved data for the selected AWS account."
     ])
 
-    return "\n".join(lines)
+    return sanitize_text("\n".join(lines))
 
 
 def get_persistent_remediation_items(context, minimum_occurrences=2, limit=10):
