@@ -44,3 +44,8 @@ app_phase2_working_backup.py
 scan_engine_phase2_4_working_backup.py
 app_phase2_working_backup.py
 scan_engine_phase2_4_working_backup.py
+
+# DGS Sentinel AI runtime exports and local backups
+caasm_snapshots/
+*_client_security_report.pdf
+*_backup_*.py
