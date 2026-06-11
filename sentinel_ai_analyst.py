@@ -182,6 +182,14 @@ def generate_local_analyst_response(question):
         lines.append(f"{key}: {value}")
 
     if (
+        "which client" in question_text
+        or "compare clients" in question_text
+        or "highest risk client" in question_text
+        or "client risk ranking" in question_text
+    ):
+        return generate_client_risk_ranking_summary()
+
+    if (
         "what changed" in question_text
         or "since the last" in question_text
         or "snapshot comparison" in question_text
@@ -498,6 +506,130 @@ def generate_client_security_summary(client_name, aws_account_id):
         "3. Validate IAM, MFA, and credential hygiene.",
         "4. Review Security Hub and GuardDuty findings.",
         "5. Run recurring scans and compare historical trends."
+    ])
+
+    return "\n".join(lines)
+
+
+def compare_clients_by_asset_risk():
+    context = build_security_context()
+    assets = context.get("assets", [])
+    clients = get_available_clients()
+
+    client_lookup = {
+        str(client.get("aws_account_id")): client.get("client_name")
+        for client in clients
+    }
+
+    grouped_assets = {}
+
+    for asset in assets:
+        account_id = str(
+            asset.get("account_id", "Unknown")
+        )
+
+        grouped_assets.setdefault(
+            account_id,
+            []
+        ).append(asset)
+
+    client_rows = []
+
+    for account_id, account_assets in grouped_assets.items():
+        risk_scores = [
+            asset.get("risk_score", 0) or 0
+            for asset in account_assets
+        ]
+
+        public_assets = [
+            asset
+            for asset in account_assets
+            if asset.get("public_ip")
+        ]
+
+        critical_assets = [
+            asset
+            for asset in account_assets
+            if (asset.get("risk_score", 0) or 0) >= 80
+        ]
+
+        avg_risk = round(
+            sum(risk_scores) / len(risk_scores),
+            2
+        ) if risk_scores else 0
+
+        max_risk = max(
+            risk_scores
+        ) if risk_scores else 0
+
+        client_rows.append({
+            "Client": client_lookup.get(
+                account_id,
+                f"Account {account_id}"
+            ),
+            "AWS Account ID": account_id,
+            "Total Assets": len(account_assets),
+            "Average Asset Risk": avg_risk,
+            "Highest Asset Risk": max_risk,
+            "Critical Assets": len(critical_assets),
+            "Public Assets": len(public_assets)
+        })
+
+    return sorted(
+        client_rows,
+        key=lambda item: (
+            item.get("Highest Asset Risk", 0),
+            item.get("Average Asset Risk", 0),
+            item.get("Public Assets", 0)
+        ),
+        reverse=True
+    )
+
+
+def generate_client_risk_ranking_summary():
+    client_rows = compare_clients_by_asset_risk()
+
+    lines = [
+        "DGS Sentinel AI — Client Risk Ranking",
+        "=" * 55,
+        "",
+        "Client Asset-Risk Comparison",
+        "-" * 55
+    ]
+
+    if not client_rows:
+        lines.append(
+            "No client assets are available. Run client scans first."
+        )
+
+        return "\n".join(lines)
+
+    for index, client in enumerate(
+        client_rows,
+        start=1
+    ):
+        lines.append(
+            f"{index}. {client.get('Client')} "
+            f"| Account: {client.get('AWS Account ID')} "
+            f"| Assets: {client.get('Total Assets')} "
+            f"| Average Risk: {client.get('Average Asset Risk')} "
+            f"| Highest Risk: {client.get('Highest Asset Risk')} "
+            f"| Critical Assets: {client.get('Critical Assets')} "
+            f"| Public Assets: {client.get('Public Assets')}"
+        )
+
+    lines.extend([
+        "",
+        "Recommended Focus",
+        "-" * 55,
+        (
+            "Start with the client account that has the highest-risk assets, "
+            "public exposure, or critical assets."
+        ),
+        (
+            "Note: This ranking currently uses saved AWS asset-inventory risk. "
+            "Client-specific remediation correlation will be added later."
+        )
     ])
 
     return "\n".join(lines)

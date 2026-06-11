@@ -2958,6 +2958,7 @@ if page == "Ask Sentinel AI":
     question_templates = [
         "Custom Question",
         "What are my top risks?",
+        "Which client has the highest risk?",
         "What should I fix first?",
         "Summarize my CAASM posture.",
         "What changed since the last CAASM snapshot?",
