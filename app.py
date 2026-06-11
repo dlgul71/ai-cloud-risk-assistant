@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from demo_mode import demo_mode_enabled
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from risk_engine import calculate_unified_risk
@@ -806,6 +807,12 @@ def assume_client_role(role_arn):
 # ============================================================
 # SIDEBAR NAVIGATION
 # ============================================================
+
+if demo_mode_enabled():
+    st.warning(
+        "Public Demo Mode — Sample identifiers are displayed. "
+        "Internal resource names and account identifiers are sanitized."
+    )
 
 with st.sidebar:
 
