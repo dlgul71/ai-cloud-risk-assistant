@@ -82,3 +82,22 @@ def sanitize_record(record):
 
 def sanitize_records(records):
     return sanitize_value(records)
+
+
+def sanitize_dataframe(dataframe):
+    """
+    Return a sanitized copy of a pandas DataFrame when Public Demo Mode
+    is enabled. Internal database values remain unchanged.
+    """
+    if not DEMO_MODE:
+        return dataframe
+
+    sanitized_dataframe = dataframe.copy()
+
+    for column in sanitized_dataframe.columns:
+        sanitized_dataframe[column] = (
+            sanitized_dataframe[column]
+            .map(sanitize_value)
+        )
+
+    return sanitized_dataframe

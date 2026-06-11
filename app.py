@@ -7,7 +7,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from demo_mode import demo_mode_enabled
+from demo_mode import (
+    demo_mode_enabled,
+    sanitize_dataframe,
+    sanitize_text,
+    sanitize_value
+)
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from risk_engine import calculate_unified_risk
@@ -57,6 +62,35 @@ except Exception:
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
+
+
+# Public Demo Mode display wrappers
+# These sanitize visible content only. Database records remain unchanged.
+_streamlit_dataframe = st.dataframe
+_streamlit_json = st.json
+
+
+def demo_dataframe(data, *args, **kwargs):
+    try:
+        safe_data = sanitize_dataframe(data)
+
+    except Exception:
+        safe_data = sanitize_value(data)
+
+    return _streamlit_dataframe(
+        safe_data,
+        *args,
+        **kwargs
+    )
+
+
+def demo_json(data, *args, **kwargs):
+    return _streamlit_json(
+        sanitize_value(data),
+        *args,
+        **kwargs
+    )
+
 
 st.set_page_config(
     page_title="DGS Sentinel AI",
@@ -994,7 +1028,7 @@ if page == "SOC Dashboard":
             ascending=False
         ).head(10)
 
-        st.dataframe(
+        demo_dataframe(
             top_soc_assets,
             width="stretch"
         )
@@ -1007,7 +1041,7 @@ if page == "SOC Dashboard":
             ascending=False
         ).head(10)
 
-        st.dataframe(
+        demo_dataframe(
             top_soc_remediation,
             width="stretch"
         )
@@ -1118,7 +1152,7 @@ if page == "Risk Trends":
         st.line_chart(findings_trend)
 
         st.subheader("Historical Snapshot Table")
-        st.dataframe(
+        demo_dataframe(
             trend_df,
             width="stretch"
         )
@@ -1255,7 +1289,7 @@ if page == "Executive Dashboard":
             ascending=False
         ).head(10)
 
-        st.dataframe(
+        demo_dataframe(
             top_assets,
             width="stretch"
         )
@@ -1298,7 +1332,7 @@ if page == "Executive Dashboard":
             ascending=False
         )
 
-        st.dataframe(
+        demo_dataframe(
             client_risk_df,
             width="stretch"
         )
@@ -1350,7 +1384,7 @@ if page == "Asset Dashboard":
             ascending=False
         )
 
-        st.dataframe(
+        demo_dataframe(
             asset_df,
             width='stretch'
         )
@@ -1573,7 +1607,7 @@ if page == "Remediation Center":
                 ]
             )
 
-            st.dataframe(
+            demo_dataframe(
                 persistent_findings_df[
                     [
                         "Priority",
@@ -1698,7 +1732,7 @@ if page == "Remediation Center":
             ascending=False
         )
 
-        st.dataframe(
+        demo_dataframe(
             remediation_df,
             width="stretch"
         )
@@ -1812,7 +1846,7 @@ if page == "Execution Center":
         get_adapter_readiness_matrix()
     )
 
-    st.dataframe(
+    demo_dataframe(
         adapter_matrix_df,
         width="stretch"
     )
@@ -1959,7 +1993,7 @@ if page == "Execution Center":
 
         st.subheader("Execution Queue")
 
-        st.dataframe(
+        demo_dataframe(
             filtered_actions_df,
             width="stretch"
         )
@@ -2058,7 +2092,7 @@ if page == "Execution Center":
                 "Yes" if execution_plan.get("target_supported") else "No"
             )
 
-            st.json(execution_plan)
+            demo_json(execution_plan)
 
             if execution_plan.get("live_execution_enabled"):
                 st.warning(
@@ -2153,7 +2187,7 @@ if page == "Execution Center":
                     f"{simulation_result.get('action_id')}."
                 )
 
-                st.json(simulation_result)
+                demo_json(simulation_result)
 
                 st.rerun()
 
@@ -2175,7 +2209,7 @@ if page == "Execution Center":
                     f"Processed {len(bulk_results)} approved remediation actions."
                 )
 
-                st.dataframe(
+                demo_dataframe(
                     pd.DataFrame(bulk_results),
                     width="stretch"
                 )
@@ -2221,7 +2255,7 @@ if page == "Execution Center":
                     audit_df["Action ID"] == int(selected_audit_action)
                 ]
 
-            st.dataframe(
+            demo_dataframe(
                 audit_df,
                 width="stretch"
             )
@@ -2365,7 +2399,7 @@ if page == "Axonius CAASM Dashboard":
                 ascending=False
             )
 
-            st.dataframe(
+            demo_dataframe(
                 axonius_asset_df,
                 width="stretch"
             )
@@ -2402,7 +2436,7 @@ if page == "Axonius CAASM Dashboard":
                 ascending=False
             )
 
-            st.dataframe(
+            demo_dataframe(
                 axonius_identity_df,
                 width="stretch"
             )
@@ -2473,7 +2507,7 @@ if page == "Axonius CAASM Dashboard":
 
             st.subheader("Identity Governance Exceptions")
 
-            st.dataframe(
+            demo_dataframe(
                 identity_governance_df,
                 width="stretch"
             )
@@ -2540,7 +2574,7 @@ if page == "Axonius CAASM Dashboard":
 
             st.subheader("Connector Coverage Findings")
 
-            st.dataframe(
+            demo_dataframe(
                 coverage_gap_df,
                 width="stretch"
             )
@@ -2605,7 +2639,7 @@ if page == "Axonius CAASM Dashboard":
                 )
             )
 
-            st.dataframe(
+            demo_dataframe(
                 caasm_findings_df,
                 width="stretch"
             )
@@ -2802,7 +2836,7 @@ if page == "Axonius CAASM Dashboard":
 
             st.subheader("CAASM Snapshot Table")
 
-            st.dataframe(
+            demo_dataframe(
                 caasm_trend_df,
                 width="stretch"
             )
@@ -2906,7 +2940,7 @@ if page == "Axonius CAASM Dashboard":
 
                 st.subheader("Latest Snapshot vs Previous Snapshot")
 
-                st.dataframe(
+                demo_dataframe(
                     caasm_comparison_df,
                     width="stretch"
                 )
@@ -2941,7 +2975,7 @@ if page == "Axonius CAASM Dashboard":
                 executive_recommendations
             )
 
-            st.dataframe(
+            demo_dataframe(
                 executive_recommendations_df,
                 width="stretch"
             )
@@ -3073,7 +3107,7 @@ if page == "Ask Sentinel AI":
             client_risk_rows
         )
 
-        st.dataframe(
+        demo_dataframe(
             client_risk_df,
             width="stretch"
         )
@@ -3383,7 +3417,7 @@ if page == "Client Accounts":
             ]
         )
 
-        st.dataframe(
+        demo_dataframe(
             clients_df,
             width="stretch"
         )
@@ -3574,7 +3608,7 @@ if st.button(
                 )
 
                 if results.get("ec2_instances"):
-                    st.dataframe(results.get("ec2_instances"), width='stretch')
+                    demo_dataframe(results.get("ec2_instances"), width='stretch')
             else:
                 run_scan()
 
@@ -3743,7 +3777,7 @@ if enable_org_discovery:
 
     if organization_accounts:
         org_df = pd.DataFrame(organization_accounts)
-        st.dataframe(org_df, width="stretch")
+        demo_dataframe(org_df, width="stretch")
 
         active_accounts = len(org_df[org_df["Status"] == "ACTIVE"])
         suspended_accounts = len(org_df[org_df["Status"] != "ACTIVE"])
@@ -3768,7 +3802,7 @@ guardduty_findings = get_guardduty_data()
 
 if guardduty_findings:
     gd_df = pd.DataFrame(guardduty_findings)
-    st.dataframe(gd_df, width="stretch")
+    demo_dataframe(gd_df, width="stretch")
 
     if "Severity" in gd_df.columns:
         gd_df["Severity"] = pd.to_numeric(gd_df["Severity"], errors="coerce").fillna(0)
@@ -3794,7 +3828,7 @@ else:
 st.subheader("Saved Threat Findings")
 
 if not df.empty:
-    st.dataframe(
+    demo_dataframe(
         df.style.apply(highlight_priority, axis=1),
         width="stretch"
     )
@@ -3853,7 +3887,7 @@ st.subheader("Remediation Priority Matrix")
 
 if remediation_playbook:
     remediation_df = pd.DataFrame(remediation_playbook)
-    st.dataframe(remediation_df, width="stretch")
+    demo_dataframe(remediation_df, width="stretch")
 else:
     st.info("No remediation priorities available yet.")
 
@@ -3879,7 +3913,7 @@ st.subheader("MITRE ATT&CK Mapping")
 mitre_df = build_mitre_mapping(df)
 
 if not mitre_df.empty:
-    st.dataframe(mitre_df, width="stretch")
+    demo_dataframe(mitre_df, width="stretch")
 else:
     st.info("No MITRE mappings available yet.")
 
