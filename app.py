@@ -92,6 +92,92 @@ def demo_json(data, *args, **kwargs):
     )
 
 
+_streamlit_write = st.write
+_streamlit_markdown = st.markdown
+_streamlit_info = st.info
+_streamlit_success = st.success
+_streamlit_warning = st.warning
+_streamlit_caption = st.caption
+_streamlit_download_button = st.download_button
+
+
+def demo_download_button(*, label, data, file_name, mime=None, **kwargs):
+    safe_data = data
+
+    if demo_mode_enabled():
+        if isinstance(data, bytes):
+            try:
+                safe_data = sanitize_text(
+                    data.decode("utf-8")
+                ).encode("utf-8")
+
+            except UnicodeDecodeError:
+                safe_data = data
+
+        elif isinstance(data, str):
+            safe_data = sanitize_text(data)
+
+    return _streamlit_download_button(
+        label=sanitize_text(label),
+        data=safe_data,
+        file_name=sanitize_text(file_name),
+        mime=mime,
+        **kwargs
+    )
+
+
+
+
+def demo_write(*args, **kwargs):
+    return _streamlit_write(
+        *[
+            sanitize_value(value)
+            for value in args
+        ],
+        **kwargs
+    )
+
+
+def demo_markdown(body, *args, **kwargs):
+    return _streamlit_markdown(
+        sanitize_text(body),
+        *args,
+        **kwargs
+    )
+
+
+def demo_info(body, *args, **kwargs):
+    return _streamlit_info(
+        sanitize_text(body),
+        *args,
+        **kwargs
+    )
+
+
+def demo_success(body, *args, **kwargs):
+    return _streamlit_success(
+        sanitize_text(body),
+        *args,
+        **kwargs
+    )
+
+
+def demo_warning(body, *args, **kwargs):
+    return _streamlit_warning(
+        sanitize_text(body),
+        *args,
+        **kwargs
+    )
+
+
+def demo_caption(body, *args, **kwargs):
+    return _streamlit_caption(
+        sanitize_text(body),
+        *args,
+        **kwargs
+    )
+
+
 st.set_page_config(
     page_title="DGS Sentinel AI",
     page_icon="🛡️",
@@ -131,14 +217,14 @@ def check_password():
         if session_age > timedelta(minutes=session_timeout_minutes):
             st.session_state["authenticated"] = False
             st.session_state["login_time"] = None
-            st.warning("Session expired. Please login again.")
+            demo_warning("Session expired. Please login again.")
             st.rerun()
 
     if st.session_state["authenticated"]:
         return True
 
     st.title("🛡️ DGS Sentinel AI Login")
-    st.caption("Protected Cloud Security Analytics Platform")
+    demo_caption("Protected Cloud Security Analytics Platform")
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -176,7 +262,7 @@ if init_client_db is not None:
     try:
         init_client_db()
     except Exception as e:
-        st.warning(f"Client database could not be initialized: {e}")
+        demo_warning(f"Client database could not be initialized: {e}")
 
 
 # ============================================================
@@ -191,7 +277,7 @@ def safe_get_findings():
     try:
         return get_all_findings()
     except Exception as e:
-        st.warning(f"Unable to load saved findings: {e}")
+        demo_warning(f"Unable to load saved findings: {e}")
         return []
 
 
@@ -264,7 +350,7 @@ def normalize_findings(rows):
             df.loc[df["KEV Exploited"] == 1, "Priority"] = "CRITICAL"
 
     except Exception as e:
-        st.warning(f"CISA KEV enrichment unavailable: {e}")
+        demo_warning(f"CISA KEV enrichment unavailable: {e}")
 
     return df
 
@@ -776,7 +862,7 @@ def get_guardduty_data():
     try:
         return get_guardduty_findings()
     except Exception as e:
-        st.warning(f"GuardDuty data unavailable: {e}")
+        demo_warning(f"GuardDuty data unavailable: {e}")
         return []
 
 
@@ -788,7 +874,7 @@ def get_organization_data():
     try:
         return get_organization_accounts()
     except Exception:
-        st.info("AWS Organizations is not enabled or this account is not part of an organization.")
+        demo_info("AWS Organizations is not enabled or this account is not part of an organization.")
         return []
 
 
@@ -843,7 +929,7 @@ def assume_client_role(role_arn):
 # ============================================================
 
 if demo_mode_enabled():
-    st.warning(
+    demo_warning(
         "Public Demo Mode — Sample identifiers are displayed. "
         "Internal resource names and account identifiers are sanitized."
     )
@@ -938,7 +1024,7 @@ if page == "SOC Dashboard":
     import pandas as pd
 
     st.title("SOC Dashboard")
-    st.caption("Executive security operations overview")
+    demo_caption("Executive security operations overview")
 
     assets = get_assets()
     remediation_items = get_remediation_items()
@@ -1055,7 +1141,7 @@ if page == "Risk Trends":
     import pandas as pd
 
     st.title("Risk Trends")
-    st.caption("Historical risk trend analysis from saved scan snapshots")
+    demo_caption("Historical risk trend analysis from saved scan snapshots")
 
     snapshot_dir = Path("scan_snapshots")
     trend_rows = []
@@ -1085,7 +1171,7 @@ if page == "Risk Trends":
                 })
 
             except Exception as e:
-                st.warning(f"Unable to load snapshot {snapshot_file.name}: {e}")
+                demo_warning(f"Unable to load snapshot {snapshot_file.name}: {e}")
 
     if trend_rows:
         trend_df = pd.DataFrame(trend_rows)
@@ -1174,7 +1260,7 @@ if page == "Risk Trends":
             selected_snapshot_path = snapshot_dir / selected_snapshot
 
             with open(selected_snapshot_path, "rb") as snapshot_file:
-                st.download_button(
+                demo_download_button(
                     label="Download Selected Snapshot JSON",
                     data=snapshot_file,
                     file_name=selected_snapshot,
@@ -1225,14 +1311,14 @@ if page == "Risk Trends":
                     latest_summary.get("guardduty_findings", 0) - previous_summary.get("guardduty_findings", 0)
                 )
 
-                st.caption(
+                demo_caption(
                     f"Comparing latest snapshot {latest_file.name} against previous snapshot {previous_file.name}."
                 )
             else:
-                st.info("At least two snapshots are required for comparison.")
+                demo_info("At least two snapshots are required for comparison.")
 
     else:
-        st.info("No scan snapshots found yet. Run scans to build historical trend data.")
+        demo_info("No scan snapshots found yet. Run scans to build historical trend data.")
 
 
 if page == "Executive Dashboard":
@@ -1242,7 +1328,7 @@ if page == "Executive Dashboard":
     import pandas as pd
 
     st.title("Executive Dashboard")
-    st.caption("Multi-client executive risk overview")
+    demo_caption("Multi-client executive risk overview")
 
     clients = get_clients()
     assets = get_assets()
@@ -1345,7 +1431,7 @@ if page == "Asset Dashboard":
     import pandas as pd
 
     st.title("Asset Dashboard")
-    st.caption("CAASM-style asset inventory for client AWS assets")
+    demo_caption("CAASM-style asset inventory for client AWS assets")
 
     assets = get_assets()
 
@@ -1438,7 +1524,7 @@ if page == "Asset Dashboard":
             asset_df["Asset ID"] == selected_asset_id
         ].iloc[0]
 
-        st.markdown(f"### {selected_asset['Asset ID']}")
+        demo_markdown(f"### {selected_asset['Asset ID']}")
 
         detail_col1, detail_col2, detail_col3 = st.columns(3)
 
@@ -1446,30 +1532,30 @@ if page == "Asset Dashboard":
         detail_col2.metric("Region", selected_asset["Region"])
         detail_col3.metric("Risk Score", selected_asset["Risk Score"])
 
-        st.write("**Account ID:**", selected_asset["Account ID"])
-        st.write("**Private IP:**", selected_asset["Private IP"])
-        st.write("**Public IP:**", selected_asset["Public IP"] or "None")
-        st.write("**State:**", selected_asset["State"])
-        st.write("**Last Scan:**", selected_asset["Last Scan"])
+        demo_write("**Account ID:**", selected_asset["Account ID"])
+        demo_write("**Private IP:**", selected_asset["Private IP"])
+        demo_write("**Public IP:**", selected_asset["Public IP"] or "None")
+        demo_write("**State:**", selected_asset["State"])
+        demo_write("**Last Scan:**", selected_asset["Last Scan"])
 
         if selected_asset["Public IP"]:
             st.error(
                 "Exposure Finding: This asset has a public IP address. Review security groups, inbound ports, and business justification."
             )
         else:
-            st.success(
+            demo_success(
                 "Exposure Finding: No public IP detected for this asset."
             )
 
         if selected_asset["Risk Score"] >= 80:
             st.error("Remediation Priority: Critical — immediate review required.")
         elif selected_asset["Risk Score"] >= 50:
-            st.warning("Remediation Priority: High — remediate within SLA.")
+            demo_warning("Remediation Priority: High — remediate within SLA.")
         else:
-            st.info("Remediation Priority: Standard monitoring.")
+            demo_info("Remediation Priority: Standard monitoring.")
 
     else:
-        st.info("No assets found yet. Run a Phase 3 client scan first.")
+        demo_info("No assets found yet. Run a Phase 3 client scan first.")
 
 
 
@@ -1479,7 +1565,7 @@ if page == "Remediation Center":
     import pandas as pd
 
     st.title("Remediation Center")
-    st.caption("Autonomous remediation recommendations generated from AWS findings")
+    demo_caption("Autonomous remediation recommendations generated from AWS findings")
 
     remediation_items = get_remediation_items()
 
@@ -1574,7 +1660,7 @@ if page == "Remediation Center":
         )
 
         if most_repeated_finding is not None:
-            st.info(
+            demo_info(
                 "Most repeated finding: "
                 f"{most_repeated_finding['Finding']} "
                 f"({int(most_repeated_finding['Occurrence Count'])} observations)"
@@ -1628,7 +1714,7 @@ if page == "Remediation Center":
                 .encode("utf-8")
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download Persistent Findings CSV",
                 data=persistent_findings_csv,
                 file_name="dgs_sentinel_persistent_findings.csv",
@@ -1636,7 +1722,7 @@ if page == "Remediation Center":
             )
 
         else:
-            st.success("No recurring open findings detected.")
+            demo_success("No recurring open findings detected.")
 
         st.subheader("Remediation Filters")
 
@@ -1679,15 +1765,15 @@ if page == "Remediation Center":
         chart_col1, chart_col2, chart_col3 = st.columns(3)
 
         with chart_col1:
-            st.write("Items by Priority")
+            demo_write("Items by Priority")
             st.bar_chart(remediation_df["Priority"].value_counts())
 
         with chart_col2:
-            st.write("Items by Status")
+            demo_write("Items by Status")
             st.bar_chart(remediation_df["Status"].value_counts())
 
         with chart_col3:
-            st.write("Items by Category")
+            demo_write("Items by Category")
             st.bar_chart(remediation_df["Category"].value_counts())
 
         st.subheader("Remediation Aging")
@@ -1739,7 +1825,7 @@ if page == "Remediation Center":
 
         remediation_csv = remediation_df.to_csv(index=False).encode("utf-8")
 
-        st.download_button(
+        demo_download_button(
             label="Download Filtered Remediation CSV",
             data=remediation_csv,
             file_name="dgs_sentinel_remediation_queue.csv",
@@ -1750,11 +1836,11 @@ if page == "Remediation Center":
 
         top_item = remediation_df.iloc[0]
 
-        st.markdown(f"### {top_item['Finding']}")
-        st.write("**Priority:**", top_item["Priority"])
-        st.write("**Category:**", top_item["Category"])
-        st.write("**Owner:**", top_item["Owner"])
-        st.write("**Recommendation:**", top_item["Recommendation"])
+        demo_markdown(f"### {top_item['Finding']}")
+        demo_write("**Priority:**", top_item["Priority"])
+        demo_write("**Category:**", top_item["Category"])
+        demo_write("**Owner:**", top_item["Owner"])
+        demo_write("**Recommendation:**", top_item["Recommendation"])
 
         st.subheader("Update Remediation Status")
 
@@ -1779,14 +1865,14 @@ if page == "Remediation Center":
                 new_status
             )
 
-            st.success(
+            demo_success(
                 f"Remediation item {selected_item_id} updated to {new_status}."
             )
 
             st.rerun()
 
     else:
-        st.info("No remediation items found yet. Run a scan to generate recommendations.")
+        demo_info("No remediation items found yet. Run a scan to generate recommendations.")
 
 
 
@@ -1809,7 +1895,7 @@ if page == "Execution Center":
     import pandas as pd
 
     st.title("Execution Center")
-    st.caption("Autonomous remediation execution queue")
+    demo_caption("Autonomous remediation execution queue")
 
     st.subheader("Remediation Guardrail Status")
 
@@ -1831,11 +1917,11 @@ if page == "Execution Center":
     )
 
     if GUARDRAILS.live_execution_enabled:
-        st.warning(
+        demo_warning(
             "Live AWS remediation is enabled. Approved actions may modify AWS resources."
         )
     else:
-        st.success(
+        demo_success(
             "Safe mode is active. Live AWS remediation is disabled. "
             "Execution Center actions remain in simulation mode."
         )
@@ -1851,7 +1937,7 @@ if page == "Execution Center":
         width="stretch"
     )
 
-    st.caption(
+    demo_caption(
         "All adapters remain locked to simulation or workflow-only mode. "
         "No live AWS remediation adapters are enabled."
     )
@@ -1926,13 +2012,13 @@ if page == "Execution Center":
         analytics_col1, analytics_col2 = st.columns(2)
 
         with analytics_col1:
-            st.write("Actions by Execution Status")
+            demo_write("Actions by Execution Status")
             st.bar_chart(
                 analytics_df["Execution Status"].value_counts()
             )
 
         with analytics_col2:
-            st.write("Actions by Adapter")
+            demo_write("Actions by Adapter")
             st.bar_chart(
                 analytics_df["Adapter"].value_counts()
             )
@@ -2022,7 +2108,7 @@ if page == "Execution Center":
             .encode("utf-8")
         )
 
-        st.download_button(
+        demo_download_button(
             label="Download Filtered Execution Summary CSV",
             data=execution_queue_csv,
             file_name="dgs_sentinel_execution_summary.csv",
@@ -2061,11 +2147,11 @@ if page == "Execution Center":
             selected_action["Execution Status"]
         )
 
-        st.write("**Finding:**", selected_action["Finding"])
-        st.write("**Action Type:**", selected_action["Action Type"])
-        st.write("**Controlled Adapter:**", selected_adapter)
-        st.write("**Execution Mode:**", selected_action["Execution Mode"])
-        st.write("**Notes:**", selected_action["Notes"])
+        demo_write("**Finding:**", selected_action["Finding"])
+        demo_write("**Action Type:**", selected_action["Action Type"])
+        demo_write("**Controlled Adapter:**", selected_adapter)
+        demo_write("**Execution Mode:**", selected_action["Execution Mode"])
+        demo_write("**Notes:**", selected_action["Notes"])
 
         st.subheader("Dry-Run Execution Plan")
 
@@ -2095,11 +2181,11 @@ if page == "Execution Center":
             demo_json(execution_plan)
 
             if execution_plan.get("live_execution_enabled"):
-                st.warning(
+                demo_warning(
                     "Live execution is enabled for this action. Review carefully."
                 )
             else:
-                st.success(
+                demo_success(
                     "Dry-run only. No AWS resources will be modified."
                 )
 
@@ -2157,7 +2243,7 @@ if page == "Execution Center":
                     execution_status=execution_status
                 )
 
-                st.success(
+                demo_success(
                     f"Execution action {selected_action_id} updated."
                 )
 
@@ -2171,7 +2257,7 @@ if page == "Execution Center":
 
         st.subheader("Run Approved Simulation")
 
-        st.caption(
+        demo_caption(
             "Simulation mode does not modify AWS resources. "
             "It validates the remediation workflow and creates an audit record."
         )
@@ -2182,7 +2268,7 @@ if page == "Execution Center":
                     int(selected_action_id)
                 )
 
-                st.success(
+                demo_success(
                     f"Simulation completed for action "
                     f"{simulation_result.get('action_id')}."
                 )
@@ -2196,7 +2282,7 @@ if page == "Execution Center":
 
         st.subheader("Bulk Approved Simulation")
 
-        st.caption(
+        demo_caption(
             "Runs all approved actions that are not already completed or failed. "
             "Simulation mode does not modify AWS resources."
         )
@@ -2205,7 +2291,7 @@ if page == "Execution Center":
             bulk_results = simulate_all_approved_actions()
 
             if bulk_results:
-                st.success(
+                demo_success(
                     f"Processed {len(bulk_results)} approved remediation actions."
                 )
 
@@ -2217,7 +2303,7 @@ if page == "Execution Center":
                 st.rerun()
 
             else:
-                st.info("No approved pending actions are available.")
+                demo_info("No approved pending actions are available.")
 
         st.subheader("Execution Audit Trail")
 
@@ -2262,7 +2348,7 @@ if page == "Execution Center":
 
             audit_csv = audit_df.to_csv(index=False).encode("utf-8")
 
-            st.download_button(
+            demo_download_button(
                 label="Download Audit Trail CSV",
                 data=audit_csv,
                 file_name="dgs_sentinel_execution_audit.csv",
@@ -2270,10 +2356,10 @@ if page == "Execution Center":
             )
 
         else:
-            st.info("No execution audit events found yet.")
+            demo_info("No execution audit events found yet.")
 
     else:
-        st.info("No remediation actions have been generated yet.")
+        demo_info("No remediation actions have been generated yet.")
 
 
 
@@ -2297,7 +2383,7 @@ if page == "Axonius CAASM Dashboard":
     import pandas as pd
 
     st.title("Axonius CAASM Dashboard")
-    st.caption(
+    demo_caption(
         "Cyber asset attack surface management and identity-risk analytics"
     )
 
@@ -2312,9 +2398,9 @@ if page == "Axonius CAASM Dashboard":
         coverage_sources = coverage_response.get("coverage_sources", [])
 
         if connector_mode == "Live" and axonius_configured():
-            st.success("Axonius connector mode: Live API")
+            demo_success("Axonius connector mode: Live API")
         else:
-            st.info(
+            demo_info(
                 "Axonius connector mode: Mock data. "
                 "Add API credentials later to enable the live connector."
             )
@@ -2424,7 +2510,7 @@ if page == "Axonius CAASM Dashboard":
             )
 
         else:
-            st.info("No Axonius asset records are available.")
+            demo_info("No Axonius asset records are available.")
 
         st.subheader("Identity Risk Table")
 
@@ -2446,7 +2532,7 @@ if page == "Axonius CAASM Dashboard":
             identity_metric_col1, identity_metric_col2 = st.columns(2)
 
             with identity_metric_col1:
-                st.write("Identity Risk Scores")
+                demo_write("Identity Risk Scores")
                 st.bar_chart(
                     axonius_identity_df.set_index("username")[
                         "risk_score"
@@ -2454,7 +2540,7 @@ if page == "Axonius CAASM Dashboard":
                 )
 
             with identity_metric_col2:
-                st.write("Identity Type Distribution")
+                demo_write("Identity Type Distribution")
                 st.bar_chart(
                     axonius_identity_df[
                         "identity_type"
@@ -2462,7 +2548,7 @@ if page == "Axonius CAASM Dashboard":
                 )
 
         else:
-            st.info("No Axonius identity records are available.")
+            demo_info("No Axonius identity records are available.")
 
         st.subheader("Identity Governance Dashboard")
 
@@ -2526,7 +2612,7 @@ if page == "Axonius CAASM Dashboard":
                 .encode("utf-8")
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download Identity Governance CSV",
                 data=identity_governance_csv,
                 file_name="dgs_sentinel_identity_governance.csv",
@@ -2534,7 +2620,7 @@ if page == "Axonius CAASM Dashboard":
             )
 
         else:
-            st.info("No identity-governance records are available.")
+            demo_info("No identity-governance records are available.")
 
         st.subheader("Coverage Gap Dashboard")
 
@@ -2599,7 +2685,7 @@ if page == "Axonius CAASM Dashboard":
                 .encode("utf-8")
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download Coverage Gap Findings CSV",
                 data=coverage_gap_csv,
                 file_name="dgs_sentinel_caasm_coverage_gaps.csv",
@@ -2607,7 +2693,7 @@ if page == "Axonius CAASM Dashboard":
             )
 
         else:
-            st.success("No connector coverage gaps detected.")
+            demo_success("No connector coverage gaps detected.")
 
         st.subheader("CAASM Policy and Coverage Findings")
 
@@ -2656,7 +2742,7 @@ if page == "Axonius CAASM Dashboard":
                 .encode("utf-8")
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download CAASM Policy Findings CSV",
                 data=caasm_csv,
                 file_name="dgs_sentinel_caasm_policy_findings.csv",
@@ -2664,7 +2750,7 @@ if page == "Axonius CAASM Dashboard":
             )
 
         else:
-            st.success("No CAASM policy or coverage findings detected.")
+            demo_success("No CAASM policy or coverage findings detected.")
 
         st.subheader("CAASM Snapshot History")
 
@@ -2683,7 +2769,7 @@ if page == "Axonius CAASM Dashboard":
                 coverage_gap_findings=coverage_gap_findings
             )
 
-            st.success(f"CAASM snapshot saved: {snapshot_path}")
+            demo_success(f"CAASM snapshot saved: {snapshot_path}")
 
         caasm_snapshots = load_caasm_snapshots()
 
@@ -2798,14 +2884,14 @@ if page == "Axonius CAASM Dashboard":
                     critical_gap_delta
                 )
 
-                st.caption(
+                demo_caption(
                     "Positive CAASM, asset-coverage, and MFA-coverage changes "
                     "represent improvement. Negative unmanaged-asset, orphaned-account, "
                     "and critical-gap changes represent improvement."
                 )
 
             else:
-                st.info(
+                demo_info(
                     "Save at least two CAASM snapshots to calculate risk deltas."
                 )
 
@@ -2865,7 +2951,7 @@ if page == "Axonius CAASM Dashboard":
                 )
 
                 with open(selected_caasm_snapshot_path, "rb") as snapshot_file:
-                    st.download_button(
+                    demo_download_button(
                         label="Download Selected CAASM Snapshot JSON",
                         data=snapshot_file.read(),
                         file_name=selected_caasm_snapshot,
@@ -2951,7 +3037,7 @@ if page == "Axonius CAASM Dashboard":
                     .encode("utf-8")
                 )
 
-                st.download_button(
+                demo_download_button(
                     label="Download CAASM Comparison CSV",
                     data=caasm_comparison_csv,
                     file_name="dgs_sentinel_caasm_snapshot_comparison.csv",
@@ -2959,12 +3045,12 @@ if page == "Axonius CAASM Dashboard":
                 )
 
             else:
-                st.info(
+                demo_info(
                     "Save at least two CAASM snapshots to export a comparison."
                 )
 
         else:
-            st.info(
+            demo_info(
                 "No CAASM snapshots found yet. Save a snapshot to begin trending."
             )
 
@@ -2986,7 +3072,7 @@ if page == "Axonius CAASM Dashboard":
                 .encode("utf-8")
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download Executive CAASM Recommendations CSV",
                 data=executive_recommendations_csv,
                 file_name="dgs_sentinel_caasm_executive_recommendations.csv",
@@ -2994,7 +3080,7 @@ if page == "Axonius CAASM Dashboard":
             )
 
         else:
-            st.info("No executive CAASM recommendations available.")
+            demo_info("No executive CAASM recommendations available.")
 
         st.subheader("Executive CAASM Export")
 
@@ -3008,7 +3094,7 @@ if page == "Axonius CAASM Dashboard":
             executive_recommendations=executive_recommendations
         )
 
-        st.download_button(
+        demo_download_button(
             label="Download Executive CAASM PDF Report",
             data=caasm_pdf_buffer,
             file_name="dgs_sentinel_executive_caasm_report.pdf",
@@ -3034,11 +3120,11 @@ if page == "Ask Sentinel AI":
     )
 
     st.title("Ask Sentinel AI")
-    st.caption(
+    demo_caption(
         "Grounded cloud-security and CAASM analysis based on saved DGS Sentinel AI platform data"
     )
 
-    st.info(
+    demo_info(
         "This analyst currently uses local platform data only. "
         "It does not modify AWS resources."
     )
@@ -3072,7 +3158,9 @@ if page == "Ask Sentinel AI":
     available_clients = get_available_clients()
 
     client_options = ["All Saved Data"] + [
-        f"{client.get('client_name')} | {client.get('aws_account_id')}"
+        sanitize_text(
+            f"{client.get('client_name')} | {client.get('aws_account_id')}"
+        )
         for client in available_clients
     ]
 
@@ -3092,7 +3180,7 @@ if page == "Ask Sentinel AI":
             selected_client_index
         ]
 
-        st.info(
+        demo_info(
             f"Analyst context selected: "
             f"{selected_client.get('client_name')} "
             f"({selected_client.get('aws_account_id')})"
@@ -3139,20 +3227,20 @@ if page == "Ask Sentinel AI":
             .encode("utf-8")
         )
 
-        st.download_button(
+        demo_download_button(
             label="Download Client Risk Ranking CSV",
             data=client_risk_csv,
             file_name="dgs_sentinel_client_risk_ranking.csv",
             mime="text/csv"
         )
 
-        st.caption(
+        demo_caption(
             "Combined risk ranking uses saved asset exposure and "
             "client-specific remediation findings."
         )
 
     else:
-        st.info(
+        demo_info(
             "No saved client-risk ranking data is available. "
             "Run client scans first."
         )
@@ -3221,7 +3309,7 @@ if page == "Ask Sentinel AI":
                 height=500
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download Analyst Response",
                 data=analyst_response.encode("utf-8"),
                 file_name="dgs_sentinel_ai_analyst_response.txt",
@@ -3229,7 +3317,7 @@ if page == "Ask Sentinel AI":
             )
 
         else:
-            st.warning("Enter a security question before running the analyst.")
+            demo_warning("Enter a security question before running the analyst.")
 
     st.subheader("OpenAI Executive Narrative")
 
@@ -3239,12 +3327,12 @@ if page == "Ask Sentinel AI":
     )
 
     if openai_configured():
-        st.success(
+        demo_success(
             "OpenAI narrative layer is configured. "
             "Grounded DGS Sentinel AI platform data will be used."
         )
     else:
-        st.info(
+        demo_info(
             "OpenAI narrative layer is not configured. "
             "The local grounded analyst remains available."
         )
@@ -3263,7 +3351,7 @@ if page == "Ask Sentinel AI":
                 ""
             )
 
-            st.success(
+            demo_success(
                 "OpenAI executive narrative generated successfully."
             )
 
@@ -3273,7 +3361,7 @@ if page == "Ask Sentinel AI":
                 height=650
             )
 
-            st.download_button(
+            demo_download_button(
                 label="Download OpenAI Executive Narrative",
                 data=narrative_text.encode("utf-8"),
                 file_name=(
@@ -3283,7 +3371,7 @@ if page == "Ask Sentinel AI":
             )
 
         else:
-            st.warning(
+            demo_warning(
                 "OpenAI narrative generation was unavailable. "
                 "The local grounded analyst remains active."
             )
@@ -3299,7 +3387,7 @@ if page == "Ask Sentinel AI":
 
     executive_summary = generate_executive_security_summary()
 
-    st.download_button(
+    demo_download_button(
         label="Download Executive Security Summary",
         data=executive_summary.encode("utf-8"),
         file_name="dgs_sentinel_ai_executive_security_summary.txt",
@@ -3327,7 +3415,7 @@ if page == "Ask Sentinel AI":
             .replace(" ", "_")
         )
 
-        st.download_button(
+        demo_download_button(
             label="Download Selected Client Security Report PDF",
             data=client_pdf_buffer,
             file_name=(
@@ -3336,14 +3424,14 @@ if page == "Ask Sentinel AI":
             mime="application/pdf"
         )
 
-        st.caption(
+        demo_caption(
             "The selected-client report is generated from saved read-only "
             "assessment data for the selected AWS account."
         )
 
     st.subheader("Suggested Questions")
 
-    st.markdown(
+    demo_markdown(
         """
         - What are my top risks?
         - What should I fix first?
@@ -3358,11 +3446,11 @@ if page == "Ask Sentinel AI":
 if page == "Client Accounts":
 
     st.title("🛡️ DGS Sentinel AI")
-    st.caption("Client Account Management")
+    demo_caption("Client Account Management")
 
     st.header("Client Account Management")
 
-    st.markdown(
+    demo_markdown(
         "Add AWS client accounts using read-only IAM AssumeRole access."
     )
 
@@ -3397,7 +3485,7 @@ if page == "Client Accounts":
                     role_arn,
                     environment
                 )
-                st.success("Client account added successfully.")
+                demo_success("Client account added successfully.")
             else:
                 st.error("Please complete all required fields.")
 
@@ -3422,7 +3510,7 @@ if page == "Client Accounts":
             width="stretch"
         )
     else:
-        st.info("No client accounts saved yet.")
+        demo_info("No client accounts saved yet.")
 
     st.stop()
 
@@ -3524,14 +3612,14 @@ if page != "Dashboard":
     st.stop()
 
 st.title("🛡️ DGS Sentinel AI")
-st.caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
+demo_caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
 
 if selected_client_data:
-    st.success(
+    demo_success(
         f"Active Client: {selected_client_data[1]} ({selected_client_data[4]})"
     )
 else:
-    st.info("Active Client: DGS Internal AWS Environment")
+    demo_info("Active Client: DGS Internal AWS Environment")
     
 
 # ============================================================
@@ -3577,12 +3665,12 @@ if st.button(
 ):
 
     if selected_client_data:
-        st.info(
+        demo_info(
             f"Preparing scan for client: {selected_client_data[1]} "
             f"({selected_client_data[4]})"
         )
     else:
-        st.info("Preparing scan for DGS Internal AWS Environment")
+        demo_info("Preparing scan for DGS Internal AWS Environment")
 
     st.session_state["last_scan_status"] = "Running"
 
@@ -3601,7 +3689,7 @@ if st.button(
                         f"Unable to assume role for client: {selected_client_data[1]}"
                     )
 
-                st.success(
+                demo_success(
                     f"Phase 3 multi-region scan completed. "
                     f"Regions scanned: {len(results.get('regions_scanned', []))}. "
                     f"EC2 assets found: {results.get('ec2_count', 0)}."
@@ -3654,13 +3742,13 @@ if st.button(
                     remediation=remediation_playbook
                 )
 
-                st.success(
+                demo_success(
                     f"Snapshot saved: {snapshot_path.get('file_path')} "
                     f"(old snapshots deleted: {snapshot_path.get('deleted_old_snapshots', 0)})"
                 )
 
             except Exception as snapshot_error:
-                st.warning(f"Snapshot save skipped: {snapshot_error}")
+                demo_warning(f"Snapshot save skipped: {snapshot_error}")
 
             st.session_state["last_scan_status"] = "Completed"
             st.session_state["last_scan_time"] = datetime.now().strftime(
@@ -3668,11 +3756,11 @@ if st.button(
             )
 
             if selected_client_data:
-                st.success(
+                demo_success(
                     f"Scan completed for client: {selected_client_data[1]}"
                 )
             else:
-                st.success(
+                demo_success(
                     "Scan completed for DGS Internal AWS Environment"
                 )
 
@@ -3680,7 +3768,7 @@ if st.button(
             st.session_state["last_scan_status"] = "Failed"
             st.error(f"Scan failed: {e}")
 
-st.info(
+demo_info(
     f"""
 Scan Status: {st.session_state['last_scan_status']}
 
@@ -3718,7 +3806,7 @@ readiness_col3.metric(
     "Scheduler Hook"
 )
 
-st.caption(
+demo_caption(
     "Scheduled scanning readiness is prepared for future cron, GitHub Actions, or cloud scheduler integration."
 )
 
@@ -3768,7 +3856,7 @@ aws_col1, aws_col2 = st.columns(2)
 aws_col1.metric("AWS Account", identity.get("Account", "Unavailable"))
 aws_col2.metric("AWS User/Role", identity.get("UserId", "Unavailable"))
 
-st.caption(identity.get("Arn", ""))
+demo_caption(identity.get("Arn", ""))
 
 if enable_org_discovery:
     st.subheader("AWS Organization Accounts")
@@ -3787,7 +3875,7 @@ if enable_org_discovery:
         org_col2.metric("Active Accounts", active_accounts)
         org_col3.metric("Suspended Accounts", suspended_accounts)
     else:
-        st.info(
+        demo_info(
             "No AWS Organization accounts available or Organizations is not enabled."
         )
 
@@ -3818,7 +3906,7 @@ if guardduty_findings:
         gd_col1.metric("High Severity Threats", high_gd)
         gd_col2.metric("Medium Severity Threats", medium_gd)
 else:
-    st.info("No GuardDuty findings available or GuardDuty is not enabled.")
+    demo_info("No GuardDuty findings available or GuardDuty is not enabled.")
 
 
 # ============================================================
@@ -3875,7 +3963,7 @@ if not df.empty:
         )
         st.plotly_chart(line_fig, width="stretch")
 else:
-    st.warning("No saved findings yet. Run the autonomous scanner first.")
+    demo_warning("No saved findings yet. Run the autonomous scanner first.")
     st.code("python headless_scan.py", language="bash")
 
 
@@ -3889,7 +3977,7 @@ if remediation_playbook:
     remediation_df = pd.DataFrame(remediation_playbook)
     demo_dataframe(remediation_df, width="stretch")
 else:
-    st.info("No remediation priorities available yet.")
+    demo_info("No remediation priorities available yet.")
 
 
 # ============================================================
@@ -3898,10 +3986,10 @@ else:
 
 st.subheader("AI Executive Risk Summary")
 
-st.markdown(risk_narrative)
+demo_markdown(risk_narrative)
 
 with st.expander("AI Executive Analysis", expanded=True):
-    st.markdown(ai_analysis)
+    demo_markdown(ai_analysis)
 
 
 # ============================================================
@@ -3915,7 +4003,7 @@ mitre_df = build_mitre_mapping(df)
 if not mitre_df.empty:
     demo_dataframe(mitre_df, width="stretch")
 else:
-    st.info("No MITRE mappings available yet.")
+    demo_info("No MITRE mappings available yet.")
 
 
 # ============================================================
