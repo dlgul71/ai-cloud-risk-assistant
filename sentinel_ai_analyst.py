@@ -875,3 +875,138 @@ def generate_combined_client_risk_ranking_summary():
     ])
 
     return "\n".join(lines)
+
+
+def generate_client_analyst_response(
+    question,
+    client_name,
+    aws_account_id
+):
+    context = build_security_context()
+
+    filtered_context = filter_context_by_account(
+        context=context,
+        aws_account_id=aws_account_id
+    )
+
+    metrics = calculate_analyst_metrics(
+        filtered_context
+    )
+
+    top_items = get_top_remediation_items(
+        filtered_context,
+        limit=10
+    )
+
+    question_text = str(question).lower()
+
+    lines = [
+        "DGS Sentinel AI — Client Analyst Response",
+        "=" * 60,
+        "",
+        f"Client: {client_name}",
+        f"AWS Account ID: {aws_account_id}",
+        "",
+        "Client Metrics",
+        "-" * 60
+    ]
+
+    for key, value in metrics.items():
+        lines.append(f"{key}: {value}")
+
+    if (
+        "top risk" in question_text
+        or "fix first" in question_text
+        or "priority" in question_text
+    ):
+        lines.extend([
+            "",
+            "Top Client Remediation Priorities",
+            "-" * 60
+        ])
+
+        if top_items:
+            for index, item in enumerate(
+                top_items,
+                start=1
+            ):
+                lines.append(
+                    f"{index}. {item.get('priority')} | "
+                    f"{item.get('category')} | "
+                    f"{item.get('finding')} | "
+                    f"Risk Score: {item.get('risk_score')}"
+                )
+
+                lines.append(
+                    f"   Recommendation: "
+                    f"{item.get('recommendation')}"
+                )
+
+        else:
+            lines.append(
+                "No client-specific remediation items are available yet. "
+                "Run a new scan for this client account."
+            )
+
+    elif "identity" in question_text or "mfa" in question_text:
+        identity_items = [
+            item
+            for item in top_items
+            if (
+                "identity" in str(
+                    item.get("category", "")
+                ).lower()
+                or "iam" in str(
+                    item.get("finding", "")
+                ).lower()
+                or "mfa" in str(
+                    item.get("finding", "")
+                ).lower()
+            )
+        ]
+
+        lines.extend([
+            "",
+            "Client Identity-Risk Summary",
+            "-" * 60
+        ])
+
+        if identity_items:
+            for index, item in enumerate(
+                identity_items,
+                start=1
+            ):
+                lines.append(
+                    f"{index}. {item.get('priority')} | "
+                    f"{item.get('finding')} | "
+                    f"Risk Score: {item.get('risk_score')}"
+                )
+
+                lines.append(
+                    f"   Recommendation: "
+                    f"{item.get('recommendation')}"
+                )
+
+        else:
+            lines.append(
+                "No client-specific identity-risk findings are available yet."
+            )
+
+    else:
+        lines.extend([
+            "",
+            "Recommended Client Focus",
+            "-" * 60,
+            "1. Review public-facing assets.",
+            "2. Review critical and high-risk remediation items.",
+            "3. Validate IAM, MFA, and credential hygiene.",
+            "4. Review Security Hub and GuardDuty findings.",
+            "5. Run recurring scans and compare historical trends."
+        ])
+
+    lines.extend([
+        "",
+        "Note: This response is grounded in saved data for the selected AWS account."
+    ])
+
+    return "\n".join(lines)

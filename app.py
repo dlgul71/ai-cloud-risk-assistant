@@ -2886,6 +2886,7 @@ if page == "Ask Sentinel AI":
         generate_executive_security_summary,
         get_available_clients,
         generate_client_security_summary,
+        generate_client_analyst_response,
         compare_clients_by_combined_risk
     )
 
@@ -3058,7 +3059,8 @@ if page == "Ask Sentinel AI":
         if question.strip():
             with st.spinner("Analyzing saved platform data..."):
                 if selected_client:
-                    analyst_response = generate_client_security_summary(
+                    analyst_response = generate_client_analyst_response(
+                        question=question,
                         client_name=selected_client.get("client_name"),
                         aws_account_id=selected_client.get("aws_account_id")
                     )
