@@ -533,7 +533,8 @@ def generate_caasm_pdf(
     identity_governance_metrics,
     coverage_gap_metrics,
     policy_findings,
-    coverage_gap_findings
+    coverage_gap_findings,
+    executive_recommendations=None
 ):
     """Generate a client-ready executive CAASM assessment PDF."""
     buffer = BytesIO()
@@ -691,18 +692,39 @@ def generate_caasm_pdf(
         write_wrapped_line("No connector coverage gaps detected.")
 
     y -= 12
-    write_section("Recommended Executive Priorities")
+    write_section("Executive CAASM Recommendations")
 
-    priorities = [
-        "1. Address orphaned and privileged accounts without MFA.",
-        "2. Resolve unmanaged asset visibility gaps.",
-        "3. Establish missing connector integrations.",
-        "4. Review critical and high-risk CAASM findings.",
-        "5. Validate improvements through recurring CAASM assessments."
-    ]
+    if executive_recommendations:
+        for index, item in enumerate(
+            executive_recommendations[:10],
+            start=1
+        ):
+            line = (
+                f"{index}. "
+                f"{item.get('Priority', 'STANDARD')} | "
+                f"{item.get('Category', 'Unknown')} | "
+                f"{item.get('Recommendation', 'Review and remediate per SLA.')}"
+            )
 
-    for priority in priorities:
-        write_wrapped_line(priority)
+            write_wrapped_line(
+                line,
+                indent=65,
+                max_chars=100
+            )
+
+            y -= 5
+
+    else:
+        fallback_priorities = [
+            "1. Address orphaned and privileged accounts without MFA.",
+            "2. Resolve unmanaged asset visibility gaps.",
+            "3. Establish missing connector integrations.",
+            "4. Review critical and high-risk CAASM findings.",
+            "5. Validate improvements through recurring CAASM assessments."
+        ]
+
+        for priority in fallback_priorities:
+            write_wrapped_line(priority)
 
     add_footer()
     pdf.save()
@@ -2716,7 +2738,8 @@ if page == "Axonius CAASM Dashboard":
             identity_governance_metrics=identity_governance_metrics,
             coverage_gap_metrics=coverage_gap_metrics,
             policy_findings=policy_findings,
-            coverage_gap_findings=coverage_gap_findings
+            coverage_gap_findings=coverage_gap_findings,
+            executive_recommendations=executive_recommendations
         )
 
         st.download_button(
