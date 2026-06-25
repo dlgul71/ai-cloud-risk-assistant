@@ -1581,6 +1581,25 @@ if page == "Client Security Dashboard":
             public_assets = 0
             last_scan = "No scan recorded"
 
+        if last_scan != "No scan recorded":
+            parsed_last_scan = pd.to_datetime(
+                last_scan,
+                errors="coerce",
+                utc=True
+            )
+
+            if pd.notna(parsed_last_scan):
+                last_scan_display = (
+                    parsed_last_scan
+                    .tz_convert("America/Chicago")
+                    .strftime("%b %d, %Y %I:%M %p CT")
+                )
+            else:
+                last_scan_display = str(last_scan)
+
+        else:
+            last_scan_display = last_scan
+
         connection_status = (
             "Configured"
             if role_arn
@@ -1630,7 +1649,7 @@ if page == "Client Security Dashboard":
 
         summary_col8.metric(
             "Last Scan",
-            last_scan
+            last_scan_display
         )
 
         st.subheader("AWS Service Coverage")
@@ -2318,6 +2337,41 @@ if page == "Client Security Dashboard":
                 "No historical snapshots contain assets for this "
                 "client account. Run a client scan to establish a baseline."
             )
+
+
+        st.subheader("Client Security Report")
+
+        from client_analyst_report import (
+            generate_client_analyst_pdf
+        )
+
+        client_security_pdf = generate_client_analyst_pdf(
+            client_name=client_name,
+            aws_account_id=aws_account_id
+        )
+
+        report_safe_client_name = (
+            sanitize_text(client_name)
+            .lower()
+            .replace(" ", "_")
+            .replace("/", "_")
+        )
+
+        demo_download_button(
+            label="Download Client Security Report PDF",
+            data=client_security_pdf,
+            file_name=(
+                f"dgs_sentinel_{report_safe_client_name}"
+                "_security_report.pdf"
+            ),
+            mime="application/pdf"
+        )
+
+        demo_caption(
+            "This report is generated from saved read-only assessment "
+            "data for the selected AWS account. It includes executive "
+            "metrics, remediation priorities, and recommended focus areas."
+        )
 
 
 if page == "Asset Dashboard":
