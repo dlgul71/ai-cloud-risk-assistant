@@ -207,13 +207,30 @@ def generate_client_analyst_pdf(
     y -= 30
 
     write_section(
-        "Executive Metrics"
+        "Client-Scoped Executive Metrics"
     )
 
-    for key, value in metrics.items():
+    client_metric_names = [
+        "Total Assets",
+        "Public Assets",
+        "Critical Remediation Items",
+        "High Remediation Items",
+        "Open Remediation Items",
+        "Persistent Findings"
+    ]
+
+    for metric_name in client_metric_names:
         write_line(
-            f"{key}: {value}"
+            f"{metric_name}: {metrics.get(metric_name, 0)}"
         )
+
+    write_line(
+        (
+            "Execution and CAASM metrics are excluded from this "
+            "client-specific section until those records contain "
+            "AWS-account correlation."
+        )
+    )
 
     y -= 12
 

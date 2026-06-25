@@ -71,8 +71,10 @@ def build_security_context():
             "owner": item[6],
             "status": item[7],
             "risk_score": item[8],
-            "aws_account_id": item[9],
-            "client_name": item[10]
+            "occurrence_count": item[9] if len(item) > 9 else 1,
+            "last_seen_at": item[10] if len(item) > 10 else None,
+            "aws_account_id": item[11] if len(item) > 11 else None,
+            "client_name": item[12] if len(item) > 12 else None
         })
 
     execution_rows = []
@@ -105,40 +107,77 @@ def calculate_analyst_metrics(context):
     remediation_items = context.get("remediation_items", [])
     execution_actions = context.get("execution_actions", [])
 
-    critical_remediation = [
-        item
-        for item in remediation_items
-        if item.get("priority") == "CRITICAL"
-    ]
-
-    high_remediation = [
-        item
-        for item in remediation_items
-        if item.get("priority") == "HIGH"
-    ]
+    closed_statuses = {
+        "closed",
+        "resolved",
+        "completed"
+    }
 
     open_remediation = [
         item
         for item in remediation_items
-        if item.get("status") == "Open"
+        if str(
+            item.get("status", "Open")
+        ).strip().lower() not in closed_statuses
     ]
+
+    critical_remediation = [
+        item
+        for item in open_remediation
+        if str(
+            item.get("priority", "")
+        ).strip().upper() == "CRITICAL"
+    ]
+
+    high_remediation = [
+        item
+        for item in open_remediation
+        if str(
+            item.get("priority", "")
+        ).strip().upper() == "HIGH"
+    ]
+
+    persistent_remediation = []
+
+    for item in open_remediation:
+        try:
+            occurrence_count = int(
+                item.get("occurrence_count", 1) or 1
+            )
+        except (TypeError, ValueError):
+            occurrence_count = 1
+
+        if occurrence_count > 1:
+            persistent_remediation.append(item)
 
     completed_actions = [
         item
         for item in execution_actions
-        if item.get("execution_status") == "Completed"
+        if str(
+            item.get("execution_status", "")
+        ).strip().lower() == "completed"
     ]
 
     pending_actions = [
         item
         for item in execution_actions
-        if item.get("approval_status") == "Pending Approval"
+        if str(
+            item.get("approval_status", "")
+        ).strip().lower() == "pending approval"
     ]
 
     public_assets = [
         asset
         for asset in assets
-        if asset.get("public_ip")
+        if str(
+            asset.get("public_ip", "") or ""
+        ).strip().lower() not in {
+            "",
+            "none",
+            "null",
+            "n/a",
+            "nan"
+        }
     ]
 
     latest_caasm_snapshot = context.get(
@@ -167,14 +206,24 @@ def calculate_analyst_metrics(context):
         "Critical Remediation Items": len(critical_remediation),
         "High Remediation Items": len(high_remediation),
         "Open Remediation Items": len(open_remediation),
+        "Persistent Findings": len(persistent_remediation),
         "Pending Execution Approvals": len(pending_actions),
         "Completed Simulation Actions": len(completed_actions),
         "CAASM Score": caasm_metrics.get("CAASM Score", 0),
         "Asset Coverage %": caasm_metrics.get("Asset Coverage %", 0),
         "MFA Coverage %": caasm_metrics.get("MFA Coverage %", 0),
-        "Orphaned Accounts": identity_metrics.get("Orphaned Accounts", 0),
-        "Privileged Without MFA": identity_metrics.get("Privileged Without MFA", 0),
-        "Critical Coverage Gaps": coverage_metrics.get("Critical Coverage Gaps", 0)
+        "Orphaned Accounts": identity_metrics.get(
+            "Orphaned Accounts",
+            0
+        ),
+        "Privileged Without MFA": identity_metrics.get(
+            "Privileged Without MFA",
+            0
+        ),
+        "Critical Coverage Gaps": coverage_metrics.get(
+            "Critical Coverage Gaps",
+            0
+        )
     }
 
 
@@ -505,6 +554,14 @@ def filter_context_by_account(context, aws_account_id=None):
         )
         if str(item.get("aws_account_id")) == str(aws_account_id)
     ]
+
+    # Execution actions and CAASM snapshots currently do not
+    # contain an AWS account identifier. Exclude them from a
+    # client-scoped report rather than showing global values.
+    filtered_context["execution_actions"] = []
+    filtered_context["latest_caasm_snapshot"] = {}
+    filtered_context["caasm_snapshot_count"] = 0
+    filtered_context["client_scope"] = True
 
     return filtered_context
 
