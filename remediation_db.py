@@ -186,7 +186,7 @@ def save_remediation_items(
 
 def get_remediation_items():
     """
-    Preserve the original nine-column format for the existing dashboard.
+    Return remediation records with recurring-finding history.
     """
     init_remediation_db()
 
@@ -203,7 +203,9 @@ def get_remediation_items():
         recommendation,
         owner,
         status,
-        risk_score
+        risk_score,
+        occurrence_count,
+        last_seen_at
     FROM remediation_items
     ORDER BY risk_score DESC, id DESC
     """)
