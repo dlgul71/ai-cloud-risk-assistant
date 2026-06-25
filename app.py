@@ -953,6 +953,7 @@ with st.sidebar:
             "Axonius CAASM Dashboard",
             "Ask Sentinel AI",
             "Client Accounts",
+            "Client Security Dashboard",
             "Asset Dashboard"
         ],
         key="main_navigation"
@@ -1425,6 +1426,330 @@ if page == "Executive Dashboard":
             width="stretch"
         )
 
+
+
+
+if page == "Client Security Dashboard":
+
+    from client_db import get_clients
+    from asset_db import get_assets
+    import pandas as pd
+
+    st.title("Client Security Dashboard")
+    demo_caption(
+        "Selected-client AWS security posture, asset exposure, "
+        "risk prioritization, and service coverage."
+    )
+
+    clients = get_clients() if get_clients is not None else []
+    assets = get_assets()
+
+    if not clients:
+        demo_info(
+            "No saved client accounts were found. "
+            "Add a client from the Client Accounts page first."
+        )
+
+    else:
+        client_options = {}
+
+        for client in clients:
+            client_id = client[0]
+            client_name = client[1]
+            aws_account_id = client[2]
+            environment = client[4]
+
+            display_label = sanitize_text(
+                f"{client_name} | {aws_account_id} | {environment}"
+            )
+
+            client_options[display_label] = client
+
+        selected_client_label = st.selectbox(
+            "Select Client",
+            list(client_options.keys()),
+            key="client_security_dashboard_selector"
+        )
+
+        selected_client = client_options[selected_client_label]
+
+        client_id = selected_client[0]
+        client_name = selected_client[1]
+        aws_account_id = selected_client[2]
+        role_arn = selected_client[3]
+        environment = selected_client[4]
+
+        display_client_name = sanitize_text(client_name)
+        display_account_id = sanitize_text(aws_account_id)
+
+        demo_info(
+            f"Active Client: {display_client_name} | "
+            f"AWS Account: {display_account_id} | "
+            f"Environment: {environment}"
+        )
+
+        asset_columns = [
+            "Asset ID",
+            "Asset Type",
+            "Account ID",
+            "Region",
+            "Hostname",
+            "Private IP",
+            "Public IP",
+            "State",
+            "Risk Score",
+            "Last Scan"
+        ]
+
+        if assets:
+            all_asset_df = pd.DataFrame(
+                assets,
+                columns=asset_columns
+            )
+
+            all_asset_df["Account ID"] = (
+                all_asset_df["Account ID"]
+                .astype(str)
+            )
+
+            all_asset_df["Risk Score"] = pd.to_numeric(
+                all_asset_df["Risk Score"],
+                errors="coerce"
+            ).fillna(0)
+
+            client_asset_df = all_asset_df[
+                all_asset_df["Account ID"] == str(aws_account_id)
+            ].copy()
+
+        else:
+            client_asset_df = pd.DataFrame(columns=asset_columns)
+
+        total_assets = len(client_asset_df)
+
+        average_risk = (
+            round(client_asset_df["Risk Score"].mean(), 2)
+            if total_assets
+            else 0
+        )
+
+        critical_assets = (
+            int((client_asset_df["Risk Score"] >= 80).sum())
+            if total_assets
+            else 0
+        )
+
+        high_assets = (
+            int(
+                (
+                    (client_asset_df["Risk Score"] >= 60)
+                    & (client_asset_df["Risk Score"] < 80)
+                ).sum()
+            )
+            if total_assets
+            else 0
+        )
+
+        if total_assets:
+            public_ip_values = (
+                client_asset_df["Public IP"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
+
+            public_assets = int(
+                (~public_ip_values.isin(
+                    ["", "none", "null", "n/a", "nan"]
+                )).sum()
+            )
+
+            last_scan_values = (
+                client_asset_df["Last Scan"]
+                .dropna()
+                .astype(str)
+            )
+
+            last_scan = (
+                last_scan_values.max()
+                if not last_scan_values.empty
+                else "No scan recorded"
+            )
+
+        else:
+            public_assets = 0
+            last_scan = "No scan recorded"
+
+        connection_status = (
+            "Configured"
+            if role_arn
+            else "Role not configured"
+        )
+
+        st.subheader("Client Security Summary")
+
+        summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+
+        summary_col1.metric(
+            "Total Assets",
+            total_assets
+        )
+
+        summary_col2.metric(
+            "Average Asset Risk",
+            average_risk
+        )
+
+        summary_col3.metric(
+            "Critical Assets",
+            critical_assets
+        )
+
+        summary_col4.metric(
+            "Public Assets",
+            public_assets
+        )
+
+        summary_col5, summary_col6, summary_col7, summary_col8 = st.columns(4)
+
+        summary_col5.metric(
+            "High-Risk Assets",
+            high_assets
+        )
+
+        summary_col6.metric(
+            "Connection",
+            connection_status
+        )
+
+        summary_col7.metric(
+            "Environment",
+            environment or "Not specified"
+        )
+
+        summary_col8.metric(
+            "Last Scan",
+            last_scan
+        )
+
+        st.subheader("AWS Service Coverage")
+
+        def service_metrics(service_name, aliases):
+            if client_asset_df.empty:
+                return {
+                    "Service": service_name,
+                    "Status": "No assets discovered",
+                    "Resources": 0,
+                    "Critical": 0,
+                    "High": 0
+                }
+
+            asset_types = (
+                client_asset_df["Asset Type"]
+                .fillna("")
+                .astype(str)
+                .str.lower()
+            )
+
+            service_mask = asset_types.apply(
+                lambda value: any(
+                    alias in value
+                    for alias in aliases
+                )
+            )
+
+            service_assets = client_asset_df[service_mask]
+
+            resource_count = len(service_assets)
+
+            return {
+                "Service": service_name,
+                "Status": (
+                    "Data available"
+                    if resource_count
+                    else "No assets discovered"
+                ),
+                "Resources": resource_count,
+                "Critical": int(
+                    (service_assets["Risk Score"] >= 80).sum()
+                ) if resource_count else 0,
+                "High": int(
+                    (
+                        (service_assets["Risk Score"] >= 60)
+                        & (service_assets["Risk Score"] < 80)
+                    ).sum()
+                ) if resource_count else 0
+            }
+
+        service_rows = [
+            service_metrics(
+                "EC2",
+                ["ec2", "instance"]
+            ),
+            service_metrics(
+                "IAM",
+                ["iam", "user", "role", "identity"]
+            ),
+            service_metrics(
+                "S3",
+                ["s3", "bucket"]
+            ),
+            {
+                "Service": "Security Hub",
+                "Status": "Phase 13 integration pending",
+                "Resources": 0,
+                "Critical": 0,
+                "High": 0
+            },
+            {
+                "Service": "GuardDuty",
+                "Status": "Phase 13 integration pending",
+                "Resources": 0,
+                "Critical": 0,
+                "High": 0
+            },
+            {
+                "Service": "AWS Config",
+                "Status": "Phase 13 integration pending",
+                "Resources": 0,
+                "Critical": 0,
+                "High": 0
+            }
+        ]
+
+        service_df = pd.DataFrame(service_rows)
+
+        demo_dataframe(
+            service_df,
+            width="stretch",
+            hide_index=True
+        )
+
+        st.subheader("Client Asset Risk")
+
+        if client_asset_df.empty:
+            demo_info(
+                "No saved assets currently match this client's AWS account ID. "
+                "Run a client scan to populate this dashboard."
+            )
+
+        else:
+            risk_display_df = client_asset_df.sort_values(
+                by="Risk Score",
+                ascending=False
+            ).copy()
+
+            risk_display_df["Account ID"] = (
+                risk_display_df["Account ID"]
+                .astype(str)
+                .apply(sanitize_text)
+            )
+
+            demo_dataframe(
+                risk_display_df,
+                width="stretch",
+                hide_index=True
+            )
 
 
 if page == "Asset Dashboard":
