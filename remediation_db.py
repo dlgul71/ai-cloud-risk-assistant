@@ -237,6 +237,8 @@ def get_remediation_items_with_client_context():
         owner,
         status,
         risk_score,
+        occurrence_count,
+        last_seen_at,
         aws_account_id,
         client_name
     FROM remediation_items

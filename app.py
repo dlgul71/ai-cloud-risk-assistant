@@ -1433,6 +1433,7 @@ if page == "Client Security Dashboard":
 
     from client_db import get_clients
     from asset_db import get_assets
+    from remediation_db import get_remediation_items_with_client_context
     import pandas as pd
 
     st.title("Client Security Dashboard")
@@ -1749,6 +1750,209 @@ if page == "Client Security Dashboard":
                 risk_display_df,
                 width="stretch",
                 hide_index=True
+            )
+
+
+        st.subheader("Client Remediation Queue")
+
+        remediation_rows = (
+            get_remediation_items_with_client_context()
+        )
+
+        remediation_columns = [
+            "ID",
+            "Created At",
+            "Category",
+            "Priority",
+            "Finding",
+            "Recommendation",
+            "Owner",
+            "Status",
+            "Risk Score",
+            "Occurrence Count",
+            "Last Seen At",
+            "AWS Account ID",
+            "Client Name"
+        ]
+
+        if remediation_rows:
+            all_remediation_df = pd.DataFrame(
+                remediation_rows,
+                columns=remediation_columns
+            )
+
+            all_remediation_df["AWS Account ID"] = (
+                all_remediation_df["AWS Account ID"]
+                .fillna("")
+                .astype(str)
+            )
+
+            all_remediation_df["Client Name"] = (
+                all_remediation_df["Client Name"]
+                .fillna("")
+                .astype(str)
+            )
+
+            account_match = (
+                all_remediation_df["AWS Account ID"]
+                == str(aws_account_id)
+            )
+
+            client_name_match = (
+                all_remediation_df["Client Name"]
+                .str.casefold()
+                == str(client_name).casefold()
+            )
+
+            client_remediation_df = all_remediation_df[
+                account_match | client_name_match
+            ].copy()
+
+        else:
+            client_remediation_df = pd.DataFrame(
+                columns=remediation_columns
+            )
+
+        if client_remediation_df.empty:
+            demo_info(
+                "No remediation findings currently match this client. "
+                "Run a client assessment to populate the remediation queue."
+            )
+
+        else:
+            client_remediation_df["Risk Score"] = pd.to_numeric(
+                client_remediation_df["Risk Score"],
+                errors="coerce"
+            ).fillna(0)
+
+            client_remediation_df["Occurrence Count"] = pd.to_numeric(
+                client_remediation_df["Occurrence Count"],
+                errors="coerce"
+            ).fillna(1).astype(int)
+
+            normalized_status = (
+                client_remediation_df["Status"]
+                .fillna("Open")
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
+
+            closed_statuses = [
+                "closed",
+                "resolved",
+                "completed"
+            ]
+
+            open_mask = ~normalized_status.isin(closed_statuses)
+
+            open_remediation_df = client_remediation_df[
+                open_mask
+            ].copy()
+
+            open_priority = (
+                open_remediation_df["Priority"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            open_items = len(open_remediation_df)
+
+            critical_items = int(
+                (open_priority == "CRITICAL").sum()
+            )
+
+            high_items = int(
+                (open_priority == "HIGH").sum()
+            )
+
+            persistent_items = int(
+                (
+                    open_remediation_df["Occurrence Count"] > 1
+                ).sum()
+            )
+
+            remediation_col1, remediation_col2, remediation_col3, remediation_col4 = (
+                st.columns(4)
+            )
+
+            remediation_col1.metric(
+                "Open Findings",
+                open_items
+            )
+
+            remediation_col2.metric(
+                "Critical Open",
+                critical_items
+            )
+
+            remediation_col3.metric(
+                "High Open",
+                high_items
+            )
+
+            remediation_col4.metric(
+                "Persistent Findings",
+                persistent_items
+            )
+
+            queue_display_columns = [
+                "Priority",
+                "Category",
+                "Finding",
+                "Recommendation",
+                "Owner",
+                "Status",
+                "Risk Score",
+                "Occurrence Count",
+                "Last Seen At"
+            ]
+
+            queue_display_df = (
+                client_remediation_df[
+                    queue_display_columns
+                ]
+                .sort_values(
+                    by=[
+                        "Risk Score",
+                        "Occurrence Count"
+                    ],
+                    ascending=[
+                        False,
+                        False
+                    ]
+                )
+            )
+
+            demo_dataframe(
+                queue_display_df,
+                width="stretch",
+                hide_index=True
+            )
+
+            safe_client_file_name = (
+                sanitize_text(client_name)
+                .lower()
+                .replace(" ", "_")
+                .replace("/", "_")
+            )
+
+            remediation_csv = (
+                queue_display_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            demo_download_button(
+                label="Download Client Remediation Queue CSV",
+                data=remediation_csv,
+                file_name=(
+                    f"dgs_sentinel_{safe_client_file_name}"
+                    "_remediation_queue.csv"
+                ),
+                mime="text/csv"
             )
 
 
