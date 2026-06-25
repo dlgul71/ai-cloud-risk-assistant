@@ -1956,6 +1956,370 @@ if page == "Client Security Dashboard":
             )
 
 
+        st.subheader("Client Risk Trend Since Previous Scan")
+
+        import json
+        from pathlib import Path
+
+        client_snapshot_dir = Path("scan_snapshots")
+        client_trend_rows = []
+
+        def safe_numeric_risk(value):
+            try:
+                return float(value or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        if client_snapshot_dir.exists():
+            for client_snapshot_file in sorted(
+                client_snapshot_dir.glob("*.json")
+            ):
+                try:
+                    with open(
+                        client_snapshot_file,
+                        "r"
+                    ) as snapshot_handle:
+                        snapshot_data = json.load(snapshot_handle)
+
+                    snapshot_assets = snapshot_data.get(
+                        "assets",
+                        []
+                    )
+
+                    matching_snapshot_assets = [
+                        asset
+                        for asset in snapshot_assets
+                        if str(
+                            asset.get("account_id", "")
+                        ) == str(aws_account_id)
+                    ]
+
+                    # Only include snapshots containing this account.
+                    if not matching_snapshot_assets:
+                        continue
+
+                    snapshot_risk_scores = [
+                        safe_numeric_risk(
+                            asset.get("risk_score", 0)
+                        )
+                        for asset in matching_snapshot_assets
+                    ]
+
+                    snapshot_asset_count = len(
+                        matching_snapshot_assets
+                    )
+
+                    snapshot_average_risk = (
+                        round(
+                            sum(snapshot_risk_scores)
+                            / len(snapshot_risk_scores),
+                            2
+                        )
+                        if snapshot_risk_scores
+                        else 0
+                    )
+
+                    snapshot_critical_assets = sum(
+                        score >= 80
+                        for score in snapshot_risk_scores
+                    )
+
+                    snapshot_high_assets = sum(
+                        60 <= score < 80
+                        for score in snapshot_risk_scores
+                    )
+
+                    snapshot_public_assets = 0
+
+                    for snapshot_asset in matching_snapshot_assets:
+                        snapshot_public_ip = str(
+                            snapshot_asset.get(
+                                "public_ip",
+                                ""
+                            )
+                            or ""
+                        ).strip().lower()
+
+                        if snapshot_public_ip not in [
+                            "",
+                            "none",
+                            "null",
+                            "n/a",
+                            "nan"
+                        ]:
+                            snapshot_public_assets += 1
+
+                    snapshot_security_score = round(
+                        max(
+                            0,
+                            100 - snapshot_average_risk
+                        ),
+                        2
+                    )
+
+                    client_trend_rows.append({
+                        "Scan Time": snapshot_data.get(
+                            "scan_time"
+                        ),
+                        "Average Risk": snapshot_average_risk,
+                        "Security Score": snapshot_security_score,
+                        "Assets": snapshot_asset_count,
+                        "Critical Assets": snapshot_critical_assets,
+                        "High-Risk Assets": snapshot_high_assets,
+                        "Public Assets": snapshot_public_assets,
+                        "Snapshot File": client_snapshot_file.name
+                    })
+
+                except Exception as snapshot_error:
+                    demo_warning(
+                        f"Unable to process client snapshot "
+                        f"{client_snapshot_file.name}: "
+                        f"{snapshot_error}"
+                    )
+
+        if client_trend_rows:
+            client_trend_df = pd.DataFrame(
+                client_trend_rows
+            )
+
+            client_trend_df["Scan Time"] = pd.to_datetime(
+                client_trend_df["Scan Time"],
+                errors="coerce"
+            )
+
+            client_trend_df = (
+                client_trend_df
+                .dropna(subset=["Scan Time"])
+                .sort_values("Scan Time")
+                .drop_duplicates(
+                    subset=["Scan Time"],
+                    keep="last"
+                )
+            )
+
+            if client_trend_df.empty:
+                demo_info(
+                    "Client snapshots were found, but their scan "
+                    "timestamps could not be processed."
+                )
+
+            else:
+                latest_client_snapshot = (
+                    client_trend_df.iloc[-1]
+                )
+
+                previous_client_snapshot = (
+                    client_trend_df.iloc[-2]
+                    if len(client_trend_df) >= 2
+                    else None
+                )
+
+                current_average_risk = round(
+                    float(
+                        latest_client_snapshot[
+                            "Average Risk"
+                        ]
+                    ),
+                    2
+                )
+
+                current_asset_count = int(
+                    latest_client_snapshot["Assets"]
+                )
+
+                current_critical_assets = int(
+                    latest_client_snapshot[
+                        "Critical Assets"
+                    ]
+                )
+
+                current_public_assets = int(
+                    latest_client_snapshot[
+                        "Public Assets"
+                    ]
+                )
+
+                if previous_client_snapshot is not None:
+                    previous_average_risk = round(
+                        float(
+                            previous_client_snapshot[
+                                "Average Risk"
+                            ]
+                        ),
+                        2
+                    )
+
+                    risk_change = round(
+                        current_average_risk
+                        - previous_average_risk,
+                        2
+                    )
+
+                    asset_change = (
+                        current_asset_count
+                        - int(
+                            previous_client_snapshot[
+                                "Assets"
+                            ]
+                        )
+                    )
+
+                    critical_change = (
+                        current_critical_assets
+                        - int(
+                            previous_client_snapshot[
+                                "Critical Assets"
+                            ]
+                        )
+                    )
+
+                    public_change = (
+                        current_public_assets
+                        - int(
+                            previous_client_snapshot[
+                                "Public Assets"
+                            ]
+                        )
+                    )
+
+                    if risk_change < 0:
+                        trend_status = "Improving"
+                    elif risk_change > 0:
+                        trend_status = "Worsening"
+                    else:
+                        trend_status = "Stable"
+
+                else:
+                    previous_average_risk = "N/A"
+                    risk_change = "N/A"
+                    asset_change = "N/A"
+                    critical_change = "N/A"
+                    public_change = "N/A"
+                    trend_status = "Baseline"
+
+                trend_col1, trend_col2, trend_col3, trend_col4 = (
+                    st.columns(4)
+                )
+
+                trend_col1.metric(
+                    "Current Average Risk",
+                    current_average_risk
+                )
+
+                trend_col2.metric(
+                    "Previous Average Risk",
+                    previous_average_risk
+                )
+
+                trend_col3.metric(
+                    "Risk Change",
+                    risk_change
+                )
+
+                trend_col4.metric(
+                    "Trend Status",
+                    trend_status
+                )
+
+                change_col1, change_col2, change_col3, change_col4 = (
+                    st.columns(4)
+                )
+
+                change_col1.metric(
+                    "Asset Count Change",
+                    asset_change
+                )
+
+                change_col2.metric(
+                    "Critical Asset Change",
+                    critical_change
+                )
+
+                change_col3.metric(
+                    "Public Asset Change",
+                    public_change
+                )
+
+                change_col4.metric(
+                    "Client Snapshots",
+                    len(client_trend_df)
+                )
+
+                st.markdown("#### Average Risk Over Time")
+
+                st.line_chart(
+                    client_trend_df.set_index(
+                        "Scan Time"
+                    )["Average Risk"]
+                )
+
+                st.markdown("#### Client Snapshot History")
+
+                client_trend_display_df = (
+                    client_trend_df[
+                        [
+                            "Scan Time",
+                            "Average Risk",
+                            "Security Score",
+                            "Assets",
+                            "Critical Assets",
+                            "High-Risk Assets",
+                            "Public Assets"
+                        ]
+                    ]
+                    .sort_values(
+                        "Scan Time",
+                        ascending=False
+                    )
+                )
+
+                demo_dataframe(
+                    client_trend_display_df,
+                    width="stretch",
+                    hide_index=True
+                )
+
+                trend_safe_client_name = (
+                    sanitize_text(client_name)
+                    .lower()
+                    .replace(" ", "_")
+                    .replace("/", "_")
+                )
+
+                client_trend_csv = (
+                    client_trend_display_df
+                    .to_csv(index=False)
+                    .encode("utf-8")
+                )
+
+                demo_download_button(
+                    label="Download Client Risk Trend CSV",
+                    data=client_trend_csv,
+                    file_name=(
+                        f"dgs_sentinel_{trend_safe_client_name}"
+                        "_risk_trend.csv"
+                    ),
+                    mime="text/csv"
+                )
+
+                if len(client_trend_df) < 2:
+                    demo_info(
+                        "This is the client's baseline snapshot. "
+                        "Run another client scan to calculate risk changes."
+                    )
+
+                demo_caption(
+                    "Only snapshots containing assets for the selected "
+                    "AWS account are included in this client trend."
+                )
+
+        else:
+            demo_info(
+                "No historical snapshots contain assets for this "
+                "client account. Run a client scan to establish a baseline."
+            )
+
+
 if page == "Asset Dashboard":
 
     from asset_db import get_assets
