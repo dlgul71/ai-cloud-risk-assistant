@@ -10,7 +10,11 @@ def generate_remediation_recommendation(finding):
         return {
             "created_at": str(datetime.now(UTC)),
             "category": "Identity & Access",
-            "priority": "HIGH",
+            "priority": (
+                "CRITICAL"
+                if priority == "CRITICAL" or risk_score >= 90
+                else "HIGH"
+            ),
             "finding": finding.get("cve_id", "IAM Risk"),
             "recommendation": "Enable MFA, review access keys, rotate stale credentials, and enforce least privilege.",
             "owner": "IAM / Cloud Security",
@@ -22,7 +26,11 @@ def generate_remediation_recommendation(finding):
         return {
             "created_at": str(datetime.now(UTC)),
             "category": "Data Exposure",
-            "priority": "HIGH",
+            "priority": (
+                "CRITICAL"
+                if priority == "CRITICAL" or risk_score >= 90
+                else "HIGH"
+            ),
             "finding": finding.get("cve_id", "S3 Exposure Risk"),
             "recommendation": "Enable S3 Block Public Access, review bucket policy/ACLs, and confirm encryption is enabled.",
             "owner": "Cloud Security / Storage Owner",

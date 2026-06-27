@@ -5,6 +5,8 @@ from botocore.exceptions import ClientError
 from client_accounts import client_boto3_client
 from asset_db import init_asset_db, save_asset
 from risk_engine import calculate_asset_risk
+from remediation_engine import generate_remediation_plan
+from remediation_db import save_remediation_items
 
 
 REGIONS = [
@@ -394,7 +396,7 @@ def scan_client_s3(role_arn):
     return s3_buckets, scan_errors
 
 
-def run_client_scan(role_arn):
+def run_client_scan(role_arn, client_name=None):
     print("=" * 60)
     print("DGS SENTINEL AI PHASE 13 CLIENT AWS SCAN")
     print("=" * 60)
@@ -513,6 +515,109 @@ def run_client_scan(role_arn):
             "last_scan": scan_time,
         })
 
+    client_findings = []
+
+    for iam_user in iam_users:
+        user_name = iam_user.get(
+            "user_name",
+            "Unknown"
+        )
+
+        if iam_user.get("mfa_enabled") is False:
+            client_findings.append({
+                "cve_id": (
+                    f"IAM Risk - {user_name} - MFA Missing"
+                ),
+                "priority": "HIGH",
+                "risk_score": 75
+            })
+
+        active_access_keys = iam_user.get(
+            "active_access_keys"
+        )
+
+        if (
+            isinstance(active_access_keys, int)
+            and active_access_keys > 0
+        ):
+            multiple_keys = active_access_keys > 1
+
+            client_findings.append({
+                "cve_id": (
+                    f"IAM Risk - {user_name} - "
+                    f"{active_access_keys} Active Access Key"
+                    f"{'s' if multiple_keys else ''}"
+                ),
+                "priority": (
+                    "CRITICAL"
+                    if multiple_keys
+                    else "HIGH"
+                ),
+                "risk_score": (
+                    90
+                    if multiple_keys
+                    else 75
+                )
+            })
+
+    for s3_bucket in s3_buckets:
+        bucket_name = s3_bucket.get(
+            "bucket_name",
+            "Unknown"
+        )
+
+        if (
+            s3_bucket.get(
+                "public_access_block"
+            ) is False
+        ):
+            client_findings.append({
+                "cve_id": (
+                    f"S3 Risk - {bucket_name} - "
+                    "Public Access Block Disabled"
+                ),
+                "priority": "HIGH",
+                "risk_score": 75
+            })
+
+        if s3_bucket.get("policy_public") is True:
+            client_findings.append({
+                "cve_id": (
+                    f"S3 Risk - {bucket_name} - "
+                    "Bucket Policy Is Public"
+                ),
+                "priority": "CRITICAL",
+                "risk_score": 95
+            })
+
+        if (
+            s3_bucket.get(
+                "encryption_enabled"
+            ) is False
+        ):
+            client_findings.append({
+                "cve_id": (
+                    f"S3 Risk - {bucket_name} - "
+                    "Default Encryption Missing"
+                ),
+                "priority": "HIGH",
+                "risk_score": 75
+            })
+
+    remediation_plan = generate_remediation_plan(
+        client_findings
+    )
+
+    if remediation_plan:
+        save_remediation_items(
+            remediation_plan,
+            aws_account_id=account_id,
+            client_name=(
+                client_name
+                or f"AWS Account {account_id}"
+            )
+        )
+
     return {
         "identity": identity,
         "regions_scanned": REGIONS,
@@ -522,5 +627,8 @@ def run_client_scan(role_arn):
         "ec2_count": len(ec2_instances),
         "iam_count": len(iam_users),
         "s3_count": len(s3_buckets),
+        "remediation_findings": client_findings,
+        "remediation_plan": remediation_plan,
+        "remediation_count": len(remediation_plan),
         "scan_errors": scan_errors,
     }

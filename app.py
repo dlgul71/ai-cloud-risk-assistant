@@ -4631,7 +4631,10 @@ if st.button(
             if selected_client_data:
                 role_arn = selected_client_data[3]
 
-                results = run_client_scan(role_arn)
+                results = run_client_scan(
+                    role_arn,
+                    client_name=selected_client_data[1]
+                )
 
                 if results.get("identity", {}).get("status") != "SUCCESS":
                     raise RuntimeError(
@@ -4643,7 +4646,9 @@ if st.button(
                     f"Regions scanned: {len(results.get('regions_scanned', []))}. "
                     f"EC2 assets: {results.get('ec2_count', 0)}. "
                     f"IAM users: {results.get('iam_count', 0)}. "
-                    f"S3 buckets: {results.get('s3_count', 0)}."
+                    f"S3 buckets: {results.get('s3_count', 0)}. "
+                    f"Remediation findings: "
+                    f"{results.get('remediation_count', 0)}."
                 )
 
                 if results.get("ec2_instances"):
