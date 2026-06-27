@@ -4639,13 +4639,46 @@ if st.button(
                     )
 
                 demo_success(
-                    f"Phase 3 multi-region scan completed. "
+                    f"Phase 13 client scan completed. "
                     f"Regions scanned: {len(results.get('regions_scanned', []))}. "
-                    f"EC2 assets found: {results.get('ec2_count', 0)}."
+                    f"EC2 assets: {results.get('ec2_count', 0)}. "
+                    f"IAM users: {results.get('iam_count', 0)}. "
+                    f"S3 buckets: {results.get('s3_count', 0)}."
                 )
 
                 if results.get("ec2_instances"):
-                    demo_dataframe(results.get("ec2_instances"), width='stretch')
+                    st.subheader("Discovered EC2 Instances")
+                    demo_dataframe(
+                        results.get("ec2_instances"),
+                        width="stretch"
+                    )
+
+                if results.get("iam_users"):
+                    st.subheader("Discovered IAM Users")
+                    demo_dataframe(
+                        results.get("iam_users"),
+                        width="stretch"
+                    )
+
+                if results.get("s3_buckets"):
+                    st.subheader("Discovered S3 Buckets")
+                    demo_dataframe(
+                        results.get("s3_buckets"),
+                        width="stretch"
+                    )
+
+                if results.get("scan_errors"):
+                    demo_warning(
+                        "Some read-only checks could not be completed."
+                    )
+
+                    demo_dataframe(
+                        [
+                            {"Warning": warning}
+                            for warning in results.get("scan_errors", [])
+                        ],
+                        width="stretch"
+                    )
             else:
                 run_scan()
 
@@ -4675,9 +4708,21 @@ if st.button(
                     "risk_rating": risk_rating,
                     "assets": len(snapshot_assets),
                     "accounts_scanned": 1,
-                    "ec2_assets": len([a for a in snapshot_assets if a.get("asset_type") == "EC2"]),
-                    "iam_users": 0,
-                    "s3_buckets": 0,
+                    "ec2_assets": len([
+                        asset
+                        for asset in snapshot_assets
+                        if asset.get("asset_type") == "EC2"
+                    ]),
+                    "iam_users": len([
+                        asset
+                        for asset in snapshot_assets
+                        if asset.get("asset_type") == "IAM User"
+                    ]),
+                    "s3_buckets": len([
+                        asset
+                        for asset in snapshot_assets
+                        if asset.get("asset_type") == "S3 Bucket"
+                    ]),
                     "securityhub_findings": high_count + critical_count,
                     "guardduty_findings": 0,
                     "kev_cves": kev_count,
