@@ -1434,6 +1434,7 @@ if page == "Client Security Dashboard":
     from client_db import get_clients
     from asset_db import get_assets
     from remediation_db import get_remediation_items_with_client_context
+    from client_detection_store import load_client_scan_summary
     import pandas as pd
 
     st.title("Client Security Dashboard")
@@ -1701,6 +1702,12 @@ if page == "Client Security Dashboard":
                 ) if resource_count else 0
             }
 
+        latest_service_summary = (
+            load_client_scan_summary(
+                aws_account_id
+            )
+        )
+
         service_rows = [
             service_metrics(
                 "EC2",
@@ -1716,17 +1723,41 @@ if page == "Client Security Dashboard":
             ),
             {
                 "Service": "Security Hub",
-                "Status": "Phase 13 integration pending",
-                "Resources": 0,
-                "Critical": 0,
-                "High": 0
+                "Status": latest_service_summary.get(
+                    "securityhub_status",
+                    "No scan recorded"
+                ),
+                "Resources": latest_service_summary.get(
+                    "securityhub_count",
+                    0
+                ),
+                "Critical": latest_service_summary.get(
+                    "securityhub_critical",
+                    0
+                ),
+                "High": latest_service_summary.get(
+                    "securityhub_high",
+                    0
+                )
             },
             {
                 "Service": "GuardDuty",
-                "Status": "Phase 13 integration pending",
-                "Resources": 0,
-                "Critical": 0,
-                "High": 0
+                "Status": latest_service_summary.get(
+                    "guardduty_status",
+                    "No scan recorded"
+                ),
+                "Resources": latest_service_summary.get(
+                    "guardduty_count",
+                    0
+                ),
+                "Critical": latest_service_summary.get(
+                    "guardduty_critical",
+                    0
+                ),
+                "High": latest_service_summary.get(
+                    "guardduty_high",
+                    0
+                )
             },
             {
                 "Service": "AWS Config",
@@ -4647,6 +4678,10 @@ if st.button(
                     f"EC2 assets: {results.get('ec2_count', 0)}. "
                     f"IAM users: {results.get('iam_count', 0)}. "
                     f"S3 buckets: {results.get('s3_count', 0)}. "
+                    f"Security Hub findings: "
+                    f"{results.get('securityhub_count', 0)}. "
+                    f"GuardDuty findings: "
+                    f"{results.get('guardduty_count', 0)}. "
                     f"Remediation findings: "
                     f"{results.get('remediation_count', 0)}."
                 )
@@ -4669,6 +4704,20 @@ if st.button(
                     st.subheader("Discovered S3 Buckets")
                     demo_dataframe(
                         results.get("s3_buckets"),
+                        width="stretch"
+                    )
+
+                if results.get("securityhub_findings"):
+                    st.subheader("Security Hub Findings")
+                    demo_dataframe(
+                        results.get("securityhub_findings"),
+                        width="stretch"
+                    )
+
+                if results.get("guardduty_findings"):
+                    st.subheader("GuardDuty Findings")
+                    demo_dataframe(
+                        results.get("guardduty_findings"),
                         width="stretch"
                     )
 
@@ -4728,8 +4777,22 @@ if st.button(
                         for asset in snapshot_assets
                         if asset.get("asset_type") == "S3 Bucket"
                     ]),
-                    "securityhub_findings": high_count + critical_count,
-                    "guardduty_findings": 0,
+                    "securityhub_findings": (
+                        results.get(
+                            "securityhub_count",
+                            0
+                        )
+                        if selected_client_data
+                        else high_count + critical_count
+                    ),
+                    "guardduty_findings": (
+                        results.get(
+                            "guardduty_count",
+                            0
+                        )
+                        if selected_client_data
+                        else 0
+                    ),
                     "kev_cves": kev_count,
                     "remediation_actions": len(remediation_playbook),
                     "critical_vulnerabilities": critical_count

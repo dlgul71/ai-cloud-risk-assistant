@@ -49,3 +49,4 @@ scan_engine_phase2_4_working_backup.py
 caasm_snapshots/
 *_client_security_report.pdf
 *_backup_*.py
+client_scan_results/

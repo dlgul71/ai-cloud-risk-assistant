@@ -7,6 +7,7 @@ from asset_db import init_asset_db, save_asset
 from risk_engine import calculate_asset_risk
 from remediation_engine import generate_remediation_plan
 from remediation_db import save_remediation_items
+from client_detection_store import save_client_scan_summary
 
 
 REGIONS = [
@@ -396,6 +397,281 @@ def scan_client_s3(role_arn):
     return s3_buckets, scan_errors
 
 
+
+def scan_client_securityhub(role_arn):
+    findings = []
+    scan_errors = []
+    enabled_regions = []
+
+    for region in REGIONS:
+        client = client_boto3_client(
+            "securityhub",
+            role_arn,
+            region
+        )
+
+        if not client:
+            scan_errors.append(
+                f"Security Hub client unavailable in {region}."
+            )
+            continue
+
+        try:
+            client.describe_hub()
+            enabled_regions.append(region)
+
+        except ClientError as error:
+            error_code = error.response.get(
+                "Error",
+                {}
+            ).get("Code")
+
+            if error_code in {
+                "InvalidAccessException",
+                "ResourceNotFoundException"
+            }:
+                continue
+
+            scan_errors.append(
+                f"Security Hub status check failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        except Exception as error:
+            scan_errors.append(
+                f"Security Hub status check failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        try:
+            paginator = client.get_paginator(
+                "get_findings"
+            )
+
+            item_count = 0
+
+            for page in paginator.paginate(
+                Filters={
+                    "RecordState": [
+                        {
+                            "Value": "ACTIVE",
+                            "Comparison": "EQUALS"
+                        }
+                    ]
+                },
+                PaginationConfig={
+                    "MaxItems": 100
+                }
+            ):
+                for finding in page.get(
+                    "Findings",
+                    []
+                ):
+                    resources = finding.get(
+                        "Resources",
+                        []
+                    )
+
+                    resource_id = (
+                        resources[0].get(
+                            "Id",
+                            "Unknown"
+                        )
+                        if resources
+                        else "Unknown"
+                    )
+
+                    findings.append({
+                        "finding_id": finding.get("Id"),
+                        "title": finding.get(
+                            "Title",
+                            "Security Hub Finding"
+                        ),
+                        "severity": finding.get(
+                            "Severity",
+                            {}
+                        ).get(
+                            "Label",
+                            "UNKNOWN"
+                        ),
+                        "resource": resource_id,
+                        "compliance": finding.get(
+                            "Compliance",
+                            {}
+                        ).get(
+                            "Status",
+                            "UNKNOWN"
+                        ),
+                        "record_state": finding.get(
+                            "RecordState",
+                            "UNKNOWN"
+                        ),
+                        "region": region
+                    })
+
+                    item_count += 1
+
+                    if item_count >= 100:
+                        break
+
+                if item_count >= 100:
+                    break
+
+        except Exception as error:
+            scan_errors.append(
+                f"Security Hub findings scan failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+
+    if enabled_regions and scan_errors:
+        status = "Partial"
+    elif enabled_regions and findings:
+        status = "Enabled"
+    elif enabled_regions:
+        status = "Enabled — no active findings"
+    elif scan_errors:
+        status = "Unavailable"
+    else:
+        status = "Not enabled"
+
+    return findings, scan_errors, {
+        "status": status,
+        "enabled_regions": enabled_regions,
+        "regions_checked": REGIONS
+    }
+
+
+def scan_client_guardduty(role_arn):
+    findings = []
+    scan_errors = []
+    enabled_regions = []
+
+    for region in REGIONS:
+        client = client_boto3_client(
+            "guardduty",
+            role_arn,
+            region
+        )
+
+        if not client:
+            scan_errors.append(
+                f"GuardDuty client unavailable in {region}."
+            )
+            continue
+
+        try:
+            detector_ids = client.list_detectors().get(
+                "DetectorIds",
+                []
+            )
+
+        except Exception as error:
+            scan_errors.append(
+                f"GuardDuty detector scan failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        if not detector_ids:
+            continue
+
+        enabled_regions.append(region)
+
+        for detector_id in detector_ids:
+            try:
+                paginator = client.get_paginator(
+                    "list_findings"
+                )
+
+                finding_ids = []
+
+                for page in paginator.paginate(
+                    DetectorId=detector_id,
+                    PaginationConfig={
+                        "MaxItems": 100
+                    }
+                ):
+                    finding_ids.extend(
+                        page.get(
+                            "FindingIds",
+                            []
+                        )
+                    )
+
+                for start in range(
+                    0,
+                    len(finding_ids),
+                    50
+                ):
+                    batch_ids = finding_ids[
+                        start:start + 50
+                    ]
+
+                    if not batch_ids:
+                        continue
+
+                    response = client.get_findings(
+                        DetectorId=detector_id,
+                        FindingIds=batch_ids
+                    )
+
+                    for finding in response.get(
+                        "Findings",
+                        []
+                    ):
+                        findings.append({
+                            "finding_id": finding.get("Id"),
+                            "title": finding.get(
+                                "Title",
+                                "GuardDuty Finding"
+                            ),
+                            "severity": finding.get(
+                                "Severity",
+                                0
+                            ),
+                            "type": finding.get(
+                                "Type",
+                                "Unknown"
+                            ),
+                            "resource": finding.get(
+                                "Resource",
+                                {}
+                            ).get(
+                                "ResourceType",
+                                "Unknown"
+                            ),
+                            "region": finding.get(
+                                "Region",
+                                region
+                            )
+                        })
+
+            except Exception as error:
+                scan_errors.append(
+                    f"GuardDuty findings scan failed in {region}: "
+                    f"{aws_error_text(error)}"
+                )
+
+    if enabled_regions and scan_errors:
+        status = "Partial"
+    elif enabled_regions and findings:
+        status = "Enabled"
+    elif enabled_regions:
+        status = "Enabled — no findings"
+    elif scan_errors:
+        status = "Unavailable"
+    else:
+        status = "Not enabled"
+
+    return findings, scan_errors, {
+        "status": status,
+        "enabled_regions": enabled_regions,
+        "regions_checked": REGIONS
+    }
+
+
 def run_client_scan(role_arn, client_name=None):
     print("=" * 60)
     print("DGS SENTINEL AI PHASE 13 CLIENT AWS SCAN")
@@ -515,6 +791,30 @@ def run_client_scan(role_arn, client_name=None):
             "last_scan": scan_time,
         })
 
+    print("Scanning Security Hub")
+
+    (
+        securityhub_findings,
+        securityhub_errors,
+        securityhub_service
+    ) = scan_client_securityhub(role_arn)
+
+    scan_errors.extend(
+        securityhub_errors
+    )
+
+    print("Scanning GuardDuty")
+
+    (
+        guardduty_findings,
+        guardduty_errors,
+        guardduty_service
+    ) = scan_client_guardduty(role_arn)
+
+    scan_errors.extend(
+        guardduty_errors
+    )
+
     client_findings = []
 
     for iam_user in iam_users:
@@ -604,6 +904,63 @@ def run_client_scan(role_arn, client_name=None):
                 "risk_score": 75
             })
 
+    for securityhub_finding in securityhub_findings:
+        severity = str(
+            securityhub_finding.get(
+                "severity",
+                "UNKNOWN"
+            )
+        ).upper()
+
+        if severity not in {
+            "CRITICAL",
+            "HIGH"
+        }:
+            continue
+
+        priority = severity
+        risk_score = (
+            95
+            if severity == "CRITICAL"
+            else 80
+        )
+
+        client_findings.append({
+            "cve_id": (
+                "Security Hub - "
+                f"{securityhub_finding.get('title')} - "
+                f"{securityhub_finding.get('region')} - "
+                f"{securityhub_finding.get('resource')}"
+            ),
+            "priority": priority,
+            "risk_score": risk_score
+        })
+
+    for guardduty_finding in guardduty_findings:
+        try:
+            severity = float(
+                guardduty_finding.get(
+                    "severity",
+                    0
+                )
+            )
+        except (TypeError, ValueError):
+            severity = 0
+
+        if severity < 7:
+            continue
+
+        client_findings.append({
+            "cve_id": (
+                "GuardDuty - "
+                f"{guardduty_finding.get('title')} - "
+                f"{guardduty_finding.get('region')} - "
+                f"{guardduty_finding.get('finding_id')}"
+            ),
+            "priority": "HIGH",
+            "risk_score": 90
+        })
+
     remediation_plan = generate_remediation_plan(
         client_findings
     )
@@ -618,6 +975,66 @@ def run_client_scan(role_arn, client_name=None):
             )
         )
 
+    securityhub_critical = sum(
+        str(item.get("severity", "")).upper()
+        == "CRITICAL"
+        for item in securityhub_findings
+    )
+
+    securityhub_high = sum(
+        str(item.get("severity", "")).upper()
+        == "HIGH"
+        for item in securityhub_findings
+    )
+
+    guardduty_high = 0
+
+    for item in guardduty_findings:
+        try:
+            finding_severity = float(
+                item.get("severity", 0)
+            )
+        except (TypeError, ValueError):
+            finding_severity = 0
+
+        if finding_severity >= 7:
+            guardduty_high += 1
+
+    save_client_scan_summary(
+        account_id,
+        {
+            "scan_time": scan_time,
+            "ec2_count": len(ec2_instances),
+            "iam_count": len(iam_users),
+            "s3_count": len(s3_buckets),
+            "securityhub_count": len(
+                securityhub_findings
+            ),
+            "securityhub_critical": (
+                securityhub_critical
+            ),
+            "securityhub_high": securityhub_high,
+            "securityhub_status": (
+                securityhub_service.get(
+                    "status",
+                    "Unknown"
+                )
+            ),
+            "guardduty_count": len(
+                guardduty_findings
+            ),
+            "guardduty_critical": 0,
+            "guardduty_high": guardduty_high,
+            "guardduty_status": (
+                guardduty_service.get(
+                    "status",
+                    "Unknown"
+                )
+            ),
+            "scan_errors": scan_errors
+        }
+    )
+
     return {
         "identity": identity,
         "regions_scanned": REGIONS,
@@ -627,6 +1044,12 @@ def run_client_scan(role_arn, client_name=None):
         "ec2_count": len(ec2_instances),
         "iam_count": len(iam_users),
         "s3_count": len(s3_buckets),
+        "securityhub_findings": securityhub_findings,
+        "securityhub_count": len(securityhub_findings),
+        "securityhub_service": securityhub_service,
+        "guardduty_findings": guardduty_findings,
+        "guardduty_count": len(guardduty_findings),
+        "guardduty_service": guardduty_service,
         "remediation_findings": client_findings,
         "remediation_plan": remediation_plan,
         "remediation_count": len(remediation_plan),
