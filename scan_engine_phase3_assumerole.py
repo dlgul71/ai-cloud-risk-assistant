@@ -672,6 +672,314 @@ def scan_client_guardduty(role_arn):
     }
 
 
+
+def scan_client_config(role_arn):
+    findings = []
+    scan_errors = []
+    enabled_regions = []
+    stopped_regions = []
+    total_rule_count = 0
+
+    for region in REGIONS:
+        client = client_boto3_client(
+            "config",
+            role_arn,
+            region
+        )
+
+        if not client:
+            scan_errors.append(
+                f"AWS Config client unavailable in {region}."
+            )
+            continue
+
+        try:
+            recorders = client.describe_configuration_recorders().get(
+                "ConfigurationRecorders",
+                []
+            )
+
+            recorder_statuses = (
+                client.describe_configuration_recorder_status().get(
+                    "ConfigurationRecordersStatus",
+                    []
+                )
+            )
+
+        except ClientError as error:
+            error_code = error.response.get(
+                "Error",
+                {}
+            ).get("Code")
+
+            if error_code in {
+                "NoAvailableConfigurationRecorderException",
+                "ResourceNotFoundException"
+            }:
+                continue
+
+            scan_errors.append(
+                f"AWS Config recorder check failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        except Exception as error:
+            scan_errors.append(
+                f"AWS Config recorder check failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        if not recorders:
+            continue
+
+        recorder_is_running = any(
+            item.get("recording") is True
+            for item in recorder_statuses
+        )
+
+        if recorder_is_running:
+            enabled_regions.append(region)
+        else:
+            stopped_regions.append(region)
+
+        try:
+            config_rules = []
+            next_token = None
+
+            while True:
+                request = {}
+
+                if next_token:
+                    request["NextToken"] = next_token
+
+                response = client.describe_config_rules(
+                    **request
+                )
+
+                config_rules.extend(
+                    response.get("ConfigRules", [])
+                )
+
+                next_token = response.get("NextToken")
+
+                if not next_token:
+                    break
+
+            total_rule_count += len(config_rules)
+
+        except Exception as error:
+            scan_errors.append(
+                f"AWS Config rule inventory failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        try:
+            noncompliant_rule_names = set()
+            next_token = None
+
+            while True:
+                request = {
+                    "ComplianceTypes": [
+                        "NON_COMPLIANT"
+                    ]
+                }
+
+                if next_token:
+                    request["NextToken"] = next_token
+
+                response = (
+                    client.describe_compliance_by_config_rule(
+                        **request
+                    )
+                )
+
+                for item in response.get(
+                    "ComplianceByConfigRules",
+                    []
+                ):
+                    rule_name = item.get(
+                        "ConfigRuleName"
+                    )
+
+                    compliance_type = item.get(
+                        "Compliance",
+                        {}
+                    ).get(
+                        "ComplianceType"
+                    )
+
+                    if (
+                        rule_name
+                        and compliance_type
+                        == "NON_COMPLIANT"
+                    ):
+                        noncompliant_rule_names.add(
+                            rule_name
+                        )
+
+                next_token = response.get("NextToken")
+
+                if not next_token:
+                    break
+
+        except Exception as error:
+            scan_errors.append(
+                f"AWS Config compliance scan failed in {region}: "
+                f"{aws_error_text(error)}"
+            )
+            continue
+
+        rules_by_name = {
+            rule.get("ConfigRuleName"): rule
+            for rule in config_rules
+            if rule.get("ConfigRuleName")
+        }
+
+        for rule_name in sorted(
+            noncompliant_rule_names
+        ):
+            resource_count = 0
+            sample_resources = []
+            next_token = None
+            details_available = True
+
+            try:
+                while True:
+                    request = {
+                        "ConfigRuleName": rule_name,
+                        "ComplianceTypes": [
+                            "NON_COMPLIANT"
+                        ],
+                        "Limit": 100
+                    }
+
+                    if next_token:
+                        request["NextToken"] = next_token
+
+                    response = (
+                        client.get_compliance_details_by_config_rule(
+                            **request
+                        )
+                    )
+
+                    for result in response.get(
+                        "EvaluationResults",
+                        []
+                    ):
+                        qualifier = result.get(
+                            "EvaluationResultIdentifier",
+                            {}
+                        ).get(
+                            "EvaluationResultQualifier",
+                            {}
+                        )
+
+                        resource_id = qualifier.get(
+                            "ResourceId",
+                            "Unknown"
+                        )
+
+                        resource_type = qualifier.get(
+                            "ResourceType",
+                            "Unknown"
+                        )
+
+                        resource_count += 1
+
+                        if len(sample_resources) < 10:
+                            sample_resources.append(
+                                f"{resource_type}:"
+                                f"{resource_id}"
+                            )
+
+                    next_token = response.get(
+                        "NextToken"
+                    )
+
+                    if not next_token:
+                        break
+
+            except Exception as error:
+                details_available = False
+
+                scan_errors.append(
+                    f"AWS Config resource details failed "
+                    f"for {rule_name} in {region}: "
+                    f"{aws_error_text(error)}"
+                )
+
+            rule = rules_by_name.get(
+                rule_name,
+                {}
+            )
+
+            findings.append({
+                "rule_name": rule_name,
+                "region": region,
+                "compliance": "NON_COMPLIANT",
+                "noncompliant_resource_count": (
+                    resource_count
+                    if details_available
+                    else None
+                ),
+                "sample_resources": (
+                    ", ".join(sample_resources)
+                    if sample_resources
+                    else "No resource sample available"
+                ),
+                "description": rule.get(
+                    "Description",
+                    ""
+                ),
+                "source_owner": rule.get(
+                    "Source",
+                    {}
+                ).get(
+                    "Owner",
+                    "Unknown"
+                )
+            })
+
+    noncompliant_resource_count = sum(
+        item.get(
+            "noncompliant_resource_count"
+        ) or 0
+        for item in findings
+    )
+
+    if enabled_regions and scan_errors:
+        status = "Partial"
+    elif enabled_regions and findings:
+        status = "Enabled — noncompliance found"
+    elif enabled_regions and total_rule_count:
+        status = "Enabled — compliant"
+    elif enabled_regions:
+        status = "Enabled — no rules"
+    elif stopped_regions:
+        status = "Recorder stopped"
+    elif scan_errors:
+        status = "Unavailable"
+    else:
+        status = "Not enabled"
+
+    service = {
+        "status": status,
+        "enabled_regions": enabled_regions,
+        "stopped_regions": stopped_regions,
+        "regions_checked": REGIONS,
+        "rule_count": total_rule_count,
+        "noncompliant_rule_count": len(findings),
+        "noncompliant_resource_count": (
+            noncompliant_resource_count
+        )
+    }
+
+    return findings, scan_errors, service
+
+
 def run_client_scan(role_arn, client_name=None):
     print("=" * 60)
     print("DGS SENTINEL AI PHASE 13 CLIENT AWS SCAN")
@@ -813,6 +1121,18 @@ def run_client_scan(role_arn, client_name=None):
 
     scan_errors.extend(
         guardduty_errors
+    )
+
+    print("Scanning AWS Config")
+
+    (
+        config_findings,
+        config_errors,
+        config_service
+    ) = scan_client_config(role_arn)
+
+    scan_errors.extend(
+        config_errors
     )
 
     client_findings = []
@@ -961,6 +1281,41 @@ def run_client_scan(role_arn, client_name=None):
             "risk_score": 90
         })
 
+    for config_finding in config_findings:
+        rule_name = config_finding.get(
+            "rule_name",
+            "Unknown Rule"
+        )
+
+        region = config_finding.get(
+            "region",
+            "Unknown Region"
+        )
+
+        resource_count = config_finding.get(
+            "noncompliant_resource_count"
+        )
+
+        if isinstance(resource_count, int):
+            resource_text = (
+                f"{resource_count} Noncompliant "
+                f"Resource"
+                f"{'s' if resource_count != 1 else ''}"
+            )
+        else:
+            resource_text = (
+                "Noncompliant Resources Detected"
+            )
+
+        client_findings.append({
+            "cve_id": (
+                f"AWS Config - {rule_name} - "
+                f"{region} - {resource_text}"
+            ),
+            "priority": "HIGH",
+            "risk_score": 80
+        })
+
     remediation_plan = generate_remediation_plan(
         client_findings
     )
@@ -1031,6 +1386,37 @@ def run_client_scan(role_arn, client_name=None):
                     "Unknown"
                 )
             ),
+            "config_rule_count": (
+                config_service.get(
+                    "rule_count",
+                    0
+                )
+            ),
+            "config_noncompliant_rule_count": (
+                config_service.get(
+                    "noncompliant_rule_count",
+                    0
+                )
+            ),
+            "config_noncompliant_resource_count": (
+                config_service.get(
+                    "noncompliant_resource_count",
+                    0
+                )
+            ),
+            "config_critical": 0,
+            "config_high": (
+                config_service.get(
+                    "noncompliant_rule_count",
+                    0
+                )
+            ),
+            "config_status": (
+                config_service.get(
+                    "status",
+                    "Unknown"
+                )
+            ),
             "scan_errors": scan_errors
         }
     )
@@ -1050,6 +1436,24 @@ def run_client_scan(role_arn, client_name=None):
         "guardduty_findings": guardduty_findings,
         "guardduty_count": len(guardduty_findings),
         "guardduty_service": guardduty_service,
+        "config_findings": config_findings,
+        "config_rule_count": config_service.get(
+            "rule_count",
+            0
+        ),
+        "config_noncompliant_rule_count": (
+            config_service.get(
+                "noncompliant_rule_count",
+                0
+            )
+        ),
+        "config_noncompliant_resource_count": (
+            config_service.get(
+                "noncompliant_resource_count",
+                0
+            )
+        ),
+        "config_service": config_service,
         "remediation_findings": client_findings,
         "remediation_plan": remediation_plan,
         "remediation_count": len(remediation_plan),

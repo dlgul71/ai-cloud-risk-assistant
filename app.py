@@ -1761,10 +1761,22 @@ if page == "Client Security Dashboard":
             },
             {
                 "Service": "AWS Config",
-                "Status": "Phase 13 integration pending",
-                "Resources": 0,
-                "Critical": 0,
-                "High": 0
+                "Status": latest_service_summary.get(
+                    "config_status",
+                    "No scan recorded"
+                ),
+                "Resources": latest_service_summary.get(
+                    "config_noncompliant_resource_count",
+                    0
+                ),
+                "Critical": latest_service_summary.get(
+                    "config_critical",
+                    0
+                ),
+                "High": latest_service_summary.get(
+                    "config_high",
+                    0
+                )
             }
         ]
 
@@ -4682,6 +4694,10 @@ if st.button(
                     f"{results.get('securityhub_count', 0)}. "
                     f"GuardDuty findings: "
                     f"{results.get('guardduty_count', 0)}. "
+                    f"AWS Config rules: "
+                    f"{results.get('config_rule_count', 0)}. "
+                    f"Noncompliant Config rules: "
+                    f"{results.get('config_noncompliant_rule_count', 0)}. "
                     f"Remediation findings: "
                     f"{results.get('remediation_count', 0)}."
                 )
@@ -4718,6 +4734,15 @@ if st.button(
                     st.subheader("GuardDuty Findings")
                     demo_dataframe(
                         results.get("guardduty_findings"),
+                        width="stretch"
+                    )
+
+                if results.get("config_findings"):
+                    st.subheader(
+                        "AWS Config Noncompliance"
+                    )
+                    demo_dataframe(
+                        results.get("config_findings"),
                         width="stretch"
                     )
 
