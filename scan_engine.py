@@ -1,84 +1,191 @@
-from datetime import datetime
-from kev_lookup import fetch_cisa_kev
+from datetime import datetime, UTC
+import boto3
+
 from db import init_db, save_findings
+from ec2_ingest import get_ec2_assets
+from iam_ingest import get_iam_risk_findings
+from s3_ingest import get_s3_exposure_findings
+from securityhub_ingest import get_securityhub_findings
+from guardduty_ingest import get_guardduty_findings
+from remediation_engine import generate_remediation_plan
+from remediation_db import save_remediation_items
+from remediation_execution import create_actions_from_remediation_plan
 
 
-def enrich_with_kev(cve_id, base_score, kev_map):
+def priority_to_score(priority):
+    priority = str(priority).upper()
 
-    kev_match = kev_map.get(cve_id)
+    if priority == "CRITICAL":
+        return 90
+    if priority == "HIGH":
+        return 75
+    if priority == "MEDIUM" or priority == "MODERATE":
+        return 50
+    if priority == "LOW":
+        return 20
 
-    if kev_match:
-        return {
-            "cve_id": cve_id,
-            "kev_exploited": True,
-            "kev_date_added": kev_match.get("date_added"),
-            "kev_due_date": kev_match.get("due_date"),
-            "known_ransomware": kev_match.get("known_ransomware"),
-            "required_action": kev_match.get("required_action"),
-            "risk_score": base_score + 50,
-            "priority": "CRITICAL"
-        }
+    return 10
 
-    return {
-        "cve_id": cve_id,
-        "kev_exploited": False,
-        "risk_score": base_score,
-        "priority": "STANDARD"
-    }
 
+def normalize_securityhub_findings(findings):
+    normalized = []
+
+    for finding in findings:
+        severity = finding.get("Severity", "UNKNOWN")
+        score = priority_to_score(severity)
+
+        normalized.append({
+            "cve_id": finding.get("Title", "SecurityHub Finding"),
+            "kev_exploited": False,
+            "known_ransomware": "Unknown",
+            "required_action": "Review Security Hub finding and remediate per SLA.",
+            "risk_score": score,
+            "priority": "CRITICAL" if score >= 90 else "HIGH" if score >= 75 else "STANDARD"
+        })
+
+    return normalized
+
+
+def normalize_guardduty_findings(findings):
+    normalized = []
+
+    for finding in findings:
+        severity = finding.get("Severity", 0)
+
+        try:
+            severity_value = float(severity)
+        except Exception:
+            severity_value = 0
+
+        if severity_value >= 7:
+            priority = "CRITICAL"
+            score = 90
+        elif severity_value >= 4:
+            priority = "HIGH"
+            score = 75
+        else:
+            priority = "STANDARD"
+            score = 40
+
+        normalized.append({
+            "cve_id": finding.get("Title", "GuardDuty Finding"),
+            "kev_exploited": False,
+            "known_ransomware": "Unknown",
+            "required_action": "Investigate GuardDuty finding and validate threat activity.",
+            "risk_score": score,
+            "priority": priority
+        })
+
+    return normalized
+
+
+def normalize_iam_findings(findings):
+    normalized = []
+
+    for finding in findings:
+        risk = finding.get("Risk", "LOW")
+        score = priority_to_score(risk)
+
+        normalized.append({
+            "cve_id": f"IAM Risk - {finding.get('User', 'Unknown User')}",
+            "kev_exploited": False,
+            "known_ransomware": "Unknown",
+            "required_action": "Enable MFA, review access keys, and rotate stale credentials.",
+            "risk_score": score,
+            "priority": "HIGH" if score >= 75 else "STANDARD"
+        })
+
+    return normalized
+
+
+def normalize_s3_findings(findings):
+    normalized = []
+
+    for finding in findings:
+        risk = finding.get("Risk", "LOW")
+        score = priority_to_score(risk)
+
+        normalized.append({
+            "cve_id": f"S3 Risk - {finding.get('Bucket', 'Unknown Bucket')}",
+            "kev_exploited": False,
+            "known_ransomware": "Unknown",
+            "required_action": "Review S3 public access block, bucket policy, ACLs, and encryption.",
+            "risk_score": score,
+            "priority": "HIGH" if score >= 75 else "STANDARD"
+        })
+
+    return normalized
+
+
+
+def get_current_aws_account_id():
+    try:
+        sts = boto3.client("sts")
+        identity = sts.get_caller_identity()
+
+        return str(identity.get("Account", "Unknown"))
+
+    except Exception as e:
+        print(f"Unable to determine AWS account ID: {e}")
+
+        return "Unknown"
 
 def run_scan():
 
     print("=" * 60)
-    print("DGS SENTINEL AI SCAN ENGINE")
+    print("DGS SENTINEL AI REAL AWS SCAN ENGINE")
     print("=" * 60)
 
-    print(f"Scan Time: {datetime.utcnow()}")
+    print(f"Scan Time: {datetime.now(UTC)}")
 
-    kev_map = fetch_cisa_kev()
-
-    sample_cves = [
-        {
-            "cve_id": "CVE-2021-44228",
-            "base_score": 40
-        },
-        {
-            "cve_id": "CVE-2023-1234",
-            "base_score": 15
-        }
-    ]
+    ec2_assets = get_ec2_assets()
+    iam_findings = get_iam_risk_findings()
+    s3_findings = get_s3_exposure_findings()
+    securityhub_findings = get_securityhub_findings()
+    guardduty_findings = get_guardduty_findings()
 
     findings = []
+    findings.extend(normalize_iam_findings(iam_findings))
+    findings.extend(normalize_s3_findings(s3_findings))
+    findings.extend(normalize_securityhub_findings(securityhub_findings))
+    findings.extend(normalize_guardduty_findings(guardduty_findings))
 
-    for item in sample_cves:
+    remediation_plan = generate_remediation_plan(findings)
 
-        result = enrich_with_kev(
-            item["cve_id"],
-            item["base_score"],
-            kev_map
-        )
+    current_aws_account_id = get_current_aws_account_id()
 
-        findings.append(result)
+    save_remediation_items(
+        remediation_plan,
+        aws_account_id=current_aws_account_id,
+        client_name="DGS Internal AWS"
+    )
 
-    print("\nSCAN RESULTS")
+    execution_actions = create_actions_from_remediation_plan(
+        remediation_plan
+    )
+
+    print(f"\n[+] Execution actions created: {len(execution_actions)}")
+
+    print("\nREMEDIATION PLAN")
     print("-" * 60)
 
-    for finding in findings:
+    for item in remediation_plan[:10]:
+        print(f"{item.get('priority')} | {item.get('category')} | {item.get('finding')}")
+        print(f"Recommendation: {item.get('recommendation')}")
 
-        print(f"\nCVE: {finding['cve_id']}")
-        print(f"Priority: {finding['priority']}")
-        print(f"Risk Score: {finding['risk_score']}")
-        print(f"KEV Exploited: {finding['kev_exploited']}")
-
-        if finding["kev_exploited"]:
-            print(f"Date Added: {finding['kev_date_added']}")
-            print(f"Ransomware: {finding['known_ransomware']}")
-            print(f"Required Action: {finding['required_action']}")
+    print("\nSCAN SUMMARY")
+    print("-" * 60)
+    print(f"EC2 Assets: {len(ec2_assets)}")
+    print(f"IAM Findings: {len(iam_findings)}")
+    print(f"S3 Findings: {len(s3_findings)}")
+    print(f"Security Hub Findings: {len(securityhub_findings)}")
+    print(f"GuardDuty Findings: {len(guardduty_findings)}")
+    print(f"Normalized Findings Saved: {len(findings)}")
 
     init_db()
     save_findings(findings)
 
-    print("\n[+] Findings saved to SQLite database")
+    print("\n[+] Real AWS findings saved to SQLite database")
     print("\nScan Completed")
 
     return findings
