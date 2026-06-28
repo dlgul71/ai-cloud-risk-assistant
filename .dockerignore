@@ -1,7 +1,47 @@
+# Version control
+.git/
+.github/
+.gitignore
+
+# Python development files
 venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environment and secrets
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
-dgs_sentinel_ai.db
+secrets.toml
+*.pem
+*.key
+
+# Local databases and client data
+*.db
+*.sqlite
+*.sqlite3
 scan_snapshots/
+client_scan_results/
+
+# Logs and temporary files
+*.log
+*.tmp
+.DS_Store
+
+# Development backups
+app_backup*
+app_before*
+app_broken*
+app_fixed*
+app_phase*
+*_backup.py
+*_before_*.py
+
+# Docker development files
+docker-compose*.yml
+docker-compose*.yaml

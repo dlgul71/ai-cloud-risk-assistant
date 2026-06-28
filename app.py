@@ -7,6 +7,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from app_config import settings
+from app_logging import configure_logging, get_logger
+from health_checks import run_health_checks
 from demo_mode import (
     demo_mode_enabled,
     sanitize_dataframe,
@@ -19,6 +22,10 @@ from risk_engine import calculate_unified_risk
 from scan_engine_phase3_assumerole import run_client_scan
 from snapshot_engine import save_scan_snapshot
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
+
+
+configure_logging(settings.log_level)
+logger = get_logger("dgs_sentinel.app")
 
 
 # ============================================================
@@ -200,7 +207,7 @@ APP_NAME = "DGS Sentinel AI"
 def check_password():
     """Simple password authentication for DGS Sentinel AI."""
 
-    session_timeout_minutes = 30
+    session_timeout_minutes = settings.session_timeout_minutes
 
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
@@ -231,8 +238,8 @@ def check_password():
 
     if st.button("Login", type="primary"):
         try:
-            correct_username = st.secrets["auth"]["username"]
-            correct_password = st.secrets["auth"]["password"]
+            correct_username = settings.app_username or ""
+            correct_password = settings.app_password or ""
         except Exception:
             st.error("Authentication is not configured. Check .streamlit/secrets.toml.")
             return False
@@ -954,7 +961,8 @@ with st.sidebar:
             "Ask Sentinel AI",
             "Client Accounts",
             "Client Security Dashboard",
-            "Asset Dashboard"
+            "Asset Dashboard",
+            "System Health"
         ],
         key="main_navigation"
     )
@@ -1427,6 +1435,108 @@ if page == "Executive Dashboard":
         )
 
 
+
+
+if page == "System Health":
+    st.title("System Health")
+
+    demo_caption(
+        "Production readiness, configuration, storage, "
+        "database, dependency, and AWS connectivity checks."
+    )
+
+    include_aws_health_check = st.checkbox(
+        "Include AWS STS identity check",
+        value=False,
+        help=(
+            "Performs a read-only AWS identity request "
+            "using the current credential chain."
+        )
+    )
+
+    if st.button(
+        "Run Health Checks",
+        type="primary"
+    ):
+        with st.spinner(
+            "Running production health checks..."
+        ):
+            st.session_state[
+                "system_health_results"
+            ] = run_health_checks(
+                include_aws=include_aws_health_check
+            )
+
+    health_results = st.session_state.get(
+        "system_health_results"
+    )
+
+    if not health_results:
+        demo_info(
+            "Select the desired checks and click "
+            "Run Health Checks."
+        )
+        st.stop()
+
+    overall_status = health_results.get(
+        "overall_status",
+        "UNKNOWN"
+    )
+
+    column1, column2, column3, column4 = (
+        st.columns(4)
+    )
+
+    column1.metric(
+        "Overall Status",
+        overall_status
+    )
+
+    column2.metric(
+        "Passed",
+        health_results.get("pass_count", 0)
+    )
+
+    column3.metric(
+        "Warnings",
+        health_results.get(
+            "warning_count",
+            0
+        )
+    )
+
+    column4.metric(
+        "Failed",
+        health_results.get("fail_count", 0)
+    )
+
+    if overall_status == "PASS":
+        demo_success(
+            "All selected production health checks passed."
+        )
+
+    elif overall_status == "WARN":
+        demo_warning(
+            "Health checks completed with warnings."
+        )
+
+    else:
+        st.error(
+            "One or more production health checks failed."
+        )
+
+    demo_caption(
+        "Checked at: "
+        f"{health_results.get('checked_at', 'Unknown')}"
+    )
+
+    demo_dataframe(
+        health_results.get("checks", []),
+        width="stretch",
+        hide_index=True
+    )
+
+    st.stop()
 
 
 if page == "Client Security Dashboard":
