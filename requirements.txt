@@ -8,6 +8,7 @@ requests==2.33.1
 streamlit-authenticator==0.4.2
 streamlit-autorefresh==1.0.1
 python-dotenv==1.2.2
-splunk-sdk==3.0.0
+splunk-sdk==2.1.1; python_version < "3.13"
+splunk-sdk==3.0.0; python_version >= "3.13"
 pyvis==0.3.2
 networkx==3.6.1
