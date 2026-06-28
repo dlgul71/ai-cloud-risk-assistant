@@ -1,0 +1,182 @@
+name: DGS Sentinel AI CI
+
+on:
+  push:
+    branches:
+      - main
+      - "phase-*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dgs-sentinel-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.13"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            -r requirements.txt \
+            -r requirements-dev.txt
+
+      - name: Validate installed packages
+        run: python -m pip check
+
+      - name: Compile production modules
+        run: |
+          python -m py_compile \
+            app.py \
+            app_config.py \
+            app_logging.py \
+            health_checks.py \
+            scan_engine_phase3_assumerole.py \
+            client_detection_store.py \
+            remediation_engine.py \
+            remediation_db.py \
+            asset_db.py \
+            client_db.py
+
+      - name: Run unit tests
+        env:
+          APP_ENV: test
+          APP_USERNAME: ci-test-user
+          APP_PASSWORD: ci-test-password
+          OPENAI_API_KEY: ci-placeholder-key
+          AWS_REGION: us-east-1
+        run: |
+          python -m pytest \
+            --cov=app_config \
+            --cov=app_logging \
+            --cov=health_checks \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=70
+
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+          if-no-files-found: error
+
+  docker-validation:
+    name: Hardened Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: python-tests
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build hardened image
+        run: |
+          docker build \
+            --tag dgs-sentinel-ai:ci \
+            .
+
+      - name: Verify non-root runtime
+        run: |
+          ID_OUTPUT=$(docker run --rm \
+            dgs-sentinel-ai:ci \
+            id)
+
+          echo "$ID_OUTPUT"
+          echo "$ID_OUTPUT" | grep "uid=10001(dgs)"
+          echo "$ID_OUTPUT" | grep "gid=10001(dgs)"
+
+      - name: Verify image configuration
+        run: |
+          IMAGE_USER=$(docker image inspect \
+            dgs-sentinel-ai:ci \
+            --format '{{.Config.User}}')
+
+          HEALTHCHECK=$(docker image inspect \
+            dgs-sentinel-ai:ci \
+            --format '{{json .Config.Healthcheck.Test}}')
+
+          echo "User=$IMAGE_USER"
+          echo "Healthcheck=$HEALTHCHECK"
+
+          test "$IMAGE_USER" = "dgs"
+          test "$HEALTHCHECK" != "null"
+
+      - name: Test Streamlit health endpoint
+        run: |
+          docker run -d \
+            --name dgs-sentinel-ci \
+            -p 8502:8501 \
+            -e APP_ENV=production \
+            -e APP_USERNAME=ci-test-user \
+            -e APP_PASSWORD=ci-test-password \
+            -e OPENAI_API_KEY=ci-placeholder-key \
+            -e AWS_REGION=us-east-1 \
+            dgs-sentinel-ai:ci
+
+          for attempt in $(seq 1 30)
+          do
+            STATUS=$(docker inspect \
+              --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' \
+              dgs-sentinel-ci)
+
+            echo "Container health: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              break
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+              docker logs dgs-sentinel-ci
+              exit 1
+            fi
+
+            sleep 3
+          done
+
+          test "$STATUS" = "healthy"
+
+          RESPONSE=$(curl -fsS \
+            http://127.0.0.1:8502/_stcore/health)
+
+          echo "Health endpoint: $RESPONSE"
+          test "$RESPONSE" = "ok"
+
+      - name: Display container logs
+        if: always()
+        run: docker logs dgs-sentinel-ci 2>/dev/null || true
+
+      - name: Remove test container
+        if: always()
+        run: docker rm -f dgs-sentinel-ci 2>/dev/null || true
