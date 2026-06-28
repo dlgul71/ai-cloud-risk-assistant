@@ -7,6 +7,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from app_config import settings
+from app_logging import configure_logging, get_logger
 from demo_mode import (
     demo_mode_enabled,
     sanitize_dataframe,
@@ -19,6 +21,10 @@ from risk_engine import calculate_unified_risk
 from scan_engine_phase3_assumerole import run_client_scan
 from snapshot_engine import save_scan_snapshot
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
+
+
+configure_logging(settings.log_level)
+logger = get_logger("dgs_sentinel.app")
 
 
 # ============================================================
@@ -231,8 +237,8 @@ def check_password():
 
     if st.button("Login", type="primary"):
         try:
-            correct_username = st.secrets["auth"]["username"]
-            correct_password = st.secrets["auth"]["password"]
+            correct_username = settings.app_username or ""
+            correct_password = settings.app_password or ""
         except Exception:
             st.error("Authentication is not configured. Check .streamlit/secrets.toml.")
             return False
