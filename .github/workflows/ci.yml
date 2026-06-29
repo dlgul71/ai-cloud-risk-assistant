@@ -91,6 +91,85 @@ jobs:
           path: coverage.xml
           if-no-files-found: error
 
+  security-scanning:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run Bandit security scan
+        run: |
+          python - <<'PYTHON'
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          files = []
+
+          for file_name in subprocess.check_output(
+              ["git", "ls-files", "*.py"],
+              text=True,
+          ).splitlines():
+              name = Path(file_name).name
+
+              if file_name.startswith("tests/"):
+                  continue
+
+              if name.startswith(
+                  (
+                      "app_backup",
+                      "app_before",
+                      "app_broken",
+                      "app_fixed",
+                      "app_phase",
+                  )
+              ):
+                  continue
+
+              if name.endswith("_backup.py") or "_before_" in name:
+                  continue
+
+              files.append(file_name)
+
+          print(f"Scanning {len(files)} tracked Python files.")
+
+          raise SystemExit(
+              subprocess.run(
+                  [sys.executable, "-m", "bandit", *files],
+                  check=False,
+              ).returncode
+          )
+          PYTHON
+
+      - name: Audit Python dependencies
+        run: |
+          python -m pip_audit \
+            -r requirements.txt \
+            -r requirements-dev.txt
+
+      - name: Scan for committed secrets
+        run: |
+          detect-secrets-hook \
+            --baseline .secrets.baseline \
+            $(git ls-files)
+
   docker-validation:
     name: Hardened Docker Image
     runs-on: ubuntu-latest
