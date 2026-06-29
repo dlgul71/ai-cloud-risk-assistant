@@ -53,3 +53,7 @@ client_scan_results/
 .coverage
 coverage.xml
 htmlcov/
+security-reports/
+bandit-report.json
+pip-audit-report.json
+trivy-report.sarif
