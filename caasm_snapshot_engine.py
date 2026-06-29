@@ -2,6 +2,10 @@ import json
 from datetime import datetime, UTC
 from pathlib import Path
 
+from app_logging import get_logger
+
+
+logger = get_logger("dgs_sentinel.caasm_snapshot")
 
 CAASM_SNAPSHOT_DIR = Path("caasm_snapshots")
 
@@ -70,6 +74,11 @@ def load_caasm_snapshots():
             snapshots.append(snapshot)
 
         except Exception:
+            logger.warning(
+                "Unable to load CAASM snapshot file: %s",
+                file_path,
+                exc_info=True,
+            )
             continue
 
     return snapshots

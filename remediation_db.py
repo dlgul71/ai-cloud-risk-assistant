@@ -335,17 +335,9 @@ def deduplicate_open_remediation_items():
         ))
 
         if duplicate_ids:
-            placeholders = ",".join(
-                "?"
-                for _ in duplicate_ids
-            )
-
-            cursor.execute(
-                f"""
-                DELETE FROM remediation_items
-                WHERE id IN ({placeholders})
-                """,
-                duplicate_ids
+            cursor.executemany(
+                "DELETE FROM remediation_items WHERE id = ?",
+                [(remediation_id,) for remediation_id in duplicate_ids],
             )
 
             deleted_rows += len(
