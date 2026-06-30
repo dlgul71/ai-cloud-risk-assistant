@@ -89,6 +89,7 @@ def test_safe_summary_does_not_expose_secrets():
         log_level="INFO",
         aws_region="us-east-1",
         public_demo_mode=False,
+        live_remediation_enabled=False,
         session_timeout_minutes=30,
         openai_api_key="openai-secret-value",
         app_username="test-user",
@@ -105,3 +106,29 @@ def test_safe_summary_does_not_expose_secrets():
         summary["app_credentials_configured"]
         is True
     )
+
+
+def test_live_remediation_defaults_to_disabled(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "DGS_LIVE_REMEDIATION_ENABLED",
+        raising=False,
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.live_remediation_enabled is False
+
+
+def test_live_remediation_can_be_enabled_explicitly(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "DGS_LIVE_REMEDIATION_ENABLED",
+        "true",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.live_remediation_enabled is True

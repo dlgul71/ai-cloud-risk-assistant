@@ -64,6 +64,9 @@ jobs:
             client_detection_store.py \
             remediation_engine.py \
             remediation_db.py \
+            remediation_guardrails.py \
+            remediation_live_actions.py \
+            remediation_aws_adapters.py \
             asset_db.py \
             client_db.py
 
