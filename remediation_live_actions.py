@@ -1,4 +1,6 @@
+from remediation_aws_adapters import execute_s3_public_access_block
 from remediation_guardrails import validate_live_execution_request
+from remediation_targeting import extract_resource_target
 
 
 SUPPORTED_ACTIONS = {
@@ -15,7 +17,9 @@ def execute_controlled_action(
     finding,
     approval_status,
     execution_mode="Simulation",
-    confirmation_phrase=""
+    confirmation_phrase="",
+    expected_account_id=None,
+    s3_client=None,
 ):
     guardrail_result = validate_live_execution_request(
         action_type=action_type,
@@ -54,16 +58,83 @@ def execute_controlled_action(
             "message": "Simulation completed. No AWS resources were modified."
         }
 
+    if adapter != "S3_BLOCK_PUBLIC_ACCESS":
+        return {
+            "status": "BLOCKED",
+            "mode": "Live",
+            "adapter": adapter,
+            "action_type": action_type,
+            "finding": finding,
+            "message": (
+                "This adapter is not enabled for live execution."
+            ),
+        }
+
+    target = extract_resource_target(
+        action_type=action_type,
+        finding=finding,
+    )
+
+    if not target.get("supported"):
+        return {
+            "status": "BLOCKED",
+            "mode": "Live",
+            "adapter": adapter,
+            "action_type": action_type,
+            "finding": finding,
+            "message": (
+                "The remediation target could not be validated."
+            ),
+        }
+
+    if not expected_account_id:
+        return {
+            "status": "BLOCKED",
+            "mode": "Live",
+            "adapter": adapter,
+            "action_type": action_type,
+            "finding": finding,
+            "message": (
+                "The expected AWS account ID is required "
+                "for live S3 remediation."
+            ),
+        }
+
+    try:
+        execution_result = execute_s3_public_access_block(
+            bucket_name=target.get("resource_id"),
+            expected_bucket_owner=expected_account_id,
+            s3_client=s3_client,
+        )
+
+    except ValueError as error:
+        return {
+            "status": "BLOCKED",
+            "mode": "Live",
+            "adapter": adapter,
+            "action_type": action_type,
+            "finding": finding,
+            "message": str(error),
+        }
+
+    except Exception as error:
+        return {
+            "status": "FAILED",
+            "mode": "Live",
+            "adapter": adapter,
+            "action_type": action_type,
+            "finding": finding,
+            "message": (
+                "Live S3 remediation failed: "
+                f"{error}"
+            ),
+        }
+
     return {
-        "status": "BLOCKED",
+        **execution_result,
         "mode": "Live",
-        "adapter": adapter,
         "action_type": action_type,
         "finding": finding,
-        "message": (
-            "Live adapter execution is not implemented yet. "
-            "The request passed guardrails but no AWS modification was performed."
-        )
     }
 
 
@@ -75,8 +146,6 @@ def get_adapter_for_action(action_type):
 
 
 def build_execution_plan(action_type, finding):
-    from remediation_targeting import extract_resource_target
-
     target = extract_resource_target(
         action_type=action_type,
         finding=finding

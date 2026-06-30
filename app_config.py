@@ -135,6 +135,12 @@ class AppSettings:
             False,
         )
     )
+    live_remediation_enabled: bool = field(
+        default_factory=lambda: get_bool(
+            "DGS_LIVE_REMEDIATION_ENABLED",
+            False,
+        )
+    )
     session_timeout_minutes: int = field(
         default_factory=lambda: get_int(
             "SESSION_TIMEOUT_MINUTES",
@@ -170,6 +176,9 @@ class AppSettings:
             "log_level": self.log_level,
             "aws_region": self.aws_region,
             "public_demo_mode": self.public_demo_mode,
+            "live_remediation_enabled": (
+                self.live_remediation_enabled
+            ),
             "session_timeout_minutes": (
                 self.session_timeout_minutes
             ),

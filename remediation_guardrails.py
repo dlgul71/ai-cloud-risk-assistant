@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from app_config import settings
+
 
 @dataclass
 class RemediationGuardrails:
@@ -15,7 +17,9 @@ class RemediationGuardrails:
     )
 
 
-GUARDRAILS = RemediationGuardrails()
+GUARDRAILS = RemediationGuardrails(
+    live_execution_enabled=settings.live_remediation_enabled,
+)
 
 
 def validate_live_execution_request(
