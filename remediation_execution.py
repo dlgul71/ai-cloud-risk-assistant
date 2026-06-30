@@ -20,15 +20,46 @@ def init_execution_db():
         approval_status TEXT,
         execution_status TEXT,
         execution_mode TEXT,
-        notes TEXT
+        notes TEXT,
+        aws_account_id TEXT,
+        client_name TEXT,
+        role_arn TEXT
     )
     """)
+
+    cursor.execute("PRAGMA table_info(remediation_actions)")
+
+    existing_columns = {
+        row[1]
+        for row in cursor.fetchall()
+    }
+
+    for column_name in (
+        "aws_account_id",
+        "client_name",
+        "role_arn",
+    ):
+        if column_name not in existing_columns:
+            cursor.execute(
+                f"""
+                ALTER TABLE remediation_actions
+                ADD COLUMN {column_name} TEXT
+                """
+            )
 
     conn.commit()
     conn.close()
 
 
-def create_execution_action(finding, action_type, priority="STANDARD", notes=""):
+def create_execution_action(
+    finding,
+    action_type,
+    priority="STANDARD",
+    notes="",
+    aws_account_id=None,
+    client_name=None,
+    role_arn=None,
+):
     init_execution_db()
 
     conn = sqlite3.connect(DB_NAME)
@@ -39,12 +70,14 @@ def create_execution_action(finding, action_type, priority="STANDARD", notes="")
     FROM remediation_actions
     WHERE finding = ?
       AND action_type = ?
+      AND COALESCE(aws_account_id, '') = COALESCE(?, '')
       AND execution_status NOT IN ('Completed', 'Failed')
     ORDER BY id DESC
     LIMIT 1
     """, (
         finding,
-        action_type
+        action_type,
+        aws_account_id,
     ))
 
     existing_action = cursor.fetchone()
@@ -67,9 +100,12 @@ def create_execution_action(finding, action_type, priority="STANDARD", notes="")
         approval_status,
         execution_status,
         execution_mode,
-        notes
+        notes,
+        aws_account_id,
+        client_name,
+        role_arn
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         str(datetime.now(UTC)),
         finding,
@@ -78,7 +114,10 @@ def create_execution_action(finding, action_type, priority="STANDARD", notes="")
         "Pending Approval",
         "Not Started",
         "Simulation",
-        notes
+        notes,
+        aws_account_id,
+        client_name,
+        role_arn,
     ))
 
     action_id = cursor.lastrowid
@@ -116,7 +155,10 @@ def get_execution_actions():
         approval_status,
         execution_status,
         execution_mode,
-        notes
+        notes,
+        aws_account_id,
+        client_name,
+        role_arn
     FROM remediation_actions
     ORDER BY id DESC
     """)
@@ -287,7 +329,191 @@ def simulate_execution(action_id):
         "message": controlled_result.get("message")
     }
 
-def create_actions_from_remediation_plan(remediation_plan):
+
+def execute_live_action(
+    action_id,
+    expected_account_id,
+    s3_client,
+    confirmation_phrase,
+    actor="DGS Sentinel AI",
+):
+    """Execute one approved remediation action in guarded live mode."""
+
+    init_execution_db()
+
+    connection = sqlite3.connect(DB_NAME)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            finding,
+            action_type,
+            approval_status,
+            execution_status,
+            aws_account_id
+        FROM remediation_actions
+        WHERE id = ?
+        """,
+        (action_id,),
+    )
+
+    action = cursor.fetchone()
+
+    if not action:
+        connection.close()
+        raise ValueError(
+            f"Action ID {action_id} was not found."
+        )
+
+    (
+        finding,
+        action_type,
+        approval_status,
+        execution_status,
+        bound_account_id,
+    ) = action
+
+    if not bound_account_id:
+        connection.close()
+        raise ValueError(
+            "This remediation action is not bound to an AWS account."
+        )
+
+    if str(bound_account_id) != str(expected_account_id):
+        connection.close()
+        raise ValueError(
+            "The selected AWS account does not match the "
+            "account bound to this remediation action."
+        )
+
+    if approval_status != "Approved":
+        connection.close()
+        raise ValueError(
+            "The remediation action must be approved "
+            "before live execution."
+        )
+
+    if execution_status == "Completed":
+        connection.close()
+        raise ValueError(
+            "This remediation action is already completed."
+        )
+
+    controlled_result = execute_controlled_action(
+        action_type=action_type,
+        finding=finding,
+        approval_status=approval_status,
+        execution_mode="Live",
+        confirmation_phrase=confirmation_phrase,
+        expected_account_id=expected_account_id,
+        s3_client=s3_client,
+    )
+
+    result_status = controlled_result.get("status")
+    result_message = controlled_result.get(
+        "message",
+        "Live remediation did not complete.",
+    )
+
+    if result_status != "EXECUTED":
+        if result_status == "FAILED":
+            cursor.execute(
+                """
+                UPDATE remediation_actions
+                SET execution_status = ?,
+                    execution_mode = ?
+                WHERE id = ?
+                """,
+                (
+                    "Failed",
+                    "Live",
+                    action_id,
+                ),
+            )
+
+            connection.commit()
+
+            log_remediation_event(
+                action_id=action_id,
+                event_type="LIVE_REMEDIATION_FAILED",
+                event_detail=(
+                    f"Adapter={controlled_result.get('adapter')}; "
+                    f"Finding={finding}; "
+                    f"Action={action_type}; "
+                    f"Result={result_message}"
+                ),
+                actor=actor,
+            )
+
+        else:
+            log_remediation_event(
+                action_id=action_id,
+                event_type="LIVE_REMEDIATION_BLOCKED",
+                event_detail=(
+                    f"Finding={finding}; "
+                    f"Action={action_type}; "
+                    f"Result={result_message}"
+                ),
+                actor=actor,
+            )
+
+        connection.close()
+        raise ValueError(result_message)
+
+    cursor.execute(
+        """
+        UPDATE remediation_actions
+        SET execution_status = ?,
+            execution_mode = ?
+        WHERE id = ?
+        """,
+        (
+            "Completed",
+            "Live",
+            action_id,
+        ),
+    )
+
+    connection.commit()
+    connection.close()
+
+    log_remediation_event(
+        action_id=action_id,
+        event_type="LIVE_REMEDIATION_COMPLETED",
+        event_detail=(
+            f"Adapter={controlled_result.get('adapter')}; "
+            f"Finding={finding}; "
+            f"Action={action_type}; "
+            f"Resource={controlled_result.get('resource_id')}; "
+            f"RequestId={controlled_result.get('request_id')}; "
+            f"Result={result_message}"
+        ),
+        actor=actor,
+    )
+
+    return {
+        "action_id": action_id,
+        "status": "Completed",
+        "mode": "Live",
+        "adapter": controlled_result.get("adapter"),
+        "finding": finding,
+        "action_type": action_type,
+        "resource_id": controlled_result.get(
+            "resource_id"
+        ),
+        "request_id": controlled_result.get(
+            "request_id"
+        ),
+        "message": result_message,
+    }
+
+def create_actions_from_remediation_plan(
+    remediation_plan,
+    aws_account_id=None,
+    client_name=None,
+    role_arn=None,
+):
     created_actions = []
 
     for item in remediation_plan:
@@ -317,13 +543,19 @@ def create_actions_from_remediation_plan(remediation_plan):
             notes=(
                 "Automatically generated from DGS Sentinel AI remediation plan. "
                 "Simulation mode only. Human approval required."
-            )
+            ),
+            aws_account_id=aws_account_id,
+            client_name=client_name,
+            role_arn=role_arn,
         )
 
         created_actions.append({
             "finding": finding,
             "action_type": action_type,
-            "priority": priority
+            "priority": priority,
+            "aws_account_id": aws_account_id,
+            "client_name": client_name,
+            "role_arn": role_arn,
         })
 
     return created_actions

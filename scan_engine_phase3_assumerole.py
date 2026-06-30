@@ -7,6 +7,7 @@ from asset_db import init_asset_db, save_asset
 from risk_engine import calculate_asset_risk
 from remediation_engine import generate_remediation_plan
 from remediation_db import save_remediation_items
+from remediation_execution import create_actions_from_remediation_plan
 from client_detection_store import save_client_scan_summary
 
 
@@ -1321,13 +1322,22 @@ def run_client_scan(role_arn, client_name=None):
     )
 
     if remediation_plan:
+        bound_client_name = (
+            client_name
+            or f"AWS Account {account_id}"
+        )
+
         save_remediation_items(
             remediation_plan,
             aws_account_id=account_id,
-            client_name=(
-                client_name
-                or f"AWS Account {account_id}"
-            )
+            client_name=bound_client_name,
+        )
+
+        create_actions_from_remediation_plan(
+            remediation_plan,
+            aws_account_id=account_id,
+            client_name=bound_client_name,
+            role_arn=role_arn,
         )
 
     securityhub_critical = sum(

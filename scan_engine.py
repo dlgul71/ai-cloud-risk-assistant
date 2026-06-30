@@ -161,7 +161,10 @@ def run_scan():
     )
 
     execution_actions = create_actions_from_remediation_plan(
-        remediation_plan
+        remediation_plan,
+        aws_account_id=current_aws_account_id,
+        client_name="DGS Internal AWS",
+        role_arn=None,
     )
 
     print(f"\n[+] Execution actions created: {len(execution_actions)}")
