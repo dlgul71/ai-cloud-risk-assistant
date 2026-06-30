@@ -2985,7 +2985,8 @@ if page == "Execution Center":
         get_execution_actions,
         update_execution_action,
         simulate_execution,
-        simulate_all_approved_actions
+        simulate_all_approved_actions,
+        execute_live_action,
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
@@ -3055,7 +3056,10 @@ if page == "Execution Center":
         "Approval Status",
         "Execution Status",
         "Execution Mode",
-        "Notes"
+        "Notes",
+        "AWS Account ID",
+        "Client Name",
+        "Role ARN",
     ]
 
     if actions:
@@ -3181,12 +3185,17 @@ if page == "Execution Center":
 
         st.subheader("Execution Queue")
 
+        queue_display_df = filtered_actions_df.drop(
+            columns=["Role ARN"],
+            errors="ignore",
+        )
+
         demo_dataframe(
-            filtered_actions_df,
+            queue_display_df,
             width="stretch"
         )
 
-        execution_export_df = filtered_actions_df.copy()
+        execution_export_df = queue_display_df.copy()
 
         execution_export_df["Resource Type"] = execution_export_df.apply(
             lambda row: build_execution_plan(
@@ -3253,6 +3262,11 @@ if page == "Execution Center":
         demo_write("**Action Type:**", selected_action["Action Type"])
         demo_write("**Controlled Adapter:**", selected_adapter)
         demo_write("**Execution Mode:**", selected_action["Execution Mode"])
+        demo_write("**Client Name:**", selected_action["Client Name"] or "Unbound")
+        demo_write(
+            "**AWS Account ID:**",
+            selected_action["AWS Account ID"] or "Unbound",
+        )
         demo_write("**Notes:**", selected_action["Notes"])
 
         st.subheader("Dry-Run Execution Plan")
@@ -3381,6 +3395,149 @@ if page == "Execution Center":
 
             except Exception as e:
                 st.error(f"Simulation failed: {e}")
+
+        st.subheader("Guarded Live S3 Remediation")
+
+        demo_caption(
+            "Live remediation is restricted to approved S3 exposure actions, "
+            "a saved client account, an assumed AWS role, and the exact "
+            "authorization phrase."
+        )
+
+        if not GUARDRAILS.live_execution_enabled:
+            demo_info(
+                "Live remediation is disabled. Set "
+                "DGS_LIVE_REMEDIATION_ENABLED=true only in an authorized "
+                "environment."
+            )
+
+        elif selected_adapter != "S3_BLOCK_PUBLIC_ACCESS":
+            demo_info(
+                "This adapter remains simulation-only. Only the guarded "
+                "S3 Block Public Access adapter supports live execution."
+            )
+
+        elif selected_action["Approval Status"] != "Approved":
+            demo_warning(
+                "This action must be approved before live execution."
+            )
+
+        elif selected_action["Execution Status"] == "Completed":
+            demo_info(
+                "This remediation action has already been completed."
+            )
+
+        else:
+            live_client_name = selected_action["Client Name"]
+            live_account_id = selected_action["AWS Account ID"]
+            live_role_arn = selected_action["Role ARN"]
+
+            if not live_account_id:
+                demo_warning(
+                    "This action is not bound to an AWS account and cannot "
+                    "be executed live."
+                )
+
+            elif not live_role_arn:
+                demo_warning(
+                    "This action has no bound remediation role. Internal or "
+                    "legacy actions remain simulation-only."
+                )
+
+            else:
+                live_account_id = str(live_account_id)
+
+                live_plan = build_execution_plan(
+                    action_type=selected_action["Action Type"],
+                    finding=selected_action["Finding"],
+                )
+
+                demo_write(
+                    "**Bound client:**",
+                    live_client_name or "Unnamed Client",
+                )
+                demo_write(
+                    "**Bound AWS account:**",
+                    live_account_id,
+                )
+                demo_write(
+                    "**Target S3 bucket:**",
+                    live_plan.get("resource_id", "UNKNOWN"),
+                )
+
+                confirmation_phrase = st.text_input(
+                    "Live execution confirmation phrase",
+                    type="password",
+                    key="live_remediation_confirmation",
+                    help=(
+                        "Enter exactly: "
+                        "AUTHORIZE LIVE AWS REMEDIATION"
+                    ),
+                )
+
+                operator_acknowledgement = st.checkbox(
+                    (
+                        "I confirm that this approved action may modify "
+                        "the AWS account permanently bound to this action."
+                    ),
+                    key="live_remediation_acknowledgement",
+                )
+
+                live_button_enabled = (
+                    operator_acknowledgement
+                    and confirmation_phrase
+                    == "AUTHORIZE LIVE AWS REMEDIATION"
+                )
+
+                if st.button(
+                    "Execute Guarded Live S3 Remediation",
+                    disabled=not live_button_enabled,
+                    key="execute_guarded_live_remediation",
+                ):
+                    try:
+                        client_session = assume_client_role(
+                            live_role_arn
+                        )
+
+                        if client_session is None:
+                            raise ValueError(
+                                "Unable to assume the remediation role "
+                                "bound to this action."
+                            )
+
+                        live_s3_client = client_session.client(
+                            "s3"
+                        )
+
+                        live_result = execute_live_action(
+                            action_id=int(selected_action_id),
+                            expected_account_id=live_account_id,
+                            s3_client=live_s3_client,
+                            confirmation_phrase=confirmation_phrase,
+                            actor=(
+                                settings.app_username
+                                or "Authenticated Operator"
+                            ),
+                        )
+
+                        demo_success(
+                            "Guarded live S3 remediation completed."
+                        )
+                        demo_json(live_result)
+                        st.rerun()
+
+                    except ValueError as error:
+                        st.error(
+                            f"Live remediation blocked: {error}"
+                        )
+
+                    except Exception as error:
+                        logger.exception(
+                            "Guarded live remediation failed."
+                        )
+                        st.error(
+                            f"Live remediation failed: {error}"
+                        )
 
         st.subheader("Bulk Approved Simulation")
 
