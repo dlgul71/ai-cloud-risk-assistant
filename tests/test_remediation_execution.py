@@ -133,11 +133,13 @@ def test_execute_live_action_completes_and_audits(
         "execute_controlled_action",
         lambda **kwargs: {
             "status": "EXECUTED",
+            "verification_status": "VERIFIED",
             "mode": "Live",
             "adapter": "S3_BLOCK_PUBLIC_ACCESS",
             "resource_id": "example-security-bucket",
             "request_id": "request-123",
-            "message": "S3 Block Public Access was enabled.",
+            "verification_request_id": "verify-123",
+            "message": "S3 Block Public Access was enabled and verified.",
         },
     )
 
@@ -353,3 +355,56 @@ def test_execute_live_action_rejects_account_mismatch(
             s3_client=object(),
             confirmation_phrase=CONFIRMATION,
         )
+
+
+def test_execute_live_action_rejects_unverified_execution(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "FAILED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-123",
+            "verification_request_id": "verify-123",
+            "message": (
+                "The AWS write completed, but the final state "
+                "could not be verified."
+            ),
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="could not be verified",
+    ):
+        remediation_execution.execute_live_action(
+            action_id=action_id,
+            expected_account_id="123456789012",
+            s3_client=object(),
+            confirmation_phrase=CONFIRMATION,
+        )
+
+    assert read_action(
+        execution_database,
+        action_id,
+    ) == (
+        "Approved",
+        "Failed",
+        "Live",
+    )
+
+    events = read_audit_events(
+        execution_database,
+        action_id,
+    )
+
+    assert events[-1][0] == "LIVE_REMEDIATION_VERIFICATION_FAILED"
+    assert "verify-123" in events[-1][1]

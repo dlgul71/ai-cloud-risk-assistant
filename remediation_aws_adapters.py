@@ -74,8 +74,64 @@ def execute_s3_public_access_block(
         else {}
     )
 
+    verification_response = s3_client.get_public_access_block(
+        Bucket=request["Bucket"],
+        ExpectedBucketOwner=request["ExpectedBucketOwner"],
+    )
+
+    verified_configuration = (
+        verification_response.get(
+            "PublicAccessBlockConfiguration",
+            {},
+        )
+        if isinstance(verification_response, dict)
+        else {}
+    )
+
+    verification_metadata = (
+        verification_response.get("ResponseMetadata", {})
+        if isinstance(verification_response, dict)
+        else {}
+    )
+
+    is_verified = all(
+        verified_configuration.get(control_name) is True
+        for control_name in S3_PUBLIC_ACCESS_BLOCK_CONFIGURATION
+    )
+
+    if not is_verified:
+        return {
+            "status": "FAILED",
+            "verification_status": "FAILED",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_type": "S3_BUCKET",
+            "resource_id": request["Bucket"],
+            "expected_bucket_owner": request[
+                "ExpectedBucketOwner"
+            ],
+            "configuration": request[
+                "PublicAccessBlockConfiguration"
+            ],
+            "verified_configuration": verified_configuration,
+            "request_id": response_metadata.get("RequestId"),
+            "verification_request_id": verification_metadata.get(
+                "RequestId"
+            ),
+            "http_status_code": response_metadata.get(
+                "HTTPStatusCode"
+            ),
+            "verification_http_status_code": (
+                verification_metadata.get("HTTPStatusCode")
+            ),
+            "message": (
+                "S3 Block Public Access was requested but the final "
+                "bucket configuration could not be verified."
+            ),
+        }
+
     return {
         "status": "EXECUTED",
+        "verification_status": "VERIFIED",
         "adapter": "S3_BLOCK_PUBLIC_ACCESS",
         "resource_type": "S3_BUCKET",
         "resource_id": request["Bucket"],
@@ -85,13 +141,18 @@ def execute_s3_public_access_block(
         "configuration": request[
             "PublicAccessBlockConfiguration"
         ],
-        "request_id": response_metadata.get(
+        "verified_configuration": verified_configuration,
+        "request_id": response_metadata.get("RequestId"),
+        "verification_request_id": verification_metadata.get(
             "RequestId"
         ),
         "http_status_code": response_metadata.get(
             "HTTPStatusCode"
         ),
+        "verification_http_status_code": (
+            verification_metadata.get("HTTPStatusCode")
+        ),
         "message": (
-            "S3 Block Public Access was enabled for the bucket."
+            "S3 Block Public Access was enabled and verified."
         ),
     }

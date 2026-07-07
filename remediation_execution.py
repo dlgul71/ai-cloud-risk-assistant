@@ -416,6 +416,45 @@ def execute_live_action(
         "Live remediation did not complete.",
     )
 
+    if (
+        result_status == "EXECUTED"
+        and controlled_result.get("verification_status") != "VERIFIED"
+    ):
+        cursor.execute(
+            """
+            UPDATE remediation_actions
+            SET execution_status = ?,
+                execution_mode = ?
+            WHERE id = ?
+            """,
+            (
+                "Failed",
+                "Live",
+                action_id,
+            ),
+        )
+
+        connection.commit()
+
+        log_remediation_event(
+            action_id=action_id,
+            event_type="LIVE_REMEDIATION_VERIFICATION_FAILED",
+            event_detail=(
+                f"Adapter={controlled_result.get('adapter')}; "
+                f"Finding={finding}; "
+                f"Action={action_type}; "
+                f"ResourceID={controlled_result.get('resource_id')}; "
+                f"RequestID={controlled_result.get('request_id')}; "
+                f"VerificationRequestID="
+                f"{controlled_result.get('verification_request_id')}; "
+                f"Result={result_message}"
+            ),
+            actor=actor,
+        )
+
+        connection.close()
+        raise ValueError(result_message)
+
     if result_status != "EXECUTED":
         if result_status == "FAILED":
             cursor.execute(

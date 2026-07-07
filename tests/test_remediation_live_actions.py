@@ -23,6 +23,20 @@ class FakeS3Client:
             }
         }
 
+    def get_public_access_block(self, **kwargs):
+        return {
+            "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+            "ResponseMetadata": {
+                "RequestId": "phase-18-verification-request",
+                "HTTPStatusCode": 200,
+            },
+        }
+
 
 def enable_live_remediation(monkeypatch):
     monkeypatch.setattr(
