@@ -132,3 +132,17 @@ def test_live_remediation_can_be_enabled_explicitly(
     settings = app_config.AppSettings()
 
     assert settings.live_remediation_enabled is True
+
+
+def test_safe_summary_does_not_expose_evidence_hmac_key():
+    settings = app_config.AppSettings(
+        remediation_evidence_hmac_key=(
+            "phase-21-summary-secret-0123456789abcdef"
+        ),
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert "phase-21-summary-secret" not in rendered_summary
+    assert summary["remediation_evidence_hmac_configured"] is True

@@ -14,6 +14,11 @@ CONFIRMATION = "AUTHORIZE LIVE AWS REMEDIATION"
 def execution_database(tmp_path, monkeypatch):
     database_path = tmp_path / "remediation_actions.db"
 
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        "phase-21-test-signing-key-0123456789abcdef",
+    )
+
     monkeypatch.setattr(
         remediation_execution,
         "DB_NAME",
@@ -599,3 +604,131 @@ def test_verify_execution_evidence_detects_tampering(
 
     assert integrity["status"] == "TAMPERED"
     assert integrity["stored_hash"] != integrity["calculated_hash"]
+
+
+def test_live_action_uses_hmac_authenticated_evidence(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-123",
+            "verification_request_id": "verify-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    connection = sqlite3.connect(execution_database)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT
+            evidence_hash,
+            evidence_authentication_type,
+            evidence_key_id
+        FROM remediation_actions
+        WHERE id = ?
+        """,
+        (action_id,),
+    )
+    stored_hash, authentication_type, key_id = cursor.fetchone()
+    connection.close()
+
+    assert len(stored_hash) == 64
+    assert authentication_type == "HMAC-SHA256"
+    assert len(key_id) == 16
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "VERIFIED"
+    assert integrity["authentication_type"] == "HMAC-SHA256"
+    assert integrity["key_id"] == key_id
+
+
+def test_verify_execution_evidence_detects_wrong_hmac_key(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-123",
+            "verification_request_id": "verify-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        "phase21-different-test-key",
+    )
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "KEY_MISMATCH"
+
+
+def test_live_action_requires_hmac_key_before_aws_execution(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.delenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: pytest.fail(
+            "AWS execution must not start without an evidence HMAC key."
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+    ):
+        remediation_execution.execute_live_action(
+            action_id=action_id,
+            expected_account_id="123456789012",
+            s3_client=object(),
+            confirmation_phrase=CONFIRMATION,
+        )

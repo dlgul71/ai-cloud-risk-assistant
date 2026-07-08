@@ -105,6 +105,12 @@ def build_security_context():
             "result_message": action[17] if len(action) > 17 else None,
             "executed_at": action[18] if len(action) > 18 else None,
             "evidence_hash": action[19] if len(action) > 19 else None,
+            "evidence_authentication_type": (
+                action[20] if len(action) > 20 else None
+            ),
+            "evidence_key_id": (
+                action[21] if len(action) > 21 else None
+            ),
         })
 
     return {

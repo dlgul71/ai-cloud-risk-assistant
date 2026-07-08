@@ -168,6 +168,12 @@ class AppSettings:
         ),
         repr=False,
     )
+    remediation_evidence_hmac_key: str | None = field(
+        default_factory=lambda: get_setting(
+            "DGS_REMEDIATION_EVIDENCE_HMAC_KEY"
+        ),
+        repr=False,
+    )
 
     def safe_summary(self) -> dict[str, Any]:
         return {
@@ -188,6 +194,9 @@ class AppSettings:
             "app_credentials_configured": bool(
                 self.app_username
                 and self.app_password
+            ),
+            "remediation_evidence_hmac_configured": bool(
+                self.remediation_evidence_hmac_key
             ),
         }
 

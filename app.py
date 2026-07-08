@@ -3069,6 +3069,8 @@ if page == "Execution Center":
         "Result Message",
         "Executed At",
         "Evidence Hash",
+        "Evidence Authentication Type",
+        "Evidence Key ID",
     ]
 
     if actions:
@@ -3317,6 +3319,15 @@ if page == "Execution Center":
             "**Evidence Hash:**",
             selected_action["Evidence Hash"] or "Not Recorded",
         )
+        demo_write(
+            "**Evidence Authentication:**",
+            selected_action["Evidence Authentication Type"]
+            or "Not Recorded",
+        )
+        demo_write(
+            "**Evidence Key ID:**",
+            selected_action["Evidence Key ID"] or "Not Recorded",
+        )
 
         try:
             evidence_integrity = verify_execution_evidence(
@@ -3334,12 +3345,23 @@ if page == "Execution Center":
                 )
             elif integrity_status == "TAMPERED":
                 st.error(
-                    "Execution evidence integrity check failed. "
+                    "Execution evidence authentication failed. "
                     "Stored evidence may have been modified."
+                )
+            elif integrity_status == "KEY_MISMATCH":
+                st.error(
+                    "Execution evidence was authenticated with a "
+                    "different HMAC key."
+                )
+            elif integrity_status == "UNSUPPORTED":
+                demo_warning(
+                    "This evidence record uses an unsupported "
+                    "authentication method."
                 )
             else:
                 demo_warning(
-                    "No tamper-evident hash is available for this action."
+                    "No authenticated evidence signature is available "
+                    "for this action."
                 )
 
         except ValueError as error:
