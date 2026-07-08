@@ -750,3 +750,44 @@ http://localhost:8501
 ✅ AI Executive Risk Analysis
 
 DGS Sentinel AI is now deployable as a secure cloud security visibility and cyber risk assessment platform.
+
+---
+
+# 🔐 Remediation Evidence Key Rotation Operations
+
+DGS Sentinel AI signs remediation evidence with HMAC-SHA256.
+
+## Required Environment Variables
+
+~~~bash
+export DGS_REMEDIATION_EVIDENCE_HMAC_KEY="current-signing-key"
+~~~
+
+During a key rotation, retain prior keys temporarily:
+
+~~~bash
+export DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS="previous-key-one,previous-key-two"
+~~~
+
+New evidence is signed only with the current key. Previous keys are used only to verify historical evidence.
+
+## Rotation Procedure
+
+1. Record the current evidence key ID.
+2. Generate and securely store a new HMAC key.
+3. Move the current key into `DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS`.
+4. Configure the new key as `DGS_REMEDIATION_EVIDENCE_HMAC_KEY`.
+5. Restart the application.
+6. Run the key-rotation validator:
+
+~~~bash
+python -m scripts.check_remediation_evidence_keys
+~~~
+
+7. Confirm all signed records report `VERIFIED`.
+8. Keep prior keys available for the required evidence-retention period.
+9. Remove an old key only after no retained evidence depends on its key ID.
+
+The validator returns exit code `0` when all signed evidence verifies, `1` when verification fails, and `2` when required key configuration is missing.
+
+Never commit HMAC keys to Git, application source code, logs, screenshots, or documentation.
