@@ -111,6 +111,21 @@ def get_int(
         return default
 
 
+def get_csv(
+    key: str,
+) -> tuple[str, ...]:
+    value = get_setting(key)
+
+    if value in {None, ""}:
+        return ()
+
+    return tuple(
+        item.strip()
+        for item in str(value).split(",")
+        if item.strip()
+    )
+
+
 @dataclass(frozen=True)
 class AppSettings:
     app_name: str = "DGS Sentinel AI"
@@ -174,6 +189,12 @@ class AppSettings:
         ),
         repr=False,
     )
+    remediation_evidence_previous_hmac_keys: tuple[str, ...] = field(
+        default_factory=lambda: get_csv(
+            "DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS"
+        ),
+        repr=False,
+    )
 
     def safe_summary(self) -> dict[str, Any]:
         return {
@@ -197,6 +218,9 @@ class AppSettings:
             ),
             "remediation_evidence_hmac_configured": bool(
                 self.remediation_evidence_hmac_key
+            ),
+            "remediation_evidence_previous_key_count": len(
+                self.remediation_evidence_previous_hmac_keys
             ),
         }
 

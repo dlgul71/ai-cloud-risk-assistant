@@ -33,6 +33,28 @@ def _get_evidence_key_id(key):
     ).hexdigest()[:16]
 
 
+def _get_previous_evidence_hmac_keys():
+    value = get_setting(
+        "DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS"
+    )
+
+    if value in {None, ""}:
+        return ()
+
+    return tuple(
+        item.strip()
+        for item in str(value).split(",")
+        if item.strip()
+    )
+
+
+def _get_evidence_verification_keys():
+    current_key = _get_evidence_hmac_key()
+    keys = (current_key, *_get_previous_evidence_hmac_keys())
+
+    return tuple(dict.fromkeys(keys))
+
+
 def _calculate_execution_evidence_hash(evidence, key=None):
     signing_key = key or _get_evidence_hmac_key()
 
@@ -859,27 +881,33 @@ def verify_execution_evidence(action_id):
         integrity_status = "UNSUPPORTED"
 
     else:
-        evidence_hmac_key = _get_evidence_hmac_key()
-        current_key_id = _get_evidence_key_id(
-            evidence_hmac_key
-        )
+        matching_key = None
 
-        calculated_hash = _calculate_execution_evidence_hash(
-            evidence,
-            evidence_hmac_key,
-        )
+        for verification_key in _get_evidence_verification_keys():
+            if (
+                _get_evidence_key_id(verification_key)
+                == stored_key_id
+            ):
+                matching_key = verification_key
+                break
 
-        if stored_key_id != current_key_id:
+        if matching_key is None:
             integrity_status = "KEY_MISMATCH"
 
-        elif hmac.compare_digest(
-            stored_hash,
-            calculated_hash,
-        ):
-            integrity_status = "VERIFIED"
-
         else:
-            integrity_status = "TAMPERED"
+            calculated_hash = _calculate_execution_evidence_hash(
+                evidence,
+                matching_key,
+            )
+
+            if hmac.compare_digest(
+                stored_hash,
+                calculated_hash,
+            ):
+                integrity_status = "VERIFIED"
+
+            else:
+                integrity_status = "TAMPERED"
 
     return {
         "action_id": action_id,
