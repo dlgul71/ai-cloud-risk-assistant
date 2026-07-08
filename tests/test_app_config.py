@@ -146,3 +146,37 @@ def test_safe_summary_does_not_expose_evidence_hmac_key():
 
     assert "phase-21-summary-secret" not in rendered_summary
     assert summary["remediation_evidence_hmac_configured"] is True
+
+
+def test_get_csv_parses_previous_hmac_keys(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS",
+        "old-key-one, old-key-two, old-key-one",
+    )
+
+    assert app_config.get_csv(
+        "DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS"
+    ) == (
+        "old-key-one",
+        "old-key-two",
+        "old-key-one",
+    )
+
+
+def test_safe_summary_reports_previous_key_count_without_secrets():
+    settings = app_config.AppSettings(
+        remediation_evidence_hmac_key="current-phase22-key",
+        remediation_evidence_previous_hmac_keys=(
+            "previous-phase22-key-one",
+            "previous-phase22-key-two",
+        ),
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert "current-phase22-key" not in rendered_summary
+    assert "previous-phase22-key-one" not in rendered_summary
+    assert summary["remediation_evidence_previous_key_count"] == 2

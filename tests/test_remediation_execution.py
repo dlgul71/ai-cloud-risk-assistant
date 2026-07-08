@@ -732,3 +732,110 @@ def test_live_action_requires_hmac_key_before_aws_execution(
             s3_client=object(),
             confirmation_phrase=CONFIRMATION,
         )
+
+
+def test_rotated_previous_hmac_key_verifies_existing_evidence(
+    execution_database,
+    monkeypatch,
+):
+    original_key = "phase22-original-signing-key"
+    rotated_key = "phase22-rotated-signing-key"
+
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        original_key,
+    )
+
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-rotation-123",
+            "verification_request_id": "verify-rotation-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        rotated_key,
+    )
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS",
+        original_key,
+    )
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "VERIFIED"
+    assert integrity["key_id"] == (
+        remediation_execution._get_evidence_key_id(original_key)
+    )
+
+
+def test_rotated_key_without_previous_key_returns_key_mismatch(
+    execution_database,
+    monkeypatch,
+):
+    original_key = "phase22-original-signing-key"
+    rotated_key = "phase22-rotated-signing-key"
+
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        original_key,
+    )
+
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-rotation-456",
+            "verification_request_id": "verify-rotation-456",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    monkeypatch.setenv(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY",
+        rotated_key,
+    )
+    monkeypatch.delenv(
+        "DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS",
+        raising=False,
+    )
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "KEY_MISMATCH"
