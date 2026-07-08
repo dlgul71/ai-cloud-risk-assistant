@@ -839,3 +839,111 @@ def test_rotated_key_without_previous_key_returns_key_mismatch(
     )
 
     assert integrity["status"] == "KEY_MISMATCH"
+
+
+def test_verify_execution_evidence_audits_verified_result(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-audit-123",
+            "verification_request_id": "verify-audit-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id,
+        actor="Evidence Auditor",
+    )
+
+    events = read_audit_events(
+        execution_database,
+        action_id,
+    )
+
+    assert integrity["status"] == "VERIFIED"
+    assert (
+        events[-1][0]
+        == "REMEDIATION_EVIDENCE_VERIFICATION_VERIFIED"
+    )
+    assert "Status=VERIFIED" in events[-1][1]
+    assert "AuthenticationType=HMAC-SHA256" in events[-1][1]
+    assert events[-1][2] == "Evidence Auditor"
+
+
+def test_verify_execution_evidence_audits_tampered_result(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-audit-456",
+            "verification_request_id": "verify-audit-456",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    connection = sqlite3.connect(execution_database)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE remediation_actions
+        SET result_message = ?
+        WHERE id = ?
+        """,
+        ("Tampered evidence message", action_id),
+    )
+    connection.commit()
+    connection.close()
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id,
+        actor="Evidence Auditor",
+    )
+
+    events = read_audit_events(
+        execution_database,
+        action_id,
+    )
+
+    assert integrity["status"] == "TAMPERED"
+    assert (
+        events[-1][0]
+        == "REMEDIATION_EVIDENCE_VERIFICATION_TAMPERED"
+    )
+    assert "Status=TAMPERED" in events[-1][1]
+    assert events[-1][2] == "Evidence Auditor"

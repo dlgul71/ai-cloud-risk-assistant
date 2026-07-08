@@ -791,7 +791,10 @@ def execute_live_action(
         "message": result_message,
     }
 
-def verify_execution_evidence(action_id):
+def verify_execution_evidence(
+    action_id,
+    actor="DGS Sentinel AI",
+):
     init_execution_db()
 
     connection = sqlite3.connect(DB_NAME)
@@ -908,6 +911,20 @@ def verify_execution_evidence(action_id):
 
             else:
                 integrity_status = "TAMPERED"
+
+    log_remediation_event(
+        action_id=action_id,
+        event_type=(
+            "REMEDIATION_EVIDENCE_VERIFICATION_"
+            f"{integrity_status}"
+        ),
+        event_detail=(
+            f"Status={integrity_status}; "
+            f"AuthenticationType={authentication_type or 'Not Recorded'}; "
+            f"KeyID={stored_key_id or 'Not Recorded'}"
+        ),
+        actor=actor,
+    )
 
     return {
         "action_id": action_id,
