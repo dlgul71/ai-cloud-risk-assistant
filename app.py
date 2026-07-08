@@ -3060,6 +3060,13 @@ if page == "Execution Center":
         "AWS Account ID",
         "Client Name",
         "Role ARN",
+        "Adapter",
+        "Resource ID",
+        "Request ID",
+        "Verification Request ID",
+        "Verification Status",
+        "Result Message",
+        "Executed At",
     ]
 
     if actions:
@@ -3268,6 +3275,42 @@ if page == "Execution Center":
             selected_action["AWS Account ID"] or "Unbound",
         )
         demo_write("**Notes:**", selected_action["Notes"])
+
+        st.subheader("Execution Evidence")
+
+        evidence_col1, evidence_col2, evidence_col3 = st.columns(3)
+
+        evidence_col1.metric(
+            "Adapter",
+            selected_action["Adapter"] or "Not Recorded",
+        )
+
+        evidence_col2.metric(
+            "Verification Status",
+            selected_action["Verification Status"] or "Not Recorded",
+        )
+
+        evidence_col3.metric(
+            "Executed At",
+            selected_action["Executed At"] or "Not Recorded",
+        )
+
+        demo_write(
+            "**Resource ID:**",
+            selected_action["Resource ID"] or "Not Recorded",
+        )
+        demo_write(
+            "**AWS Request ID:**",
+            selected_action["Request ID"] or "Not Recorded",
+        )
+        demo_write(
+            "**Verification Request ID:**",
+            selected_action["Verification Request ID"] or "Not Recorded",
+        )
+        demo_write(
+            "**Execution Result:**",
+            selected_action["Result Message"] or "Not Recorded",
+        )
 
         st.subheader("Dry-Run Execution Plan")
 

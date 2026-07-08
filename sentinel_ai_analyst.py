@@ -89,7 +89,21 @@ def build_security_context():
             "approval_status": action[5],
             "execution_status": action[6],
             "execution_mode": action[7],
-            "notes": action[8]
+            "notes": action[8],
+            "aws_account_id": action[9] if len(action) > 9 else None,
+            "client_name": action[10] if len(action) > 10 else None,
+            "role_arn": action[11] if len(action) > 11 else None,
+            "adapter": action[12] if len(action) > 12 else None,
+            "resource_id": action[13] if len(action) > 13 else None,
+            "request_id": action[14] if len(action) > 14 else None,
+            "verification_request_id": (
+                action[15] if len(action) > 15 else None
+            ),
+            "verification_status": (
+                action[16] if len(action) > 16 else None
+            ),
+            "result_message": action[17] if len(action) > 17 else None,
+            "executed_at": action[18] if len(action) > 18 else None,
         })
 
     return {

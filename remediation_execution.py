@@ -23,7 +23,14 @@ def init_execution_db():
         notes TEXT,
         aws_account_id TEXT,
         client_name TEXT,
-        role_arn TEXT
+        role_arn TEXT,
+        adapter TEXT,
+        resource_id TEXT,
+        request_id TEXT,
+        verification_request_id TEXT,
+        verification_status TEXT,
+        result_message TEXT,
+        executed_at TEXT
     )
     """)
 
@@ -38,6 +45,13 @@ def init_execution_db():
         "aws_account_id",
         "client_name",
         "role_arn",
+        "adapter",
+        "resource_id",
+        "request_id",
+        "verification_request_id",
+        "verification_status",
+        "result_message",
+        "executed_at",
     ):
         if column_name not in existing_columns:
             cursor.execute(
@@ -158,7 +172,14 @@ def get_execution_actions():
         notes,
         aws_account_id,
         client_name,
-        role_arn
+        role_arn,
+        adapter,
+        resource_id,
+        request_id,
+        verification_request_id,
+        verification_status,
+        result_message,
+        executed_at
     FROM remediation_actions
     ORDER BY id DESC
     """)
@@ -424,12 +445,26 @@ def execute_live_action(
             """
             UPDATE remediation_actions
             SET execution_status = ?,
-                execution_mode = ?
+                execution_mode = ?,
+                adapter = ?,
+                resource_id = ?,
+                request_id = ?,
+                verification_request_id = ?,
+                verification_status = ?,
+                result_message = ?,
+                executed_at = ?
             WHERE id = ?
             """,
             (
                 "Failed",
                 "Live",
+                controlled_result.get("adapter"),
+                controlled_result.get("resource_id"),
+                controlled_result.get("request_id"),
+                controlled_result.get("verification_request_id"),
+                controlled_result.get("verification_status"),
+                result_message,
+                str(datetime.now(UTC)),
                 action_id,
             ),
         )
@@ -461,12 +496,26 @@ def execute_live_action(
                 """
                 UPDATE remediation_actions
                 SET execution_status = ?,
-                    execution_mode = ?
+                    execution_mode = ?,
+                    adapter = ?,
+                    resource_id = ?,
+                    request_id = ?,
+                    verification_request_id = ?,
+                    verification_status = ?,
+                    result_message = ?,
+                    executed_at = ?
                 WHERE id = ?
                 """,
                 (
                     "Failed",
                     "Live",
+                    controlled_result.get("adapter"),
+                    controlled_result.get("resource_id"),
+                    controlled_result.get("request_id"),
+                    controlled_result.get("verification_request_id"),
+                    controlled_result.get("verification_status"),
+                    result_message,
+                    str(datetime.now(UTC)),
                     action_id,
                 ),
             )
@@ -504,12 +553,26 @@ def execute_live_action(
         """
         UPDATE remediation_actions
         SET execution_status = ?,
-            execution_mode = ?
+            execution_mode = ?,
+            adapter = ?,
+            resource_id = ?,
+            request_id = ?,
+            verification_request_id = ?,
+            verification_status = ?,
+            result_message = ?,
+            executed_at = ?
         WHERE id = ?
         """,
         (
             "Completed",
             "Live",
+            controlled_result.get("adapter"),
+            controlled_result.get("resource_id"),
+            controlled_result.get("request_id"),
+            controlled_result.get("verification_request_id"),
+            controlled_result.get("verification_status"),
+            result_message,
+            str(datetime.now(UTC)),
             action_id,
         ),
     )

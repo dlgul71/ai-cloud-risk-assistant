@@ -101,6 +101,32 @@ def read_action(database_path, action_id):
     return action
 
 
+def read_execution_evidence(database_path, action_id):
+    connection = sqlite3.connect(database_path)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            adapter,
+            resource_id,
+            request_id,
+            verification_request_id,
+            verification_status,
+            result_message,
+            executed_at
+        FROM remediation_actions
+        WHERE id = ?
+        """,
+        (action_id,),
+    )
+
+    evidence = cursor.fetchone()
+    connection.close()
+
+    return evidence
+
+
 def read_audit_events(database_path, action_id):
     connection = sqlite3.connect(database_path)
     cursor = connection.cursor()
@@ -172,6 +198,21 @@ def test_execute_live_action_completes_and_audits(
     assert events[-1][0] == "LIVE_REMEDIATION_COMPLETED"
     assert events[-1][2] == "Security Administrator"
     assert "request-123" in events[-1][1]
+
+    evidence = read_execution_evidence(
+        execution_database,
+        action_id,
+    )
+
+    assert evidence[:6] == (
+        "S3_BLOCK_PUBLIC_ACCESS",
+        "example-security-bucket",
+        "request-123",
+        "verify-123",
+        "VERIFIED",
+        "S3 Block Public Access was enabled and verified.",
+    )
+    assert evidence[6] is not None
 
 
 def test_execute_live_action_requires_approval(
@@ -408,3 +449,63 @@ def test_execute_live_action_rejects_unverified_execution(
 
     assert events[-1][0] == "LIVE_REMEDIATION_VERIFICATION_FAILED"
     assert "verify-123" in events[-1][1]
+
+    evidence = read_execution_evidence(
+        execution_database,
+        action_id,
+    )
+
+    assert evidence[:6] == (
+        "S3_BLOCK_PUBLIC_ACCESS",
+        "example-security-bucket",
+        "request-123",
+        "verify-123",
+        "FAILED",
+        (
+            "The AWS write completed, but the final state "
+            "could not be verified."
+        ),
+    )
+    assert evidence[6] is not None
+
+
+def test_get_execution_actions_returns_structured_evidence(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-123",
+            "verification_request_id": "verify-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    actions = remediation_execution.get_execution_actions()
+    action = next(row for row in actions if row[0] == action_id)
+
+    assert action[12:18] == (
+        "S3_BLOCK_PUBLIC_ACCESS",
+        "example-security-bucket",
+        "request-123",
+        "verify-123",
+        "VERIFIED",
+        "S3 Block Public Access was enabled and verified.",
+    )
+    assert action[18] is not None
