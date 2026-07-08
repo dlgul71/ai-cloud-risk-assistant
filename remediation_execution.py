@@ -1,14 +1,41 @@
 import hashlib
+import hmac
 import json
 import sqlite3
 from datetime import datetime, UTC
+from app_config import get_setting
 from remediation_audit import log_remediation_event
 from remediation_live_actions import execute_controlled_action
 
 DB_NAME = "remediation_actions.db"
 
 
-def _calculate_execution_evidence_hash(evidence):
+EVIDENCE_AUTHENTICATION_TYPE = "HMAC-SHA256"
+
+
+def _get_evidence_hmac_key():
+    key = get_setting(
+        "DGS_REMEDIATION_EVIDENCE_HMAC_KEY"
+    )
+
+    if key in {None, ""}:
+        raise RuntimeError(
+            "Required configuration setting is missing: "
+            "DGS_REMEDIATION_EVIDENCE_HMAC_KEY"
+        )
+
+    return str(key)
+
+
+def _get_evidence_key_id(key):
+    return hashlib.sha256(
+        key.encode("utf-8")
+    ).hexdigest()[:16]
+
+
+def _calculate_execution_evidence_hash(evidence, key=None):
+    signing_key = key or _get_evidence_hmac_key()
+
     canonical_evidence = json.dumps(
         evidence,
         sort_keys=True,
@@ -16,8 +43,10 @@ def _calculate_execution_evidence_hash(evidence):
         ensure_ascii=False,
     )
 
-    return hashlib.sha256(
-        canonical_evidence.encode("utf-8")
+    return hmac.new(
+        signing_key.encode("utf-8"),
+        canonical_evidence.encode("utf-8"),
+        hashlib.sha256,
     ).hexdigest()
 
 
@@ -84,7 +113,9 @@ def init_execution_db():
         verification_status TEXT,
         result_message TEXT,
         executed_at TEXT,
-        evidence_hash TEXT
+        evidence_hash TEXT,
+        evidence_authentication_type TEXT,
+        evidence_key_id TEXT
     )
     """)
 
@@ -107,6 +138,8 @@ def init_execution_db():
         "result_message",
         "executed_at",
         "evidence_hash",
+        "evidence_authentication_type",
+        "evidence_key_id",
     ):
         if column_name not in existing_columns:
             cursor.execute(
@@ -235,7 +268,9 @@ def get_execution_actions():
         verification_status,
         result_message,
         executed_at,
-        evidence_hash
+        evidence_hash,
+        evidence_authentication_type,
+        evidence_key_id
     FROM remediation_actions
     ORDER BY id DESC
     """)
@@ -481,6 +516,11 @@ def execute_live_action(
             "This remediation action is already completed."
         )
 
+    evidence_hmac_key = _get_evidence_hmac_key()
+    evidence_key_id = _get_evidence_key_id(
+        evidence_hmac_key
+    )
+
     controlled_result = execute_controlled_action(
         action_type=action_type,
         finding=finding,
@@ -527,7 +567,8 @@ def execute_live_action(
     ):
         executed_at = str(datetime.now(UTC))
         evidence_hash = _calculate_execution_evidence_hash(
-            build_evidence("Failed", executed_at)
+            build_evidence("Failed", executed_at),
+            evidence_hmac_key,
         )
 
         cursor.execute(
@@ -542,7 +583,9 @@ def execute_live_action(
                 verification_status = ?,
                 result_message = ?,
                 executed_at = ?,
-                evidence_hash = ?
+                evidence_hash = ?,
+                evidence_authentication_type = ?,
+                evidence_key_id = ?
             WHERE id = ?
             """,
             (
@@ -556,6 +599,8 @@ def execute_live_action(
                 result_message,
                 executed_at,
                 evidence_hash,
+                EVIDENCE_AUTHENTICATION_TYPE,
+                evidence_key_id,
                 action_id,
             ),
         )
@@ -600,7 +645,9 @@ def execute_live_action(
                     verification_status = ?,
                     result_message = ?,
                     executed_at = ?,
-                    evidence_hash = ?
+                    evidence_hash = ?,
+                    evidence_authentication_type = ?,
+                    evidence_key_id = ?
                 WHERE id = ?
                 """,
                 (
@@ -614,6 +661,8 @@ def execute_live_action(
                     result_message,
                     executed_at,
                     evidence_hash,
+                    EVIDENCE_AUTHENTICATION_TYPE,
+                    evidence_key_id,
                     action_id,
                 ),
             )
@@ -649,7 +698,8 @@ def execute_live_action(
 
     executed_at = str(datetime.now(UTC))
     evidence_hash = _calculate_execution_evidence_hash(
-        build_evidence("Completed", executed_at)
+        build_evidence("Completed", executed_at),
+        evidence_hmac_key,
     )
 
     cursor.execute(
@@ -664,7 +714,9 @@ def execute_live_action(
             verification_status = ?,
             result_message = ?,
             executed_at = ?,
-            evidence_hash = ?
+            evidence_hash = ?,
+            evidence_authentication_type = ?,
+            evidence_key_id = ?
         WHERE id = ?
         """,
         (
@@ -678,6 +730,8 @@ def execute_live_action(
             result_message,
             executed_at,
             evidence_hash,
+            EVIDENCE_AUTHENTICATION_TYPE,
+            evidence_key_id,
             action_id,
         ),
     )
@@ -739,7 +793,9 @@ def verify_execution_evidence(action_id):
             verification_status,
             result_message,
             executed_at,
-            evidence_hash
+            evidence_hash,
+            evidence_authentication_type,
+            evidence_key_id
         FROM remediation_actions
         WHERE id = ?
         """,
@@ -771,6 +827,8 @@ def verify_execution_evidence(action_id):
         result_message,
         executed_at,
         stored_hash,
+        authentication_type,
+        stored_key_id,
     ) = row
 
     evidence = _build_execution_evidence(
@@ -792,22 +850,44 @@ def verify_execution_evidence(action_id):
         executed_at=executed_at,
     )
 
-    calculated_hash = _calculate_execution_evidence_hash(
-        evidence
-    )
+    calculated_hash = None
 
     if not stored_hash:
         integrity_status = "MISSING"
-    elif stored_hash == calculated_hash:
-        integrity_status = "VERIFIED"
+
+    elif authentication_type != EVIDENCE_AUTHENTICATION_TYPE:
+        integrity_status = "UNSUPPORTED"
+
     else:
-        integrity_status = "TAMPERED"
+        evidence_hmac_key = _get_evidence_hmac_key()
+        current_key_id = _get_evidence_key_id(
+            evidence_hmac_key
+        )
+
+        calculated_hash = _calculate_execution_evidence_hash(
+            evidence,
+            evidence_hmac_key,
+        )
+
+        if stored_key_id != current_key_id:
+            integrity_status = "KEY_MISMATCH"
+
+        elif hmac.compare_digest(
+            stored_hash,
+            calculated_hash,
+        ):
+            integrity_status = "VERIFIED"
+
+        else:
+            integrity_status = "TAMPERED"
 
     return {
         "action_id": action_id,
         "status": integrity_status,
         "stored_hash": stored_hash,
         "calculated_hash": calculated_hash,
+        "authentication_type": authentication_type,
+        "key_id": stored_key_id,
     }
 
 
