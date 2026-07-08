@@ -2987,6 +2987,7 @@ if page == "Execution Center":
         simulate_execution,
         simulate_all_approved_actions,
         execute_live_action,
+        verify_execution_evidence,
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
@@ -3067,6 +3068,7 @@ if page == "Execution Center":
         "Verification Status",
         "Result Message",
         "Executed At",
+        "Evidence Hash",
     ]
 
     if actions:
@@ -3311,6 +3313,39 @@ if page == "Execution Center":
             "**Execution Result:**",
             selected_action["Result Message"] or "Not Recorded",
         )
+        demo_write(
+            "**Evidence Hash:**",
+            selected_action["Evidence Hash"] or "Not Recorded",
+        )
+
+        try:
+            evidence_integrity = verify_execution_evidence(
+                int(selected_action_id)
+            )
+
+            integrity_status = evidence_integrity.get(
+                "status",
+                "UNKNOWN",
+            )
+
+            if integrity_status == "VERIFIED":
+                demo_success(
+                    "Execution evidence integrity verified."
+                )
+            elif integrity_status == "TAMPERED":
+                st.error(
+                    "Execution evidence integrity check failed. "
+                    "Stored evidence may have been modified."
+                )
+            else:
+                demo_warning(
+                    "No tamper-evident hash is available for this action."
+                )
+
+        except ValueError as error:
+            st.error(
+                f"Unable to verify execution evidence: {error}"
+            )
 
         st.subheader("Dry-Run Execution Plan")
 

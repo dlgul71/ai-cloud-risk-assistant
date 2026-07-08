@@ -509,3 +509,93 @@ def test_get_execution_actions_returns_structured_evidence(
         "S3 Block Public Access was enabled and verified.",
     )
     assert action[18] is not None
+    assert len(action[19]) == 64
+
+
+def test_live_action_persists_tamper_evident_hash(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-123",
+            "verification_request_id": "verify-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "VERIFIED"
+    assert len(integrity["stored_hash"]) == 64
+    assert integrity["stored_hash"] == integrity["calculated_hash"]
+
+
+def test_verify_execution_evidence_detects_tampering(
+    execution_database,
+    monkeypatch,
+):
+    action_id = insert_action(execution_database)
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "S3_BLOCK_PUBLIC_ACCESS",
+            "resource_id": "example-security-bucket",
+            "request_id": "request-123",
+            "verification_request_id": "verify-123",
+            "message": "S3 Block Public Access was enabled and verified.",
+        },
+    )
+
+    remediation_execution.execute_live_action(
+        action_id=action_id,
+        expected_account_id="123456789012",
+        s3_client=object(),
+        confirmation_phrase=CONFIRMATION,
+    )
+
+    connection = sqlite3.connect(execution_database)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE remediation_actions
+        SET result_message = ?
+        WHERE id = ?
+        """,
+        (
+            "Tampered remediation evidence.",
+            action_id,
+        ),
+    )
+    connection.commit()
+    connection.close()
+
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "TAMPERED"
+    assert integrity["stored_hash"] != integrity["calculated_hash"]

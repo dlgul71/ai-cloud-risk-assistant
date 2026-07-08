@@ -104,6 +104,7 @@ def build_security_context():
             ),
             "result_message": action[17] if len(action) > 17 else None,
             "executed_at": action[18] if len(action) > 18 else None,
+            "evidence_hash": action[19] if len(action) > 19 else None,
         })
 
     return {

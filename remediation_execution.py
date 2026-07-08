@@ -1,9 +1,62 @@
+import hashlib
+import json
 import sqlite3
 from datetime import datetime, UTC
 from remediation_audit import log_remediation_event
 from remediation_live_actions import execute_controlled_action
 
 DB_NAME = "remediation_actions.db"
+
+
+def _calculate_execution_evidence_hash(evidence):
+    canonical_evidence = json.dumps(
+        evidence,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+    return hashlib.sha256(
+        canonical_evidence.encode("utf-8")
+    ).hexdigest()
+
+
+def _build_execution_evidence(
+    action_id,
+    finding,
+    action_type,
+    approval_status,
+    execution_status,
+    execution_mode,
+    aws_account_id,
+    client_name,
+    role_arn,
+    adapter,
+    resource_id,
+    request_id,
+    verification_request_id,
+    verification_status,
+    result_message,
+    executed_at,
+):
+    return {
+        "action_id": action_id,
+        "finding": finding,
+        "action_type": action_type,
+        "approval_status": approval_status,
+        "execution_status": execution_status,
+        "execution_mode": execution_mode,
+        "aws_account_id": aws_account_id,
+        "client_name": client_name,
+        "role_arn": role_arn,
+        "adapter": adapter,
+        "resource_id": resource_id,
+        "request_id": request_id,
+        "verification_request_id": verification_request_id,
+        "verification_status": verification_status,
+        "result_message": result_message,
+        "executed_at": executed_at,
+    }
 
 
 def init_execution_db():
@@ -30,7 +83,8 @@ def init_execution_db():
         verification_request_id TEXT,
         verification_status TEXT,
         result_message TEXT,
-        executed_at TEXT
+        executed_at TEXT,
+        evidence_hash TEXT
     )
     """)
 
@@ -52,6 +106,7 @@ def init_execution_db():
         "verification_status",
         "result_message",
         "executed_at",
+        "evidence_hash",
     ):
         if column_name not in existing_columns:
             cursor.execute(
@@ -179,7 +234,8 @@ def get_execution_actions():
         verification_request_id,
         verification_status,
         result_message,
-        executed_at
+        executed_at,
+        evidence_hash
     FROM remediation_actions
     ORDER BY id DESC
     """)
@@ -372,7 +428,9 @@ def execute_live_action(
             action_type,
             approval_status,
             execution_status,
-            aws_account_id
+            aws_account_id,
+            client_name,
+            role_arn
         FROM remediation_actions
         WHERE id = ?
         """,
@@ -393,6 +451,8 @@ def execute_live_action(
         approval_status,
         execution_status,
         bound_account_id,
+        bound_client_name,
+        bound_role_arn,
     ) = action
 
     if not bound_account_id:
@@ -437,10 +497,39 @@ def execute_live_action(
         "Live remediation did not complete.",
     )
 
+    def build_evidence(execution_status_value, executed_at_value):
+        return _build_execution_evidence(
+            action_id=action_id,
+            finding=finding,
+            action_type=action_type,
+            approval_status=approval_status,
+            execution_status=execution_status_value,
+            execution_mode="Live",
+            aws_account_id=bound_account_id,
+            client_name=bound_client_name,
+            role_arn=bound_role_arn,
+            adapter=controlled_result.get("adapter"),
+            resource_id=controlled_result.get("resource_id"),
+            request_id=controlled_result.get("request_id"),
+            verification_request_id=controlled_result.get(
+                "verification_request_id"
+            ),
+            verification_status=controlled_result.get(
+                "verification_status"
+            ),
+            result_message=result_message,
+            executed_at=executed_at_value,
+        )
+
     if (
         result_status == "EXECUTED"
         and controlled_result.get("verification_status") != "VERIFIED"
     ):
+        executed_at = str(datetime.now(UTC))
+        evidence_hash = _calculate_execution_evidence_hash(
+            build_evidence("Failed", executed_at)
+        )
+
         cursor.execute(
             """
             UPDATE remediation_actions
@@ -452,7 +541,8 @@ def execute_live_action(
                 verification_request_id = ?,
                 verification_status = ?,
                 result_message = ?,
-                executed_at = ?
+                executed_at = ?,
+                evidence_hash = ?
             WHERE id = ?
             """,
             (
@@ -464,7 +554,8 @@ def execute_live_action(
                 controlled_result.get("verification_request_id"),
                 controlled_result.get("verification_status"),
                 result_message,
-                str(datetime.now(UTC)),
+                executed_at,
+                evidence_hash,
                 action_id,
             ),
         )
@@ -492,6 +583,11 @@ def execute_live_action(
 
     if result_status != "EXECUTED":
         if result_status == "FAILED":
+            executed_at = str(datetime.now(UTC))
+            evidence_hash = _calculate_execution_evidence_hash(
+                build_evidence("Failed", executed_at)
+            )
+
             cursor.execute(
                 """
                 UPDATE remediation_actions
@@ -503,7 +599,8 @@ def execute_live_action(
                     verification_request_id = ?,
                     verification_status = ?,
                     result_message = ?,
-                    executed_at = ?
+                    executed_at = ?,
+                    evidence_hash = ?
                 WHERE id = ?
                 """,
                 (
@@ -515,7 +612,8 @@ def execute_live_action(
                     controlled_result.get("verification_request_id"),
                     controlled_result.get("verification_status"),
                     result_message,
-                    str(datetime.now(UTC)),
+                    executed_at,
+                    evidence_hash,
                     action_id,
                 ),
             )
@@ -549,6 +647,11 @@ def execute_live_action(
         connection.close()
         raise ValueError(result_message)
 
+    executed_at = str(datetime.now(UTC))
+    evidence_hash = _calculate_execution_evidence_hash(
+        build_evidence("Completed", executed_at)
+    )
+
     cursor.execute(
         """
         UPDATE remediation_actions
@@ -560,7 +663,8 @@ def execute_live_action(
             verification_request_id = ?,
             verification_status = ?,
             result_message = ?,
-            executed_at = ?
+            executed_at = ?,
+            evidence_hash = ?
         WHERE id = ?
         """,
         (
@@ -572,7 +676,8 @@ def execute_live_action(
             controlled_result.get("verification_request_id"),
             controlled_result.get("verification_status"),
             result_message,
-            str(datetime.now(UTC)),
+            executed_at,
+            evidence_hash,
             action_id,
         ),
     )
@@ -609,6 +714,102 @@ def execute_live_action(
         ),
         "message": result_message,
     }
+
+def verify_execution_evidence(action_id):
+    init_execution_db()
+
+    connection = sqlite3.connect(DB_NAME)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            finding,
+            action_type,
+            approval_status,
+            execution_status,
+            execution_mode,
+            aws_account_id,
+            client_name,
+            role_arn,
+            adapter,
+            resource_id,
+            request_id,
+            verification_request_id,
+            verification_status,
+            result_message,
+            executed_at,
+            evidence_hash
+        FROM remediation_actions
+        WHERE id = ?
+        """,
+        (action_id,),
+    )
+
+    row = cursor.fetchone()
+    connection.close()
+
+    if not row:
+        raise ValueError(
+            f"Action ID {action_id} was not found."
+        )
+
+    (
+        finding,
+        action_type,
+        approval_status,
+        execution_status,
+        execution_mode,
+        aws_account_id,
+        client_name,
+        role_arn,
+        adapter,
+        resource_id,
+        request_id,
+        verification_request_id,
+        verification_status,
+        result_message,
+        executed_at,
+        stored_hash,
+    ) = row
+
+    evidence = _build_execution_evidence(
+        action_id=action_id,
+        finding=finding,
+        action_type=action_type,
+        approval_status=approval_status,
+        execution_status=execution_status,
+        execution_mode=execution_mode,
+        aws_account_id=aws_account_id,
+        client_name=client_name,
+        role_arn=role_arn,
+        adapter=adapter,
+        resource_id=resource_id,
+        request_id=request_id,
+        verification_request_id=verification_request_id,
+        verification_status=verification_status,
+        result_message=result_message,
+        executed_at=executed_at,
+    )
+
+    calculated_hash = _calculate_execution_evidence_hash(
+        evidence
+    )
+
+    if not stored_hash:
+        integrity_status = "MISSING"
+    elif stored_hash == calculated_hash:
+        integrity_status = "VERIFIED"
+    else:
+        integrity_status = "TAMPERED"
+
+    return {
+        "action_id": action_id,
+        "status": integrity_status,
+        "stored_hash": stored_hash,
+        "calculated_hash": calculated_hash,
+    }
+
 
 def create_actions_from_remediation_plan(
     remediation_plan,
