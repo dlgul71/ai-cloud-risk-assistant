@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from app_config import settings
+from access_control import accessible_pages, normalize_role
 from app_logging import configure_logging, get_logger
 from health_checks import run_health_checks
 from demo_mode import (
@@ -228,6 +229,9 @@ def check_password():
             st.rerun()
 
     if st.session_state["authenticated"]:
+        st.session_state["user_role"] = normalize_role(
+            settings.app_role
+        )
         return True
 
     st.title("🛡️ DGS Sentinel AI Login")
@@ -250,6 +254,9 @@ def check_password():
         ):
             st.session_state["authenticated"] = True
             st.session_state["login_time"] = datetime.now()
+            st.session_state["user_role"] = normalize_role(
+                settings.app_role
+            )
             st.rerun()
         else:
             st.error("Invalid username or password")
@@ -946,10 +953,15 @@ with st.sidebar:
     if st.button("Logout"):
         st.session_state["authenticated"] = False
         st.session_state["login_time"] = None
+        st.session_state.pop("user_role", None)
         st.rerun()
 
-    page = st.radio(
-        "Navigation",
+    st.caption(
+        f"Role: {st.session_state.get('user_role', 'Viewer')}"
+    )
+
+    navigation_pages = accessible_pages(
+        st.session_state.get("user_role"),
         [
             "Dashboard",
             "Executive Dashboard",
@@ -962,8 +974,13 @@ with st.sidebar:
             "Client Accounts",
             "Client Security Dashboard",
             "Asset Dashboard",
-            "System Health"
+            "System Health",
         ],
+    )
+
+    page = st.radio(
+        "Navigation",
+        navigation_pages,
         key="main_navigation"
     )
     st.sidebar.write("Selected page:", page)
