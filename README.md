@@ -684,7 +684,7 @@ Current security capabilities include:
 
 ~~~bash
 export APP_USERNAME="administrator"
-export APP_PASSWORD="replace-with-a-secure-password"
+export APP_PASSWORD="replace-with-a-secure-password"  # pragma: allowlist secret
 export DGS_APP_ROLE="Administrator"
 ~~~
 

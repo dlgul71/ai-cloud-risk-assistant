@@ -217,7 +217,7 @@ def test_app_role_reads_environment_value(
 def test_safe_summary_reports_role_without_credentials():
     settings = app_config.AppSettings(
         app_username="test-user",
-        app_password="test-password",
+        app_password="test-password",  # pragma: allowlist secret
         app_role="Viewer",
     )
 
