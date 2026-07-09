@@ -180,3 +180,50 @@ def test_safe_summary_reports_previous_key_count_without_secrets():
     assert "current-phase22-key" not in rendered_summary
     assert "previous-phase22-key-one" not in rendered_summary
     assert summary["remediation_evidence_previous_key_count"] == 2
+
+
+def test_app_role_defaults_to_administrator(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "DGS_APP_ROLE",
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        app_config,
+        "_streamlit_secret",
+        lambda key: None,
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.app_role == "Administrator"
+
+
+def test_app_role_reads_environment_value(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "DGS_APP_ROLE",
+        "Analyst",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.app_role == "Analyst"
+
+
+def test_safe_summary_reports_role_without_credentials():
+    settings = app_config.AppSettings(
+        app_username="test-user",
+        app_password="test-password",
+        app_role="Viewer",
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert summary["app_role"] == "Viewer"
+    assert "test-user" not in rendered_summary
+    assert "test-password" not in rendered_summary
