@@ -11,6 +11,8 @@ from app_config import settings
 from access_control import (
     PERMISSION_APPROVE_REMEDIATION,
     PERMISSION_EXECUTE_REMEDIATION,
+    PERMISSION_MANAGE_CLIENTS,
+    PERMISSION_RUN_SCANS,
     accessible_pages,
     has_permission,
     normalize_role,
@@ -4886,6 +4888,17 @@ if page == "Ask Sentinel AI":
 
 if page == "Client Accounts":
 
+    can_manage_clients = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_MANAGE_CLIENTS,
+    )
+
+    if not can_manage_clients:
+        st.error(
+            "Your role is not authorized to manage client accounts."
+        )
+        st.stop()
+
     st.title("🛡️ DGS Sentinel AI")
     demo_caption("Client Account Management")
 
@@ -5093,6 +5106,16 @@ ai_analysis = generate_ai_analysis(summary, remediation_playbook)
 
 st.subheader("Manual Autonomous Scan")
 
+can_run_scans = has_permission(
+    st.session_state.get("user_role"),
+    PERMISSION_RUN_SCANS,
+)
+
+if not can_run_scans:
+    demo_info(
+        "Your role has read-only access and cannot run security scans."
+    )
+
 if "last_scan_status" not in st.session_state:
     st.session_state["last_scan_status"] = "Idle"
 
@@ -5102,8 +5125,15 @@ if "last_scan_time" not in st.session_state:
 if st.button(
     "Run DGS Sentinel Scan Now",
     type="primary",
-    key="run_dgs_sentinel_scan_now"
+    key="run_dgs_sentinel_scan_now",
+    disabled=not can_run_scans,
 ):
+
+    if not can_run_scans:
+        st.error(
+            "Your role is not authorized to run security scans."
+        )
+        st.stop()
 
     if selected_client_data:
         demo_info(
