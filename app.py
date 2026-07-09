@@ -8,6 +8,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from app_config import settings
+from access_control import (
+    PERMISSION_APPROVE_REMEDIATION,
+    PERMISSION_EXECUTE_REMEDIATION,
+    PERMISSION_MANAGE_CLIENTS,
+    PERMISSION_RUN_SCANS,
+    accessible_pages,
+    has_permission,
+    normalize_role,
+)
 from app_logging import configure_logging, get_logger
 from health_checks import run_health_checks
 from demo_mode import (
@@ -228,6 +237,9 @@ def check_password():
             st.rerun()
 
     if st.session_state["authenticated"]:
+        st.session_state["user_role"] = normalize_role(
+            settings.app_role
+        )
         return True
 
     st.title("🛡️ DGS Sentinel AI Login")
@@ -250,6 +262,9 @@ def check_password():
         ):
             st.session_state["authenticated"] = True
             st.session_state["login_time"] = datetime.now()
+            st.session_state["user_role"] = normalize_role(
+                settings.app_role
+            )
             st.rerun()
         else:
             st.error("Invalid username or password")
@@ -946,10 +961,15 @@ with st.sidebar:
     if st.button("Logout"):
         st.session_state["authenticated"] = False
         st.session_state["login_time"] = None
+        st.session_state.pop("user_role", None)
         st.rerun()
 
-    page = st.radio(
-        "Navigation",
+    st.caption(
+        f"Role: {st.session_state.get('user_role', 'Viewer')}"
+    )
+
+    navigation_pages = accessible_pages(
+        st.session_state.get("user_role"),
         [
             "Dashboard",
             "Executive Dashboard",
@@ -962,8 +982,13 @@ with st.sidebar:
             "Client Accounts",
             "Client Security Dashboard",
             "Asset Dashboard",
-            "System Health"
+            "System Health",
         ],
+    )
+
+    page = st.radio(
+        "Navigation",
+        navigation_pages,
         key="main_navigation"
     )
     st.sidebar.write("Selected page:", page)
@@ -2666,6 +2691,11 @@ if page == "Remediation Center":
     from remediation_db import get_remediation_items, update_remediation_status
     import pandas as pd
 
+    can_update_remediation = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_APPROVE_REMEDIATION,
+    )
+
     st.title("Remediation Center")
     demo_caption("Autonomous remediation recommendations generated from AWS findings")
 
@@ -2958,20 +2988,34 @@ if page == "Remediation Center":
                 "In Progress",
                 "Resolved",
                 "Accepted Risk"
-            ]
+            ],
+            disabled=not can_update_remediation,
         )
 
-        if st.button("Update Remediation Status"):
-            update_remediation_status(
-                int(selected_item_id),
-                new_status
+        if not can_update_remediation:
+            demo_info(
+                "Your role has read-only access to remediation status."
             )
 
-            demo_success(
-                f"Remediation item {selected_item_id} updated to {new_status}."
-            )
+        if st.button(
+            "Update Remediation Status",
+            disabled=not can_update_remediation,
+        ):
+            if not can_update_remediation:
+                st.error(
+                    "Your role is not authorized to update remediation status."
+                )
+            else:
+                update_remediation_status(
+                    int(selected_item_id),
+                    new_status
+                )
 
-            st.rerun()
+                demo_success(
+                    f"Remediation item {selected_item_id} updated to {new_status}."
+                )
+
+                st.rerun()
 
     else:
         demo_info("No remediation items found yet. Run a scan to generate recommendations.")
@@ -3000,6 +3044,16 @@ if page == "Execution Center":
 
     st.title("Execution Center")
     demo_caption("Autonomous remediation execution queue")
+
+    current_user_role = st.session_state.get("user_role")
+    can_approve_remediation = has_permission(
+        current_user_role,
+        PERMISSION_APPROVE_REMEDIATION,
+    )
+    can_execute_remediation = has_permission(
+        current_user_role,
+        PERMISSION_EXECUTE_REMEDIATION,
+    )
 
     st.subheader("Remediation Guardrail Status")
 
@@ -3442,34 +3496,62 @@ if page == "Execution Center":
         approval_status = st.selectbox(
             "Approval status",
             approval_options,
-            index=approval_index
+            index=approval_index,
+            disabled=not can_approve_remediation,
         )
 
         execution_status = st.selectbox(
             "Execution status",
             execution_options,
-            index=execution_index
+            index=execution_index,
+            disabled=not can_execute_remediation,
         )
 
-        if st.button("Update Execution Action"):
-            try:
-                update_execution_action(
-                    int(selected_action_id),
-                    approval_status=approval_status,
-                    execution_status=execution_status
+        can_update_execution_action = (
+            can_approve_remediation
+            or can_execute_remediation
+        )
+
+        if not can_update_execution_action:
+            demo_info(
+                "Your role has read-only access to remediation actions."
+            )
+
+        if st.button(
+            "Update Execution Action",
+            disabled=not can_update_execution_action,
+        ):
+            if not can_update_execution_action:
+                st.error(
+                    "Your role is not authorized to update remediation actions."
                 )
+            else:
+                try:
+                    update_execution_action(
+                        int(selected_action_id),
+                        approval_status=(
+                            approval_status
+                            if can_approve_remediation
+                            else current_approval
+                        ),
+                        execution_status=(
+                            execution_status
+                            if can_execute_remediation
+                            else current_execution
+                        ),
+                    )
 
-                demo_success(
-                    f"Execution action {selected_action_id} updated."
-                )
+                    demo_success(
+                        f"Execution action {selected_action_id} updated."
+                    )
 
-                st.rerun()
+                    st.rerun()
 
-            except ValueError as e:
-                st.error(f"Workflow update blocked: {e}")
+                except ValueError as e:
+                    st.error(f"Workflow update blocked: {e}")
 
-            except Exception as e:
-                st.error(f"Unable to update execution action: {e}")
+                except Exception as e:
+                    st.error(f"Unable to update execution action: {e}")
 
         st.subheader("Run Approved Simulation")
 
@@ -3478,23 +3560,31 @@ if page == "Execution Center":
             "It validates the remediation workflow and creates an audit record."
         )
 
-        if st.button("Run Approved Simulation"):
-            try:
-                simulation_result = simulate_execution(
-                    int(selected_action_id)
+        if st.button(
+            "Run Approved Simulation",
+            disabled=not can_execute_remediation,
+        ):
+            if not can_execute_remediation:
+                st.error(
+                    "Your role is not authorized to execute remediation."
                 )
+            else:
+                try:
+                    simulation_result = simulate_execution(
+                        int(selected_action_id)
+                    )
 
-                demo_success(
-                    f"Simulation completed for action "
-                    f"{simulation_result.get('action_id')}."
-                )
+                    demo_success(
+                        f"Simulation completed for action "
+                        f"{simulation_result.get('action_id')}."
+                    )
 
-                demo_json(simulation_result)
+                    demo_json(simulation_result)
 
-                st.rerun()
+                    st.rerun()
 
-            except Exception as e:
-                st.error(f"Simulation failed: {e}")
+                except Exception as e:
+                    st.error(f"Simulation failed: {e}")
 
         st.subheader("Guarded Live S3 Remediation")
 
@@ -3504,7 +3594,12 @@ if page == "Execution Center":
             "authorization phrase."
         )
 
-        if not GUARDRAILS.live_execution_enabled:
+        if not can_execute_remediation:
+            demo_info(
+                "Your role is not authorized to execute live remediation."
+            )
+
+        elif not GUARDRAILS.live_execution_enabled:
             demo_info(
                 "Live remediation is disabled. Set "
                 "DGS_LIVE_REMEDIATION_ENABLED=true only in an authorized "
@@ -3646,23 +3741,31 @@ if page == "Execution Center":
             "Simulation mode does not modify AWS resources."
         )
 
-        if st.button("Run All Approved Simulations"):
-            bulk_results = simulate_all_approved_actions()
-
-            if bulk_results:
-                demo_success(
-                    f"Processed {len(bulk_results)} approved remediation actions."
+        if st.button(
+            "Run All Approved Simulations",
+            disabled=not can_execute_remediation,
+        ):
+            if not can_execute_remediation:
+                st.error(
+                    "Your role is not authorized to execute remediation."
                 )
-
-                demo_dataframe(
-                    pd.DataFrame(bulk_results),
-                    width="stretch"
-                )
-
-                st.rerun()
-
             else:
-                demo_info("No approved pending actions are available.")
+                bulk_results = simulate_all_approved_actions()
+
+                if bulk_results:
+                    demo_success(
+                        f"Processed {len(bulk_results)} approved remediation actions."
+                    )
+
+                    demo_dataframe(
+                        pd.DataFrame(bulk_results),
+                        width="stretch"
+                    )
+
+                    st.rerun()
+
+                else:
+                    demo_info("No approved pending actions are available.")
 
         st.subheader("Execution Audit Trail")
 
@@ -4118,17 +4221,30 @@ if page == "Axonius CAASM Dashboard":
             load_caasm_snapshots
         )
 
-        if st.button("Save Current CAASM Snapshot"):
-            snapshot_path = save_caasm_snapshot(
-                connector_mode=connector_mode,
-                metrics=metrics,
-                identity_governance_metrics=identity_governance_metrics,
-                coverage_gap_metrics=coverage_gap_metrics,
-                policy_findings=policy_findings,
-                coverage_gap_findings=coverage_gap_findings
-            )
+        can_save_caasm_snapshot = has_permission(
+            st.session_state.get("user_role"),
+            PERMISSION_RUN_SCANS,
+        )
 
-            demo_success(f"CAASM snapshot saved: {snapshot_path}")
+        if st.button(
+            "Save Current CAASM Snapshot",
+            disabled=not can_save_caasm_snapshot,
+        ):
+            if not can_save_caasm_snapshot:
+                st.error(
+                    "Your role is not authorized to save CAASM snapshots."
+                )
+            else:
+                snapshot_path = save_caasm_snapshot(
+                    connector_mode=connector_mode,
+                    metrics=metrics,
+                    identity_governance_metrics=identity_governance_metrics,
+                    coverage_gap_metrics=coverage_gap_metrics,
+                    policy_findings=policy_findings,
+                    coverage_gap_findings=coverage_gap_findings
+                )
+
+                demo_success(f"CAASM snapshot saved: {snapshot_path}")
 
         caasm_snapshots = load_caasm_snapshots()
 
@@ -4804,6 +4920,17 @@ if page == "Ask Sentinel AI":
 
 if page == "Client Accounts":
 
+    can_manage_clients = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_MANAGE_CLIENTS,
+    )
+
+    if not can_manage_clients:
+        st.error(
+            "Your role is not authorized to manage client accounts."
+        )
+        st.stop()
+
     st.title("🛡️ DGS Sentinel AI")
     demo_caption("Client Account Management")
 
@@ -5011,6 +5138,16 @@ ai_analysis = generate_ai_analysis(summary, remediation_playbook)
 
 st.subheader("Manual Autonomous Scan")
 
+can_run_scans = has_permission(
+    st.session_state.get("user_role"),
+    PERMISSION_RUN_SCANS,
+)
+
+if not can_run_scans:
+    demo_info(
+        "Your role has read-only access and cannot run security scans."
+    )
+
 if "last_scan_status" not in st.session_state:
     st.session_state["last_scan_status"] = "Idle"
 
@@ -5020,8 +5157,15 @@ if "last_scan_time" not in st.session_state:
 if st.button(
     "Run DGS Sentinel Scan Now",
     type="primary",
-    key="run_dgs_sentinel_scan_now"
+    key="run_dgs_sentinel_scan_now",
+    disabled=not can_run_scans,
 ):
+
+    if not can_run_scans:
+        st.error(
+            "Your role is not authorized to run security scans."
+        )
+        st.stop()
 
     if selected_client_data:
         demo_info(

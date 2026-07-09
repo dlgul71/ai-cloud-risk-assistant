@@ -183,6 +183,15 @@ class AppSettings:
         ),
         repr=False,
     )
+    app_role: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "DGS_APP_ROLE",
+                "auth.role",
+                default="Administrator",
+            )
+        )
+    )
     remediation_evidence_hmac_key: str | None = field(
         default_factory=lambda: get_setting(
             "DGS_REMEDIATION_EVIDENCE_HMAC_KEY"
@@ -216,6 +225,7 @@ class AppSettings:
                 self.app_username
                 and self.app_password
             ),
+            "app_role": self.app_role,
             "remediation_evidence_hmac_configured": bool(
                 self.remediation_evidence_hmac_key
             ),
