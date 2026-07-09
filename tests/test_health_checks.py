@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import closing
+from types import SimpleNamespace
 
 import health_checks
 
@@ -134,3 +135,71 @@ def test_health_summary_reports_failure(
 
     assert results["overall_status"] == "FAIL"
     assert results["fail_count"] == 1
+
+
+def test_configuration_fails_when_live_remediation_lacks_hmac_key(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "settings",
+        SimpleNamespace(
+            safe_summary=lambda: {
+                "app_env": "production",
+                "aws_region": "us-east-1",
+                "openai_configured": True,
+                "app_credentials_configured": True,
+                "live_remediation_enabled": True,
+                "remediation_evidence_hmac_configured": False,
+                "remediation_evidence_previous_key_count": 0,
+            },
+        ),
+    )
+
+    results = health_checks.check_configuration()
+
+    signing_result = next(
+        result
+        for result in results
+        if result["Component"] == "Remediation evidence signing"
+    )
+
+    assert signing_result["Status"] == "FAIL"
+    assert "HMAC signing key is missing" in signing_result["Detail"]
+
+
+def test_configuration_passes_with_hmac_key_and_reports_previous_keys(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "settings",
+        SimpleNamespace(
+            safe_summary=lambda: {
+                "app_env": "production",
+                "aws_region": "us-east-1",
+                "openai_configured": True,
+                "app_credentials_configured": True,
+                "live_remediation_enabled": True,
+                "remediation_evidence_hmac_configured": True,
+                "remediation_evidence_previous_key_count": 2,
+            },
+        ),
+    )
+
+    results = health_checks.check_configuration()
+
+    signing_result = next(
+        result
+        for result in results
+        if result["Component"] == "Remediation evidence signing"
+    )
+    previous_keys_result = next(
+        result
+        for result in results
+        if result["Component"] == "Previous remediation evidence keys"
+    )
+
+    assert signing_result["Status"] == "PASS"
+    assert previous_keys_result["Status"] == "PASS"
+    assert previous_keys_result["Detail"] == "2 previous key(s) configured"

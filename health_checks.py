@@ -109,6 +109,47 @@ def check_configuration() -> list[dict[str, str]]:
         )
     )
 
+    evidence_hmac_configured = bool(
+        summary["remediation_evidence_hmac_configured"]
+    )
+    live_remediation_enabled = bool(
+        summary["live_remediation_enabled"]
+    )
+
+    if evidence_hmac_configured:
+        evidence_hmac_status = "PASS"
+        evidence_hmac_detail = "Current HMAC signing key configured"
+    elif live_remediation_enabled:
+        evidence_hmac_status = "FAIL"
+        evidence_hmac_detail = (
+            "Live remediation is enabled, but the evidence "
+            "HMAC signing key is missing"
+        )
+    else:
+        evidence_hmac_status = "WARN"
+        evidence_hmac_detail = (
+            "Evidence HMAC signing key is not configured"
+        )
+
+    results.append(
+        _result(
+            "Remediation evidence signing",
+            evidence_hmac_status,
+            evidence_hmac_detail,
+        )
+    )
+
+    results.append(
+        _result(
+            "Previous remediation evidence keys",
+            "PASS",
+            (
+                f"{summary['remediation_evidence_previous_key_count']} "
+                "previous key(s) configured"
+            ),
+        )
+    )
+
     return results
 
 
