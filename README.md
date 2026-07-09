@@ -683,8 +683,8 @@ Current security capabilities include:
 ## Application Authentication Configuration
 
 ~~~bash
-export DGS_APP_USERNAME="administrator"
-export DGS_APP_PASSWORD="replace-with-a-secure-password"
+export APP_USERNAME="administrator"
+export APP_PASSWORD="replace-with-a-secure-password"
 export DGS_APP_ROLE="Administrator"
 ~~~
 
