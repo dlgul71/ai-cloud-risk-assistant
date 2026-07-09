@@ -8,7 +8,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from app_config import settings
-from access_control import accessible_pages, normalize_role
+from access_control import (
+    PERMISSION_APPROVE_REMEDIATION,
+    PERMISSION_EXECUTE_REMEDIATION,
+    accessible_pages,
+    has_permission,
+    normalize_role,
+)
 from app_logging import configure_logging, get_logger
 from health_checks import run_health_checks
 from demo_mode import (
@@ -3018,6 +3024,16 @@ if page == "Execution Center":
     st.title("Execution Center")
     demo_caption("Autonomous remediation execution queue")
 
+    current_user_role = st.session_state.get("user_role")
+    can_approve_remediation = has_permission(
+        current_user_role,
+        PERMISSION_APPROVE_REMEDIATION,
+    )
+    can_execute_remediation = has_permission(
+        current_user_role,
+        PERMISSION_EXECUTE_REMEDIATION,
+    )
+
     st.subheader("Remediation Guardrail Status")
 
     guardrail_col1, guardrail_col2, guardrail_col3 = st.columns(3)
@@ -3459,34 +3475,62 @@ if page == "Execution Center":
         approval_status = st.selectbox(
             "Approval status",
             approval_options,
-            index=approval_index
+            index=approval_index,
+            disabled=not can_approve_remediation,
         )
 
         execution_status = st.selectbox(
             "Execution status",
             execution_options,
-            index=execution_index
+            index=execution_index,
+            disabled=not can_execute_remediation,
         )
 
-        if st.button("Update Execution Action"):
-            try:
-                update_execution_action(
-                    int(selected_action_id),
-                    approval_status=approval_status,
-                    execution_status=execution_status
+        can_update_execution_action = (
+            can_approve_remediation
+            or can_execute_remediation
+        )
+
+        if not can_update_execution_action:
+            demo_info(
+                "Your role has read-only access to remediation actions."
+            )
+
+        if st.button(
+            "Update Execution Action",
+            disabled=not can_update_execution_action,
+        ):
+            if not can_update_execution_action:
+                st.error(
+                    "Your role is not authorized to update remediation actions."
                 )
+            else:
+                try:
+                    update_execution_action(
+                        int(selected_action_id),
+                        approval_status=(
+                            approval_status
+                            if can_approve_remediation
+                            else current_approval
+                        ),
+                        execution_status=(
+                            execution_status
+                            if can_execute_remediation
+                            else current_execution
+                        ),
+                    )
 
-                demo_success(
-                    f"Execution action {selected_action_id} updated."
-                )
+                    demo_success(
+                        f"Execution action {selected_action_id} updated."
+                    )
 
-                st.rerun()
+                    st.rerun()
 
-            except ValueError as e:
-                st.error(f"Workflow update blocked: {e}")
+                except ValueError as e:
+                    st.error(f"Workflow update blocked: {e}")
 
-            except Exception as e:
-                st.error(f"Unable to update execution action: {e}")
+                except Exception as e:
+                    st.error(f"Unable to update execution action: {e}")
 
         st.subheader("Run Approved Simulation")
 
@@ -3495,23 +3539,31 @@ if page == "Execution Center":
             "It validates the remediation workflow and creates an audit record."
         )
 
-        if st.button("Run Approved Simulation"):
-            try:
-                simulation_result = simulate_execution(
-                    int(selected_action_id)
+        if st.button(
+            "Run Approved Simulation",
+            disabled=not can_execute_remediation,
+        ):
+            if not can_execute_remediation:
+                st.error(
+                    "Your role is not authorized to execute remediation."
                 )
+            else:
+                try:
+                    simulation_result = simulate_execution(
+                        int(selected_action_id)
+                    )
 
-                demo_success(
-                    f"Simulation completed for action "
-                    f"{simulation_result.get('action_id')}."
-                )
+                    demo_success(
+                        f"Simulation completed for action "
+                        f"{simulation_result.get('action_id')}."
+                    )
 
-                demo_json(simulation_result)
+                    demo_json(simulation_result)
 
-                st.rerun()
+                    st.rerun()
 
-            except Exception as e:
-                st.error(f"Simulation failed: {e}")
+                except Exception as e:
+                    st.error(f"Simulation failed: {e}")
 
         st.subheader("Guarded Live S3 Remediation")
 
@@ -3521,7 +3573,12 @@ if page == "Execution Center":
             "authorization phrase."
         )
 
-        if not GUARDRAILS.live_execution_enabled:
+        if not can_execute_remediation:
+            demo_info(
+                "Your role is not authorized to execute live remediation."
+            )
+
+        elif not GUARDRAILS.live_execution_enabled:
             demo_info(
                 "Live remediation is disabled. Set "
                 "DGS_LIVE_REMEDIATION_ENABLED=true only in an authorized "
@@ -3663,23 +3720,31 @@ if page == "Execution Center":
             "Simulation mode does not modify AWS resources."
         )
 
-        if st.button("Run All Approved Simulations"):
-            bulk_results = simulate_all_approved_actions()
-
-            if bulk_results:
-                demo_success(
-                    f"Processed {len(bulk_results)} approved remediation actions."
+        if st.button(
+            "Run All Approved Simulations",
+            disabled=not can_execute_remediation,
+        ):
+            if not can_execute_remediation:
+                st.error(
+                    "Your role is not authorized to execute remediation."
                 )
-
-                demo_dataframe(
-                    pd.DataFrame(bulk_results),
-                    width="stretch"
-                )
-
-                st.rerun()
-
             else:
-                demo_info("No approved pending actions are available.")
+                bulk_results = simulate_all_approved_actions()
+
+                if bulk_results:
+                    demo_success(
+                        f"Processed {len(bulk_results)} approved remediation actions."
+                    )
+
+                    demo_dataframe(
+                        pd.DataFrame(bulk_results),
+                        width="stretch"
+                    )
+
+                    st.rerun()
+
+                else:
+                    demo_info("No approved pending actions are available.")
 
         st.subheader("Execution Audit Trail")
 
