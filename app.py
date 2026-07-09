@@ -2691,6 +2691,11 @@ if page == "Remediation Center":
     from remediation_db import get_remediation_items, update_remediation_status
     import pandas as pd
 
+    can_update_remediation = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_APPROVE_REMEDIATION,
+    )
+
     st.title("Remediation Center")
     demo_caption("Autonomous remediation recommendations generated from AWS findings")
 
@@ -2983,20 +2988,34 @@ if page == "Remediation Center":
                 "In Progress",
                 "Resolved",
                 "Accepted Risk"
-            ]
+            ],
+            disabled=not can_update_remediation,
         )
 
-        if st.button("Update Remediation Status"):
-            update_remediation_status(
-                int(selected_item_id),
-                new_status
+        if not can_update_remediation:
+            demo_info(
+                "Your role has read-only access to remediation status."
             )
 
-            demo_success(
-                f"Remediation item {selected_item_id} updated to {new_status}."
-            )
+        if st.button(
+            "Update Remediation Status",
+            disabled=not can_update_remediation,
+        ):
+            if not can_update_remediation:
+                st.error(
+                    "Your role is not authorized to update remediation status."
+                )
+            else:
+                update_remediation_status(
+                    int(selected_item_id),
+                    new_status
+                )
 
-            st.rerun()
+                demo_success(
+                    f"Remediation item {selected_item_id} updated to {new_status}."
+                )
+
+                st.rerun()
 
     else:
         demo_info("No remediation items found yet. Run a scan to generate recommendations.")
