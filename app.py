@@ -4221,17 +4221,30 @@ if page == "Axonius CAASM Dashboard":
             load_caasm_snapshots
         )
 
-        if st.button("Save Current CAASM Snapshot"):
-            snapshot_path = save_caasm_snapshot(
-                connector_mode=connector_mode,
-                metrics=metrics,
-                identity_governance_metrics=identity_governance_metrics,
-                coverage_gap_metrics=coverage_gap_metrics,
-                policy_findings=policy_findings,
-                coverage_gap_findings=coverage_gap_findings
-            )
+        can_save_caasm_snapshot = has_permission(
+            st.session_state.get("user_role"),
+            PERMISSION_RUN_SCANS,
+        )
 
-            demo_success(f"CAASM snapshot saved: {snapshot_path}")
+        if st.button(
+            "Save Current CAASM Snapshot",
+            disabled=not can_save_caasm_snapshot,
+        ):
+            if not can_save_caasm_snapshot:
+                st.error(
+                    "Your role is not authorized to save CAASM snapshots."
+                )
+            else:
+                snapshot_path = save_caasm_snapshot(
+                    connector_mode=connector_mode,
+                    metrics=metrics,
+                    identity_governance_metrics=identity_governance_metrics,
+                    coverage_gap_metrics=coverage_gap_metrics,
+                    policy_findings=policy_findings,
+                    coverage_gap_findings=coverage_gap_findings
+                )
+
+                demo_success(f"CAASM snapshot saved: {snapshot_path}")
 
         caasm_snapshots = load_caasm_snapshots()
 
