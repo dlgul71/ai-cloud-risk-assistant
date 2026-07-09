@@ -665,18 +665,38 @@ Python Risk Engine
 
 # 🔐 Authentication & Security
 
-DGS Sentinel AI includes built-in authentication controls to protect dashboard access and sensitive cloud security telemetry.
+DGS Sentinel AI includes built-in authentication and role-based access
+control to protect cloud security telemetry and sensitive remediation
+operations.
 
 Current security capabilities include:
 
 - Username and password authentication
 - Protected dashboard access
-- Session management
+- Session management and automatic timeout
 - Logout functionality
-- Automatic session timeout
-- Secure credential storage through Streamlit secrets management
+- Secure credential storage through environment variables or Streamlit secrets
+- Role-aware navigation
+- Action-level remediation authorization
+- Safe fallback to the Viewer role for unknown role values
 
-These controls provide a foundation for future role-based access control (RBAC) and enterprise identity integrations.
+## Application Authentication Configuration
+
+~~~bash
+export DGS_APP_USERNAME="administrator"
+export DGS_APP_PASSWORD="replace-with-a-secure-password"
+export DGS_APP_ROLE="Administrator"
+~~~
+
+Supported application roles are:
+
+- `Administrator` — full dashboard, client-management, approval, execution,
+  evidence, and system-health access
+- `Analyst` — dashboard, scan, and execution-evidence access
+- `Viewer` — read-only dashboard access
+
+Role names are normalized without regard to capitalization. Missing or invalid
+role values default safely to `Viewer`.
 
 ---
 
