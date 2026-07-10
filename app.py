@@ -69,9 +69,18 @@ except Exception:
     get_clients = None
 
 try:
-    from azure_client_accounts import test_azure_subscription
+    from azure_client_accounts import (
+        create_azure_credential,
+        test_azure_subscription,
+    )
 except Exception:
+    create_azure_credential = None
     test_azure_subscription = None
+
+try:
+    from azure_resource_discovery import discover_azure_resources
+except Exception:
+    discover_azure_resources = None
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -5066,7 +5075,11 @@ if get_clients is not None:
         client_options = [
             "DGS Internal / Default AWS Account"
         ] + [
-            f"{client[1]} | {client[2]} | {client[4]}"
+            (
+                f"{client[1]} | "
+                f"{client[6] if str(client[5] or 'AWS').upper() == 'AZURE' else client[2]} "
+                f"| {client[4]}"
+            )
             for client in saved_clients
         ]
 
@@ -5161,6 +5174,50 @@ if selected_client_data is not None:
                         f"Azure connection test failed: {exc}"
                     )
 
+        if st.sidebar.button(
+            "Run Azure Resource Discovery",
+            key="run_azure_resource_discovery",
+        ):
+            if discover_azure_resources is None:
+                st.sidebar.error(
+                    "Azure resource discovery module is unavailable."
+                )
+            elif not azure_secret:
+                st.sidebar.error(
+                    "Enter the Azure client secret before discovery."
+                )
+            else:
+                try:
+                    credential = create_azure_credential(
+                        tenant_id=selected_client_data[7],
+                        client_id=selected_client_data[8],
+                        client_secret=azure_secret,
+                    )
+
+                    discovery_result = discover_azure_resources(
+                        credential=credential,
+                        subscription_id=selected_client_data[6],
+                    )
+
+                    st.session_state[
+                        "azure_resource_discovery"
+                    ] = discovery_result
+                    st.session_state[
+                        "azure_resource_discovery_client"
+                    ] = selected_client_data[1]
+
+                    st.sidebar.success(
+                        "Azure resource discovery completed."
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Azure resource discovery failed."
+                    )
+                    st.sidebar.error(
+                        f"Azure discovery failed: {exc}"
+                    )
+
     else:
         if st.sidebar.button(
             "Test Client AWS Connection",
@@ -5206,6 +5263,89 @@ if page != "Dashboard":
 
 st.title("🛡️ DGS Sentinel AI")
 demo_caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
+
+azure_discovery = st.session_state.get(
+    "azure_resource_discovery"
+)
+
+if azure_discovery:
+    st.header("Azure Resource Discovery")
+
+    azure_client_name = st.session_state.get(
+        "azure_resource_discovery_client",
+        "Selected Azure Client",
+    )
+
+    demo_caption(
+        f"Latest Azure discovery results for {azure_client_name}"
+    )
+
+    azure_summary = azure_discovery.get("summary", {})
+
+    azure_col1, azure_col2, azure_col3 = st.columns(3)
+
+    azure_col1.metric(
+        "Resource Groups",
+        azure_summary.get("resource_groups", 0),
+    )
+    azure_col2.metric(
+        "Virtual Machines",
+        azure_summary.get("virtual_machines", 0),
+    )
+    azure_col3.metric(
+        "Storage Accounts",
+        azure_summary.get("storage_accounts", 0),
+    )
+
+    resource_groups = azure_discovery.get(
+        "resource_groups",
+        [],
+    )
+    virtual_machines = azure_discovery.get(
+        "virtual_machines",
+        [],
+    )
+    storage_accounts = azure_discovery.get(
+        "storage_accounts",
+        [],
+    )
+
+    azure_tab1, azure_tab2, azure_tab3 = st.tabs(
+        [
+            "Resource Groups",
+            "Virtual Machines",
+            "Storage Accounts",
+        ]
+    )
+
+    with azure_tab1:
+        if resource_groups:
+            demo_dataframe(
+                pd.DataFrame(resource_groups),
+                width="stretch",
+            )
+        else:
+            demo_info("No Azure resource groups discovered.")
+
+    with azure_tab2:
+        if virtual_machines:
+            demo_dataframe(
+                pd.DataFrame(virtual_machines),
+                width="stretch",
+            )
+        else:
+            demo_info("No Azure virtual machines discovered.")
+
+    with azure_tab3:
+        if storage_accounts:
+            demo_dataframe(
+                pd.DataFrame(storage_accounts),
+                width="stretch",
+            )
+        else:
+            demo_info("No Azure storage accounts discovered.")
+
+    st.divider()
 
 if selected_client_data:
     demo_success(
