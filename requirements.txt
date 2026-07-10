@@ -4,6 +4,8 @@ plotly==6.7.0
 boto3==1.43.6
 azure-identity==1.25.3
 azure-mgmt-resource==26.0.0
+azure-mgmt-storage==24.0.0
+azure-mgmt-compute==37.1.0
 openai==2.36.0
 reportlab==4.5.1
 requests==2.33.1
