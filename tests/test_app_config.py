@@ -227,3 +227,91 @@ def test_safe_summary_reports_role_without_credentials():
     assert summary["app_role"] == "Viewer"
     assert "test-user" not in rendered_summary
     assert "test-password" not in rendered_summary
+
+
+def test_azure_settings_read_environment_values(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "AZURE_TENANT_ID",
+        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    )
+    monkeypatch.setenv(
+        "AZURE_CLIENT_ID",
+        "11111111-2222-3333-4444-555555555555",
+    )
+    monkeypatch.setenv(
+        "AZURE_CLIENT_SECRET",
+        "azure-test-client-secret",
+    )
+    monkeypatch.setenv(
+        "AZURE_SUBSCRIPTION_ID",
+        "99999999-8888-7777-6666-555555555555",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert (
+        settings.azure_tenant_id
+        == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    )
+    assert (
+        settings.azure_client_id
+        == "11111111-2222-3333-4444-555555555555"
+    )
+    assert (
+        settings.azure_client_secret
+        == "azure-test-client-secret"
+    )
+    assert (
+        settings.azure_subscription_id
+        == "99999999-8888-7777-6666-555555555555"
+    )
+
+
+def test_azure_settings_default_to_unconfigured(
+    monkeypatch,
+):
+    for key in (
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_SUBSCRIPTION_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    monkeypatch.setattr(
+        app_config,
+        "_streamlit_secret",
+        lambda key: None,
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.azure_tenant_id is None
+    assert settings.azure_client_id is None
+    assert settings.azure_client_secret is None
+    assert settings.azure_subscription_id is None
+
+
+def test_safe_summary_reports_azure_without_exposing_secret():
+    settings = app_config.AppSettings(
+        azure_tenant_id=(
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        ),
+        azure_client_id=(
+            "11111111-2222-3333-4444-555555555555"
+        ),
+        azure_client_secret=(
+            "azure-summary-client-secret"
+        ),
+        azure_subscription_id=(
+            "99999999-8888-7777-6666-555555555555"
+        ),
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert summary["azure_configured"] is True
+    assert "azure-summary-client-secret" not in rendered_summary
