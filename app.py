@@ -88,6 +88,11 @@ except Exception:
     discover_azure_security_posture = None
 
 try:
+    from azure_storage_exposure import analyze_storage_exposure
+except Exception:
+    analyze_storage_exposure = None
+
+try:
     from streamlit_autorefresh import st_autorefresh
     AUTOREFRESH_AVAILABLE = True
 except Exception:
@@ -5211,6 +5216,30 @@ if selected_client_data is not None:
                         "azure_resource_discovery_client"
                     ] = selected_client_data[1]
 
+                    if analyze_storage_exposure is not None:
+                        storage_exposure = analyze_storage_exposure(
+                            discovery_result.get(
+                                "storage_accounts",
+                                [],
+                            )
+                        )
+
+                        st.session_state[
+                            "azure_storage_exposure"
+                        ] = storage_exposure
+                        st.session_state[
+                            "azure_storage_exposure_client"
+                        ] = selected_client_data[1]
+                    else:
+                        st.session_state.pop(
+                            "azure_storage_exposure",
+                            None,
+                        )
+                        st.session_state.pop(
+                            "azure_storage_exposure_client",
+                            None,
+                        )
+
                     st.sidebar.success(
                         "Azure resource discovery completed."
                     )
@@ -5416,6 +5445,148 @@ if azure_discovery:
             demo_info("No Azure storage accounts discovered.")
 
     st.divider()
+
+azure_storage_exposure = st.session_state.get(
+    "azure_storage_exposure"
+)
+
+if azure_storage_exposure:
+    st.header("Azure Storage Exposure Analysis")
+
+    storage_client_name = st.session_state.get(
+        "azure_storage_exposure_client",
+        "Selected Azure Client",
+    )
+
+    demo_caption(
+        f"Latest storage security analysis for {storage_client_name}"
+    )
+
+    storage_summary = azure_storage_exposure.get(
+        "summary",
+        {},
+    )
+
+    (
+        storage_col1,
+        storage_col2,
+        storage_col3,
+        storage_col4,
+        storage_col5,
+    ) = st.columns(5)
+
+    storage_col1.metric(
+        "Storage Accounts",
+        storage_summary.get("storage_accounts", 0),
+    )
+    storage_col2.metric(
+        "Exposed Accounts",
+        storage_summary.get("exposed_accounts", 0),
+    )
+    storage_col3.metric(
+        "High Findings",
+        storage_summary.get("high", 0),
+    )
+    storage_col4.metric(
+        "Medium Findings",
+        storage_summary.get("medium", 0),
+    )
+    storage_col5.metric(
+        "Total Findings",
+        storage_summary.get("findings", 0),
+    )
+
+    storage_accounts = azure_storage_exposure.get(
+        "storage_accounts",
+        [],
+    )
+    storage_findings = azure_storage_exposure.get(
+        "findings",
+        [],
+    )
+
+    high_storage_findings = [
+        finding
+        for finding in storage_findings
+        if str(
+            finding.get("severity", "")
+        ).strip().lower() in {"critical", "high"}
+    ]
+
+    (
+        storage_findings_tab,
+        exposed_storage_tab,
+        storage_configuration_tab,
+    ) = st.tabs(
+        [
+            "All Findings",
+            "High-Risk Findings",
+            "Storage Configuration",
+        ]
+    )
+
+    with storage_findings_tab:
+        if storage_findings:
+            storage_findings_df = pd.DataFrame(
+                storage_findings
+            )
+
+            severity_order = {
+                "Critical": 4,
+                "High": 3,
+                "Medium": 2,
+                "Low": 1,
+            }
+
+            storage_findings_df[
+                "Severity Rank"
+            ] = storage_findings_df[
+                "severity"
+            ].map(severity_order).fillna(0)
+
+            storage_findings_df = (
+                storage_findings_df.sort_values(
+                    by="Severity Rank",
+                    ascending=False,
+                ).drop(
+                    columns=["Severity Rank"]
+                )
+            )
+
+            demo_dataframe(
+                storage_findings_df,
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No Azure storage exposure findings were identified."
+            )
+
+    with exposed_storage_tab:
+        if high_storage_findings:
+            demo_dataframe(
+                pd.DataFrame(high_storage_findings),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No critical or high-risk storage findings "
+                "were identified."
+            )
+
+    with storage_configuration_tab:
+        if storage_accounts:
+            demo_dataframe(
+                pd.DataFrame(storage_accounts),
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Azure storage accounts were discovered."
+            )
+
+    st.divider()
+
 
 azure_posture = st.session_state.get(
     "azure_security_posture"
