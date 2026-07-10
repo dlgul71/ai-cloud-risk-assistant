@@ -18,7 +18,8 @@ def init_client_db():
             environment TEXT,
             cloud_provider TEXT DEFAULT 'AWS',
             azure_subscription_id TEXT,
-            azure_tenant_id TEXT
+            azure_tenant_id TEXT,
+            azure_client_id TEXT
         )
         """
     )
@@ -32,6 +33,7 @@ def init_client_db():
         "cloud_provider": "TEXT DEFAULT 'AWS'",
         "azure_subscription_id": "TEXT",
         "azure_tenant_id": "TEXT",
+        "azure_client_id": "TEXT",
     }
 
     for column_name, column_definition in migrations.items():
@@ -64,6 +66,7 @@ def add_client(
     cloud_provider="AWS",
     azure_subscription_id=None,
     azure_tenant_id=None,
+    azure_client_id=None,
 ):
     init_client_db()
 
@@ -81,9 +84,10 @@ def add_client(
             environment,
             cloud_provider,
             azure_subscription_id,
-            azure_tenant_id
+            azure_tenant_id,
+            azure_client_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             client_name,
@@ -93,6 +97,7 @@ def add_client(
             normalized_provider,
             azure_subscription_id,
             azure_tenant_id,
+            azure_client_id,
         ),
     )
 
@@ -116,7 +121,8 @@ def get_clients():
             environment,
             cloud_provider,
             azure_subscription_id,
-            azure_tenant_id
+            azure_tenant_id,
+            azure_client_id
         FROM clients
         ORDER BY id
         """

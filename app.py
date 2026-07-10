@@ -69,6 +69,11 @@ except Exception:
     get_clients = None
 
 try:
+    from azure_client_accounts import test_azure_subscription
+except Exception:
+    test_azure_subscription = None
+
+try:
     from streamlit_autorefresh import st_autorefresh
     AUTOREFRESH_AVAILABLE = True
 except Exception:
@@ -4960,6 +4965,7 @@ if page == "Client Accounts":
         role_arn = None
         azure_subscription_id = None
         azure_tenant_id = None
+        azure_client_id = None
 
         if cloud_provider == "AWS":
             aws_account_id = st.text_input("AWS Account ID")
@@ -4969,6 +4975,9 @@ if page == "Client Accounts":
                 "Azure Subscription ID"
             )
             azure_tenant_id = st.text_input("Azure Tenant ID")
+            azure_client_id = st.text_input(
+                "Azure Application (Client) ID"
+            )
 
         environment = st.selectbox(
             "Environment",
@@ -4986,7 +4995,11 @@ if page == "Client Accounts":
             provider_fields_complete = (
                 aws_account_id and role_arn
                 if cloud_provider == "AWS"
-                else azure_subscription_id and azure_tenant_id
+                else (
+                    azure_subscription_id
+                    and azure_tenant_id
+                    and azure_client_id
+                )
             )
 
             if client_name and provider_fields_complete:
@@ -4998,6 +5011,7 @@ if page == "Client Accounts":
                     cloud_provider=cloud_provider,
                     azure_subscription_id=azure_subscription_id,
                     azure_tenant_id=azure_tenant_id,
+                    azure_client_id=azure_client_id,
                 )
                 demo_success(
                     f"{cloud_provider} client account added successfully."
@@ -5021,6 +5035,7 @@ if page == "Client Accounts":
                 "Cloud Provider",
                 "Azure Subscription ID",
                 "Azure Tenant ID",
+                "Azure Client ID",
             ]
         )
 
@@ -5091,38 +5106,97 @@ else:
     )
 
 # ============================================================
-# TEST CLIENT AWS CONNECTION
+# TEST CLIENT CLOUD CONNECTION
 # ============================================================
 
 if selected_client_data is not None:
 
-    if st.sidebar.button(
-        "Test Client AWS Connection",
-        key="test_client_connection"
-    ):
+    selected_provider = (
+        str(selected_client_data[5] or "AWS").strip().upper()
+    )
 
-        role_arn = selected_client_data[3]
+    if selected_provider == "AZURE":
+        azure_secret = st.sidebar.text_input(
+            "Azure Client Secret",
+            type="password",
+            key="azure_connection_client_secret",
+            help=(
+                "Used only for this connection test. "
+                "The secret is not stored in the client database."
+            ),
+        )
 
-        session = assume_client_role(role_arn)
-
-        if session:
-            try:
-                sts = session.client("sts")
-                identity = sts.get_caller_identity()
-
-                st.sidebar.success(
-                    f"Connected to AWS Account: {identity['Account']}"
-                )
-
-            except Exception as e:
+        if st.sidebar.button(
+            "Test Client Azure Connection",
+            key="test_azure_client_connection",
+        ):
+            if test_azure_subscription is None:
                 st.sidebar.error(
-                    f"Connection test failed: {e}"
+                    "Azure validation module is unavailable."
                 )
+            elif not azure_secret:
+                st.sidebar.error(
+                    "Enter the Azure client secret before testing."
+                )
+            else:
+                try:
+                    identity = test_azure_subscription(
+                        tenant_id=selected_client_data[7],
+                        client_id=selected_client_data[8],
+                        client_secret=azure_secret,
+                        subscription_id=selected_client_data[6],
+                    )
+
+                    st.sidebar.success(
+                        "Connected to Azure Subscription: "
+                        f"{identity['display_name']} "
+                        f"({identity['subscription_id']})"
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Azure client connection test failed."
+                    )
+                    st.sidebar.error(
+                        f"Azure connection test failed: {exc}"
+                    )
+
+    else:
+        if st.sidebar.button(
+            "Test Client AWS Connection",
+            key="test_client_connection",
+        ):
+            role_arn = selected_client_data[3]
+            session = assume_client_role(role_arn)
+
+            if session:
+                try:
+                    sts = session.client("sts")
+                    identity = sts.get_caller_identity()
+
+                    st.sidebar.success(
+                        "Connected to AWS Account: "
+                        f"{identity['Account']}"
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "AWS client connection test failed."
+                    )
+                    st.sidebar.error(
+                        f"Connection test failed: {exc}"
+                    )
+            else:
+                st.sidebar.error(
+                    "Unable to assume the selected AWS client role."
+                )
+
 else:
     st.sidebar.info(
-    "Select a saved client from Active Client Account to enable AWS connection test."
-)
-    
+        "Select a saved client account to enable "
+        "the cloud connection test."
+    )
+
 # ============================================================
 # MAIN DASHBOARD HEADER
 # ============================================================

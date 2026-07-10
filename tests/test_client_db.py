@@ -32,6 +32,7 @@ def test_init_client_db_creates_multicloud_columns(client_database):
         "cloud_provider",
         "azure_subscription_id",
         "azure_tenant_id",
+        "azure_client_id",
     }.issubset(columns)
 
 
@@ -77,6 +78,7 @@ def test_init_client_db_migrates_existing_aws_database(client_database):
     assert clients[0][5] == "AWS"
     assert clients[0][6] is None
     assert clients[0][7] is None
+    assert clients[0][8] is None
 
 
 def test_add_client_defaults_to_aws(client_database):
@@ -107,6 +109,7 @@ def test_add_azure_client(client_database):
         cloud_provider="Azure",
         azure_subscription_id="11111111-2222-3333-4444-555555555555",
         azure_tenant_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        azure_client_id="99999999-8888-7777-6666-555555555555",
     )
 
     client = client_db.get_clients()[0]
@@ -117,3 +120,4 @@ def test_add_azure_client(client_database):
     assert client[5] == "Azure"
     assert client[6] == "11111111-2222-3333-4444-555555555555"
     assert client[7] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    assert client[8] == "99999999-8888-7777-6666-555555555555"
