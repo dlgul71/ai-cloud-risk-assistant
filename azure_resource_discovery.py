@@ -70,8 +70,34 @@ def discover_azure_resources(
                 "enable_https_traffic_only",
                 None,
             ),
+            "minimum_tls_version": str(
+                getattr(account, "minimum_tls_version", None)
+                or ""
+            ),
+            "allow_shared_key_access": getattr(
+                account,
+                "allow_shared_key_access",
+                None,
+            ),
             "public_network_access": str(
                 getattr(account, "public_network_access", None)
+                or ""
+            ),
+            "network_default_action": str(
+                getattr(
+                    getattr(account, "network_rule_set", None),
+                    "default_action",
+                    None,
+                )
+                or ""
+            ),
+            "network_bypass": str(
+                getattr(
+                    getattr(account, "network_rule_set", None),
+                    "bypass",
+                    None,
+                )
+                or ""
             ),
             "id": account.id,
         }

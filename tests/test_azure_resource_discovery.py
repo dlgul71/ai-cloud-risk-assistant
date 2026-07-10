@@ -36,13 +36,20 @@ def test_discover_azure_resources(monkeypatch):
     class FakeSku:
         name = "Standard_LRS"
 
+    class FakeNetworkRuleSet:
+        default_action = "Deny"
+        bypass = "AzureServices"
+
     class FakeStorage:
         name = "dgsstorage"
         location = "eastus"
         kind = "StorageV2"
         sku = FakeSku()
         enable_https_traffic_only = True
+        minimum_tls_version = "TLS1_2"
+        allow_shared_key_access = False
         public_network_access = "Enabled"
+        network_rule_set = FakeNetworkRuleSet()
         id = (
             "/subscriptions/sub/resourceGroups/DGS-Production/"
             "providers/Microsoft.Storage/storageAccounts/dgsstorage"
@@ -101,7 +108,13 @@ def test_discover_azure_resources(monkeypatch):
     assert result["virtual_machines"][0]["resource_group"] == (
         "DGS-Production"
     )
-    assert result["storage_accounts"][0]["https_only"] is True
+    storage = result["storage_accounts"][0]
+
+    assert storage["https_only"] is True
+    assert storage["minimum_tls_version"] == "TLS1_2"
+    assert storage["allow_shared_key_access"] is False
+    assert storage["network_default_action"] == "Deny"
+    assert storage["network_bypass"] == "AzureServices"
 
 
 def test_discover_azure_resources_requires_subscription_id():
