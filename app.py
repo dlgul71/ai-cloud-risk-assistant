@@ -83,6 +83,11 @@ except Exception:
     discover_azure_resources = None
 
 try:
+    from azure_security_posture import discover_azure_security_posture
+except Exception:
+    discover_azure_security_posture = None
+
+try:
     from streamlit_autorefresh import st_autorefresh
     AUTOREFRESH_AVAILABLE = True
 except Exception:
@@ -5218,6 +5223,71 @@ if selected_client_data is not None:
                         f"Azure discovery failed: {exc}"
                     )
 
+        azure_security_location = st.sidebar.text_input(
+            "Defender for Cloud Location",
+            value="centralus",
+            key="azure_security_center_location",
+            help=(
+                "Azure Security Center location used by the "
+                "Defender for Cloud management API."
+            ),
+        )
+
+        if st.sidebar.button(
+            "Run Azure Security Posture",
+            key="run_azure_security_posture",
+        ):
+            if discover_azure_security_posture is None:
+                st.sidebar.error(
+                    "Azure security posture module is unavailable."
+                )
+            elif create_azure_credential is None:
+                st.sidebar.error(
+                    "Azure credential module is unavailable."
+                )
+            elif not azure_secret:
+                st.sidebar.error(
+                    "Enter the Azure client secret before scanning."
+                )
+            elif not azure_security_location:
+                st.sidebar.error(
+                    "Enter the Defender for Cloud location."
+                )
+            else:
+                try:
+                    credential = create_azure_credential(
+                        tenant_id=selected_client_data[7],
+                        client_id=selected_client_data[8],
+                        client_secret=azure_secret,
+                    )
+
+                    posture_result = (
+                        discover_azure_security_posture(
+                            credential=credential,
+                            subscription_id=selected_client_data[6],
+                            asc_location=azure_security_location,
+                        )
+                    )
+
+                    st.session_state[
+                        "azure_security_posture"
+                    ] = posture_result
+                    st.session_state[
+                        "azure_security_posture_client"
+                    ] = selected_client_data[1]
+
+                    st.sidebar.success(
+                        "Azure security posture discovery completed."
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Azure security posture discovery failed."
+                    )
+                    st.sidebar.error(
+                        f"Azure security posture failed: {exc}"
+                    )
+
     else:
         if st.sidebar.button(
             "Test Client AWS Connection",
@@ -5344,6 +5414,113 @@ if azure_discovery:
             )
         else:
             demo_info("No Azure storage accounts discovered.")
+
+    st.divider()
+
+azure_posture = st.session_state.get(
+    "azure_security_posture"
+)
+
+if azure_posture:
+    st.header("Microsoft Defender for Cloud")
+
+    azure_posture_client = st.session_state.get(
+        "azure_security_posture_client",
+        "Selected Azure Client",
+    )
+
+    demo_caption(
+        f"Latest Azure security posture for {azure_posture_client}"
+    )
+
+    posture_summary = azure_posture.get("summary", {})
+
+    posture_col1, posture_col2, posture_col3, posture_col4 = (
+        st.columns(4)
+    )
+
+    posture_col1.metric(
+        "Secure Scores",
+        posture_summary.get("secure_scores", 0),
+    )
+    posture_col2.metric(
+        "Assessments",
+        posture_summary.get("assessments", 0),
+    )
+    posture_col3.metric(
+        "Healthy",
+        posture_summary.get("healthy", 0),
+    )
+    posture_col4.metric(
+        "Unhealthy",
+        posture_summary.get("unhealthy", 0),
+    )
+
+    secure_scores = azure_posture.get(
+        "secure_scores",
+        [],
+    )
+    assessments = azure_posture.get(
+        "assessments",
+        [],
+    )
+
+    unhealthy_assessments = [
+        assessment
+        for assessment in assessments
+        if str(
+            assessment.get("status_code", "")
+        ).lower() == "unhealthy"
+    ]
+
+    score_tab, unhealthy_tab, all_assessments_tab = st.tabs(
+        [
+            "Secure Scores",
+            "Unhealthy Assessments",
+            "All Assessments",
+        ]
+    )
+
+    with score_tab:
+        if secure_scores:
+            secure_scores_df = pd.DataFrame(secure_scores)
+
+            demo_dataframe(
+                secure_scores_df,
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Defender for Cloud secure scores were returned."
+            )
+
+    with unhealthy_tab:
+        if unhealthy_assessments:
+            unhealthy_df = pd.DataFrame(
+                unhealthy_assessments
+            )
+
+            demo_dataframe(
+                unhealthy_df,
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No unhealthy Defender assessments were returned."
+            )
+
+    with all_assessments_tab:
+        if assessments:
+            assessments_df = pd.DataFrame(assessments)
+
+            demo_dataframe(
+                assessments_df,
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Defender for Cloud assessments were returned."
+            )
 
     st.divider()
 
