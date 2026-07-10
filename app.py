@@ -4937,7 +4937,8 @@ if page == "Client Accounts":
     st.header("Client Account Management")
 
     demo_markdown(
-        "Add AWS client accounts using read-only IAM AssumeRole access."
+        "Register AWS accounts or Azure subscriptions for multicloud "
+        "security visibility."
     )
 
     if add_client is None or get_clients is None:
@@ -4946,10 +4947,28 @@ if page == "Client Accounts":
         )
         st.stop()
 
+    cloud_provider = st.selectbox(
+        "Cloud Provider",
+        ["AWS", "Azure"],
+        key="client_cloud_provider",
+    )
+
     with st.form("client_account_form"):
         client_name = st.text_input("Client Name")
-        aws_account_id = st.text_input("AWS Account ID")
-        role_arn = st.text_input("AWS Role ARN")
+
+        aws_account_id = None
+        role_arn = None
+        azure_subscription_id = None
+        azure_tenant_id = None
+
+        if cloud_provider == "AWS":
+            aws_account_id = st.text_input("AWS Account ID")
+            role_arn = st.text_input("AWS Role ARN")
+        else:
+            azure_subscription_id = st.text_input(
+                "Azure Subscription ID"
+            )
+            azure_tenant_id = st.text_input("Azure Tenant ID")
 
         environment = st.selectbox(
             "Environment",
@@ -4964,14 +4983,25 @@ if page == "Client Accounts":
         submitted = st.form_submit_button("Add Client Account")
 
         if submitted:
-            if client_name and aws_account_id and role_arn:
+            provider_fields_complete = (
+                aws_account_id and role_arn
+                if cloud_provider == "AWS"
+                else azure_subscription_id and azure_tenant_id
+            )
+
+            if client_name and provider_fields_complete:
                 add_client(
-                    client_name,
-                    aws_account_id,
-                    role_arn,
-                    environment
+                    client_name=client_name,
+                    aws_account_id=aws_account_id,
+                    role_arn=role_arn,
+                    environment=environment,
+                    cloud_provider=cloud_provider,
+                    azure_subscription_id=azure_subscription_id,
+                    azure_tenant_id=azure_tenant_id,
                 )
-                demo_success("Client account added successfully.")
+                demo_success(
+                    f"{cloud_provider} client account added successfully."
+                )
             else:
                 st.error("Please complete all required fields.")
 
@@ -4987,7 +5017,10 @@ if page == "Client Accounts":
                 "Client Name",
                 "AWS Account ID",
                 "Role ARN",
-                "Environment"
+                "Environment",
+                "Cloud Provider",
+                "Azure Subscription ID",
+                "Azure Tenant ID",
             ]
         )
 
