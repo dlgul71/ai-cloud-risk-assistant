@@ -100,6 +100,11 @@ except Exception:
     analyze_azure_network_exposure = None
 
 try:
+    from azure_demo_data import build_azure_demo_dataset
+except Exception:
+    build_azure_demo_dataset = None
+
+try:
     from streamlit_autorefresh import st_autorefresh
     AUTOREFRESH_AVAILABLE = True
 except Exception:
@@ -5419,13 +5424,43 @@ demo_caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
 azure_discovery = st.session_state.get(
     "azure_resource_discovery"
 )
+azure_network_exposure = st.session_state.get(
+    "azure_network_exposure"
+)
+azure_storage_exposure = st.session_state.get(
+    "azure_storage_exposure"
+)
+
+azure_display_client_name = "Selected Azure Client"
+
+if (
+    demo_mode_enabled()
+    and build_azure_demo_dataset is not None
+):
+    azure_demo_dataset = build_azure_demo_dataset()
+
+    azure_discovery = azure_demo_dataset["discovery"]
+    azure_network_exposure = azure_demo_dataset[
+        "network_exposure"
+    ]
+    azure_storage_exposure = azure_demo_dataset[
+        "storage_exposure"
+    ]
+    azure_display_client_name = azure_demo_dataset[
+        "client_name"
+    ]
+
+    demo_warning(
+        "Azure Demo Dataset — Sanitized sample Azure "
+        "resources and exposure findings are displayed."
+    )
 
 if azure_discovery:
     st.header("Azure Resource Discovery")
 
     azure_client_name = st.session_state.get(
         "azure_resource_discovery_client",
-        "Selected Azure Client",
+        azure_display_client_name,
     )
 
     demo_caption(
@@ -5499,16 +5534,12 @@ if azure_discovery:
 
     st.divider()
 
-azure_network_exposure = st.session_state.get(
-    "azure_network_exposure"
-)
-
 if azure_network_exposure:
     st.header("Azure Network Exposure Analysis")
 
     network_client_name = st.session_state.get(
         "azure_network_exposure_client",
-        "Selected Azure Client",
+        azure_display_client_name,
     )
 
     demo_caption(
@@ -5751,16 +5782,12 @@ if azure_network_exposure:
 
     st.divider()
 
-azure_storage_exposure = st.session_state.get(
-    "azure_storage_exposure"
-)
-
 if azure_storage_exposure:
     st.header("Azure Storage Exposure Analysis")
 
     storage_client_name = st.session_state.get(
         "azure_storage_exposure_client",
-        "Selected Azure Client",
+        azure_display_client_name,
     )
 
     demo_caption(
