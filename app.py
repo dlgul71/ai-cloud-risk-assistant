@@ -27,7 +27,10 @@ from demo_mode import (
 )
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from risk_engine import calculate_unified_risk
+from risk_engine import (
+    calculate_unified_risk,
+    summarize_azure_findings,
+)
 from scan_engine_phase3_assumerole import run_client_scan
 from snapshot_engine import save_scan_snapshot
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
@@ -6198,12 +6201,47 @@ kev_count = len(df[df["KEV Exploited"] == 1]) if not df.empty else 0
 avg_risk = round(df["Risk Score"].mean(), 2) if not df.empty else 0
 risk_rating = calculate_risk_rating(avg_risk)
 
+azure_finding_summary = summarize_azure_findings(
+    network_exposure=azure_network_exposure,
+    storage_exposure=azure_storage_exposure,
+)
+
+multi_cloud_risk_score = round(
+    calculate_unified_risk(
+        base_risk=avg_risk,
+        securityhub_count=0,
+        guardduty_count=0,
+        azure_critical_count=azure_finding_summary[
+            "critical"
+        ],
+        azure_high_count=azure_finding_summary["high"],
+        azure_medium_count=azure_finding_summary[
+            "medium"
+        ],
+    ),
+    2,
+)
+
+multi_cloud_risk_rating = calculate_risk_rating(
+    multi_cloud_risk_score
+)
+
 summary = {
     "Critical Findings": critical_count,
     "High Findings": high_count,
     "KEV Exploited Findings": kev_count,
     "Average Risk Score": avg_risk,
-    "Risk Rating": risk_rating
+    "Risk Rating": risk_rating,
+    "Azure Critical Findings": azure_finding_summary[
+        "critical"
+    ],
+    "Azure High Findings": azure_finding_summary["high"],
+    "Azure Medium Findings": azure_finding_summary[
+        "medium"
+    ],
+    "Azure Total Findings": azure_finding_summary["total"],
+    "Multi-Cloud Risk Score": multi_cloud_risk_score,
+    "Multi-Cloud Risk Rating": multi_cloud_risk_rating,
 }
 
 remediation_playbook = generate_remediation_playbook(df)
@@ -6491,18 +6529,47 @@ demo_caption(
 
 st.header("Executive Security Overview")
 
-metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+(
+    metric_col1,
+    metric_col2,
+    metric_col3,
+    metric_col4,
+    metric_col5,
+) = st.columns(5)
 
-metric_col1.metric("Critical Findings", critical_count)
-metric_col2.metric("KEV Findings", kev_count)
-metric_col3.metric("Average Risk Score", avg_risk)
-metric_col4.metric("Risk Rating", risk_rating)
+metric_col1.metric(
+    "AWS Critical Findings",
+    critical_count,
+)
+metric_col2.metric(
+    "Azure Findings",
+    azure_finding_summary["total"],
+)
+metric_col3.metric(
+    "AWS Baseline Risk",
+    avg_risk,
+)
+metric_col4.metric(
+    "Multi-Cloud Risk",
+    multi_cloud_risk_score,
+)
+metric_col5.metric(
+    "Risk Rating",
+    multi_cloud_risk_rating,
+)
+
+demo_caption(
+    "Azure severity contribution: "
+    f"{azure_finding_summary['critical']} critical, "
+    f"{azure_finding_summary['high']} high, and "
+    f"{azure_finding_summary['medium']} medium findings."
+)
 
 gauge_fig = go.Figure(
     go.Indicator(
         mode="gauge+number",
-        value=avg_risk,
-        title={"text": "Enterprise Security Risk Gauge"},
+        value=multi_cloud_risk_score,
+        title={"text": "Enterprise Multi-Cloud Risk Gauge"},
         gauge={
             "axis": {"range": [0, 100]},
             "bar": {"color": "darkblue"},
