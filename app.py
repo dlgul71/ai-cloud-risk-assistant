@@ -5501,6 +5501,102 @@ if azure_discovery:
         [],
     )
 
+    azure_started_at = azure_discovery.get("started_at")
+    azure_completed_at = azure_discovery.get("completed_at")
+    azure_service_status = azure_discovery.get(
+        "service_status",
+        {},
+    )
+
+    scan_timestamp_parts = []
+
+    if azure_started_at:
+        scan_timestamp_parts.append(
+            f"Started: {azure_started_at}"
+        )
+
+    if azure_completed_at:
+        scan_timestamp_parts.append(
+            f"Completed: {azure_completed_at}"
+        )
+
+    if scan_timestamp_parts:
+        demo_caption(
+            " | ".join(scan_timestamp_parts)
+        )
+
+    if azure_service_status:
+        service_status_rows = []
+
+        for resource_type, status_details in (
+            azure_service_status.items()
+        ):
+            error_details = (
+                status_details.get("error") or {}
+            )
+
+            service_status_rows.append(
+                {
+                    "Resource Category": (
+                        resource_type.replace(
+                            "_",
+                            " ",
+                        ).title()
+                    ),
+                    "Status": status_details.get(
+                        "status",
+                        "UNKNOWN",
+                    ),
+                    "Resource Count": status_details.get(
+                        "resource_count",
+                        0,
+                    ),
+                    "Scanned At": status_details.get(
+                        "scanned_at",
+                    ),
+                    "Error": error_details.get(
+                        "message",
+                    ),
+                }
+            )
+
+        complete_service_count = sum(
+            row["Status"] == "COMPLETE"
+            for row in service_status_rows
+        )
+        failed_service_count = sum(
+            row["Status"] == "FAILED"
+            for row in service_status_rows
+        )
+
+        (
+            service_col1,
+            service_col2,
+            service_col3,
+        ) = st.columns(3)
+
+        service_col1.metric(
+            "Services Complete",
+            complete_service_count,
+        )
+        service_col2.metric(
+            "Services Failed",
+            failed_service_count,
+        )
+        service_col3.metric(
+            "Services Checked",
+            len(service_status_rows),
+        )
+
+        with st.expander(
+            "Azure service discovery status",
+            expanded=failed_service_count > 0,
+        ):
+            demo_dataframe(
+                pd.DataFrame(service_status_rows),
+                width="stretch",
+            )
+
     if azure_discovery_status == "PARTIAL":
         st.warning(
             "Azure discovery returned partial results. "

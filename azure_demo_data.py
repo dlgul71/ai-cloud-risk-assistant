@@ -8,6 +8,7 @@ from azure_storage_exposure import analyze_storage_exposure
 
 DEMO_SUBSCRIPTION_ID = "00000000-0000-0000-0000-000000000000"
 DEMO_CLIENT_NAME = "Demo Azure Enterprise"
+DEMO_SCAN_TIME = "2026-07-11T12:00:00+00:00"
 
 DEMO_PRODUCTION_RESOURCE_GROUP = "demo-production-rg"
 DEMO_SHARED_RESOURCE_GROUP = "demo-shared-services-rg"
@@ -338,8 +339,54 @@ def _build_demo_discovery():
         },
     ]
 
+    service_status = {
+        "resource_groups": {
+            "status": "COMPLETE",
+            "resource_count": len(resource_groups),
+            "scanned_at": DEMO_SCAN_TIME,
+            "error": None,
+        },
+        "virtual_machines": {
+            "status": "COMPLETE",
+            "resource_count": len(virtual_machines),
+            "scanned_at": DEMO_SCAN_TIME,
+            "error": None,
+        },
+        "storage_accounts": {
+            "status": "COMPLETE",
+            "resource_count": len(storage_accounts),
+            "scanned_at": DEMO_SCAN_TIME,
+            "error": None,
+        },
+        "network_security_groups": {
+            "status": "COMPLETE",
+            "resource_count": len(
+                network_security_groups
+            ),
+            "scanned_at": DEMO_SCAN_TIME,
+            "error": None,
+        },
+        "public_ip_addresses": {
+            "status": "COMPLETE",
+            "resource_count": len(public_ip_addresses),
+            "scanned_at": DEMO_SCAN_TIME,
+            "error": None,
+        },
+        "network_interfaces": {
+            "status": "COMPLETE",
+            "resource_count": len(network_interfaces),
+            "scanned_at": DEMO_SCAN_TIME,
+            "error": None,
+        },
+    }
+
     return {
         "subscription_id": DEMO_SUBSCRIPTION_ID,
+        "started_at": DEMO_SCAN_TIME,
+        "completed_at": DEMO_SCAN_TIME,
+        "discovery_status": "COMPLETE",
+        "errors": [],
+        "service_status": service_status,
         "resource_groups": resource_groups,
         "virtual_machines": virtual_machines,
         "storage_accounts": storage_accounts,

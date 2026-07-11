@@ -489,3 +489,110 @@ def test_successful_discovery_reports_complete_status(
 
     assert result["discovery_status"] == "COMPLETE"
     assert result["errors"] == []
+
+
+FIXED_SCAN_TIME = "2026-07-11T12:00:00+00:00"
+
+
+def test_discovery_includes_scan_timestamps_and_service_status(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        azure_resource_discovery,
+        "_utc_now_iso",
+        lambda: FIXED_SCAN_TIME,
+        raising=False,
+    )
+
+    _patch_discovery_clients(monkeypatch)
+
+    result = azure_resource_discovery.discover_azure_resources(
+        credential="credential",
+        subscription_id="subscription-id",
+    )
+
+    assert result["started_at"] == FIXED_SCAN_TIME
+    assert result["completed_at"] == FIXED_SCAN_TIME
+
+    assert result["service_status"] == {
+        "resource_groups": {
+            "status": "COMPLETE",
+            "resource_count": 0,
+            "scanned_at": FIXED_SCAN_TIME,
+            "error": None,
+        },
+        "virtual_machines": {
+            "status": "COMPLETE",
+            "resource_count": 0,
+            "scanned_at": FIXED_SCAN_TIME,
+            "error": None,
+        },
+        "storage_accounts": {
+            "status": "COMPLETE",
+            "resource_count": 0,
+            "scanned_at": FIXED_SCAN_TIME,
+            "error": None,
+        },
+        "network_security_groups": {
+            "status": "COMPLETE",
+            "resource_count": 0,
+            "scanned_at": FIXED_SCAN_TIME,
+            "error": None,
+        },
+        "public_ip_addresses": {
+            "status": "COMPLETE",
+            "resource_count": 0,
+            "scanned_at": FIXED_SCAN_TIME,
+            "error": None,
+        },
+        "network_interfaces": {
+            "status": "COMPLETE",
+            "resource_count": 0,
+            "scanned_at": FIXED_SCAN_TIME,
+            "error": None,
+        },
+    }
+
+
+def test_failed_service_has_failed_status_and_timestamp(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        azure_resource_discovery,
+        "_utc_now_iso",
+        lambda: FIXED_SCAN_TIME,
+        raising=False,
+    )
+
+    _patch_discovery_clients(
+        monkeypatch,
+        errors={
+            "storage_accounts": RuntimeError(
+                "Storage service unavailable"
+            )
+        },
+    )
+
+    result = azure_resource_discovery.discover_azure_resources(
+        credential="credential",
+        subscription_id="subscription-id",
+    )
+
+    storage_status = result["service_status"][
+        "storage_accounts"
+    ]
+
+    assert storage_status == {
+        "status": "FAILED",
+        "resource_count": 0,
+        "scanned_at": FIXED_SCAN_TIME,
+        "error": {
+            "error_type": "RuntimeError",
+            "message": "Storage service unavailable",
+        },
+    }
+
+    assert result["service_status"]["virtual_machines"][
+        "status"
+    ] == "COMPLETE"
+    assert result["discovery_status"] == "PARTIAL"

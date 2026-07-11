@@ -1,5 +1,7 @@
 """Azure resource discovery for DGS Sentinel AI."""
 
+from datetime import datetime, timezone
+
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource.resources import ResourceManagementClient
@@ -35,13 +37,16 @@ def discover_azure_resources(
         subscription_id,
     )
 
+    started_at = _utc_now_iso()
     errors = []
+    service_status = {}
 
     resource_groups = _discover_collection(
         resource_type="resource_groups",
         operation=resource_client.resource_groups.list,
         serializer=_serialize_resource_group,
         errors=errors,
+        service_status=service_status,
     )
 
     virtual_machines = _discover_collection(
@@ -49,6 +54,7 @@ def discover_azure_resources(
         operation=compute_client.virtual_machines.list_all,
         serializer=_serialize_virtual_machine,
         errors=errors,
+        service_status=service_status,
     )
 
     storage_accounts = _discover_collection(
@@ -56,6 +62,7 @@ def discover_azure_resources(
         operation=storage_client.storage_accounts.list,
         serializer=_serialize_storage_account,
         errors=errors,
+        service_status=service_status,
     )
 
     network_security_groups = _discover_collection(
@@ -65,6 +72,7 @@ def discover_azure_resources(
         ),
         serializer=_serialize_network_security_group,
         errors=errors,
+        service_status=service_status,
     )
 
     public_ip_addresses = _discover_collection(
@@ -72,6 +80,7 @@ def discover_azure_resources(
         operation=network_client.public_ip_addresses.list_all,
         serializer=_serialize_public_ip_address,
         errors=errors,
+        service_status=service_status,
     )
 
     network_interfaces = _discover_collection(
@@ -79,10 +88,16 @@ def discover_azure_resources(
         operation=network_client.network_interfaces.list_all,
         serializer=_serialize_network_interface,
         errors=errors,
+        service_status=service_status,
     )
+
+    completed_at = _utc_now_iso()
 
     return {
         "subscription_id": subscription_id,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "service_status": service_status,
         "discovery_status": (
             "PARTIAL"
             if errors
@@ -116,26 +131,52 @@ def _discover_collection(
     operation,
     serializer,
     errors,
+    service_status,
 ):
     """Run one Azure discovery operation without stopping others."""
 
     try:
-        resources = operation()
-
-        return [
+        resources = [
             serializer(resource)
-            for resource in resources
+            for resource in operation()
         ]
+
+        service_status[resource_type] = {
+            "status": "COMPLETE",
+            "resource_count": len(resources),
+            "scanned_at": _utc_now_iso(),
+            "error": None,
+        }
+
+        return resources
+
     except Exception as exc:
+        error_detail = {
+            "error_type": type(exc).__name__,
+            "message": str(exc),
+        }
+
         errors.append(
             {
                 "resource_type": resource_type,
-                "error_type": type(exc).__name__,
-                "message": str(exc),
+                **error_detail,
             }
         )
 
+        service_status[resource_type] = {
+            "status": "FAILED",
+            "resource_count": 0,
+            "scanned_at": _utc_now_iso(),
+            "error": error_detail,
+        }
+
         return []
+
+
+def _utc_now_iso():
+    """Return the current UTC timestamp in ISO 8601 format."""
+
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _serialize_resource_group(resource_group):
