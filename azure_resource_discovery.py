@@ -10,7 +10,7 @@ def discover_azure_resources(
     credential,
     subscription_id,
 ):
-    """Discover core Azure resources for a subscription."""
+    """Discover Azure resources while preserving partial results."""
 
     if credential is None:
         raise ValueError("Azure credential is required.")
@@ -35,107 +35,60 @@ def discover_azure_resources(
         subscription_id,
     )
 
-    resource_groups = [
-        {
-            "name": group.name,
-            "location": group.location,
-            "id": group.id,
-        }
-        for group in resource_client.resource_groups.list()
-    ]
+    errors = []
 
-    virtual_machines = [
-        {
-            "name": vm.name,
-            "location": vm.location,
-            "resource_group": _resource_group_from_id(vm.id),
-            "vm_size": getattr(
-                getattr(vm, "hardware_profile", None),
-                "vm_size",
-                None,
-            ),
-            "network_interface_ids": _reference_ids(
-                getattr(
-                    getattr(vm, "network_profile", None),
-                    "network_interfaces",
-                    None,
-                )
-            ),
-            "id": vm.id,
-        }
-        for vm in compute_client.virtual_machines.list_all()
-    ]
+    resource_groups = _discover_collection(
+        resource_type="resource_groups",
+        operation=resource_client.resource_groups.list,
+        serializer=_serialize_resource_group,
+        errors=errors,
+    )
 
-    storage_accounts = [
-        {
-            "name": account.name,
-            "location": account.location,
-            "resource_group": _resource_group_from_id(account.id),
-            "kind": str(account.kind),
-            "sku": getattr(
-                getattr(account, "sku", None),
-                "name",
-                None,
-            ),
-            "https_only": getattr(
-                account,
-                "enable_https_traffic_only",
-                None,
-            ),
-            "minimum_tls_version": str(
-                getattr(account, "minimum_tls_version", None)
-                or ""
-            ),
-            "allow_shared_key_access": getattr(
-                account,
-                "allow_shared_key_access",
-                None,
-            ),
-            "public_network_access": str(
-                getattr(account, "public_network_access", None)
-                or ""
-            ),
-            "network_default_action": str(
-                getattr(
-                    getattr(account, "network_rule_set", None),
-                    "default_action",
-                    None,
-                )
-                or ""
-            ),
-            "network_bypass": str(
-                getattr(
-                    getattr(account, "network_rule_set", None),
-                    "bypass",
-                    None,
-                )
-                or ""
-            ),
-            "id": account.id,
-        }
-        for account in storage_client.storage_accounts.list()
-    ]
+    virtual_machines = _discover_collection(
+        resource_type="virtual_machines",
+        operation=compute_client.virtual_machines.list_all,
+        serializer=_serialize_virtual_machine,
+        errors=errors,
+    )
 
-    network_security_groups = [
-        _serialize_network_security_group(network_security_group)
-        for network_security_group
-        in network_client.network_security_groups.list_all()
-    ]
+    storage_accounts = _discover_collection(
+        resource_type="storage_accounts",
+        operation=storage_client.storage_accounts.list,
+        serializer=_serialize_storage_account,
+        errors=errors,
+    )
 
-    public_ip_addresses = [
-        _serialize_public_ip_address(public_ip_address)
-        for public_ip_address
-        in network_client.public_ip_addresses.list_all()
-    ]
+    network_security_groups = _discover_collection(
+        resource_type="network_security_groups",
+        operation=(
+            network_client.network_security_groups.list_all
+        ),
+        serializer=_serialize_network_security_group,
+        errors=errors,
+    )
 
-    network_interfaces = [
-        _serialize_network_interface(network_interface)
-        for network_interface
-        in network_client.network_interfaces.list_all()
-    ]
+    public_ip_addresses = _discover_collection(
+        resource_type="public_ip_addresses",
+        operation=network_client.public_ip_addresses.list_all,
+        serializer=_serialize_public_ip_address,
+        errors=errors,
+    )
+
+    network_interfaces = _discover_collection(
+        resource_type="network_interfaces",
+        operation=network_client.network_interfaces.list_all,
+        serializer=_serialize_network_interface,
+        errors=errors,
+    )
 
     return {
         "subscription_id": subscription_id,
+        "discovery_status": (
+            "PARTIAL"
+            if errors
+            else "COMPLETE"
+        ),
+        "errors": errors,
         "resource_groups": resource_groups,
         "virtual_machines": virtual_machines,
         "storage_accounts": storage_accounts,
@@ -154,6 +107,146 @@ def discover_azure_resources(
             ),
             "network_interfaces": len(network_interfaces),
         },
+    }
+
+
+def _discover_collection(
+    *,
+    resource_type,
+    operation,
+    serializer,
+    errors,
+):
+    """Run one Azure discovery operation without stopping others."""
+
+    try:
+        resources = operation()
+
+        return [
+            serializer(resource)
+            for resource in resources
+        ]
+    except Exception as exc:
+        errors.append(
+            {
+                "resource_type": resource_type,
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            }
+        )
+
+        return []
+
+
+def _serialize_resource_group(resource_group):
+    """Convert an Azure resource group to a dictionary."""
+
+    return {
+        "name": resource_group.name,
+        "location": resource_group.location,
+        "id": resource_group.id,
+    }
+
+
+def _serialize_virtual_machine(virtual_machine):
+    """Convert an Azure virtual machine to a dictionary."""
+
+    return {
+        "name": virtual_machine.name,
+        "location": virtual_machine.location,
+        "resource_group": _resource_group_from_id(
+            virtual_machine.id
+        ),
+        "vm_size": getattr(
+            getattr(
+                virtual_machine,
+                "hardware_profile",
+                None,
+            ),
+            "vm_size",
+            None,
+        ),
+        "network_interface_ids": _reference_ids(
+            getattr(
+                getattr(
+                    virtual_machine,
+                    "network_profile",
+                    None,
+                ),
+                "network_interfaces",
+                None,
+            )
+        ),
+        "id": virtual_machine.id,
+    }
+
+
+def _serialize_storage_account(storage_account):
+    """Convert an Azure storage account to a dictionary."""
+
+    return {
+        "name": storage_account.name,
+        "location": storage_account.location,
+        "resource_group": _resource_group_from_id(
+            storage_account.id
+        ),
+        "kind": str(storage_account.kind),
+        "sku": getattr(
+            getattr(storage_account, "sku", None),
+            "name",
+            None,
+        ),
+        "https_only": getattr(
+            storage_account,
+            "enable_https_traffic_only",
+            None,
+        ),
+        "minimum_tls_version": str(
+            getattr(
+                storage_account,
+                "minimum_tls_version",
+                None,
+            )
+            or ""
+        ),
+        "allow_shared_key_access": getattr(
+            storage_account,
+            "allow_shared_key_access",
+            None,
+        ),
+        "public_network_access": str(
+            getattr(
+                storage_account,
+                "public_network_access",
+                None,
+            )
+            or ""
+        ),
+        "network_default_action": str(
+            getattr(
+                getattr(
+                    storage_account,
+                    "network_rule_set",
+                    None,
+                ),
+                "default_action",
+                None,
+            )
+            or ""
+        ),
+        "network_bypass": str(
+            getattr(
+                getattr(
+                    storage_account,
+                    "network_rule_set",
+                    None,
+                ),
+                "bypass",
+                None,
+            )
+            or ""
+        ),
+        "id": storage_account.id,
     }
 
 

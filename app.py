@@ -5298,9 +5298,29 @@ if selected_client_data is not None:
                             None,
                         )
 
-                    st.sidebar.success(
-                        "Azure resource discovery completed."
+                    discovery_status = str(
+                        discovery_result.get(
+                            "discovery_status",
+                            "COMPLETE",
+                        )
+                    ).strip().upper()
+
+                    discovery_errors = discovery_result.get(
+                        "errors",
+                        [],
                     )
+
+                    if discovery_status == "PARTIAL":
+                        st.sidebar.warning(
+                            "Azure discovery completed with "
+                            f"{len(discovery_errors)} partial "
+                            "failure(s). Available results were "
+                            "preserved."
+                        )
+                    else:
+                        st.sidebar.success(
+                            "Azure resource discovery completed."
+                        )
 
                 except Exception as exc:
                     logger.exception(
@@ -5468,6 +5488,40 @@ if azure_discovery:
     )
 
     azure_summary = azure_discovery.get("summary", {})
+
+    azure_discovery_status = str(
+        azure_discovery.get(
+            "discovery_status",
+            "COMPLETE",
+        )
+    ).strip().upper()
+
+    azure_discovery_errors = azure_discovery.get(
+        "errors",
+        [],
+    )
+
+    if azure_discovery_status == "PARTIAL":
+        st.warning(
+            "Azure discovery returned partial results. "
+            "Resources that were discovered successfully are "
+            "shown below."
+        )
+
+        with st.expander(
+            "View Azure discovery errors",
+            expanded=False,
+        ):
+            if azure_discovery_errors:
+                demo_dataframe(
+                    pd.DataFrame(azure_discovery_errors),
+                    width="stretch",
+                )
+            else:
+                demo_info(
+                    "No structured Azure discovery errors "
+                    "were returned."
+                )
 
     azure_col1, azure_col2, azure_col3 = st.columns(3)
 
