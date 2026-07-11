@@ -503,29 +503,67 @@ def highlight_priority(row):
 
 
 def generate_risk_narrative(summary):
-    """Generate an executive narrative from summary metrics."""
-    risk_rating = summary.get("Risk Rating", "UNKNOWN")
+    """Generate a multi-cloud executive risk narrative."""
+    risk_rating = summary.get(
+        "Multi-Cloud Risk Rating",
+        summary.get("Risk Rating", "UNKNOWN"),
+    )
+    risk_score = summary.get(
+        "Multi-Cloud Risk Score",
+        summary.get("Average Risk Score", 0),
+    )
     critical = summary.get("Critical Findings", 0)
     kev = summary.get("KEV Exploited Findings", 0)
+    azure_total = summary.get("Azure Total Findings", 0)
 
     return f"""
-DGS Sentinel AI assessed cloud security posture and identified an overall rating of {risk_rating}.
-The environment currently shows {critical} critical findings and {kev} known exploited vulnerability indicators.
+DGS Sentinel AI assessed the multi-cloud security posture and identified an
+overall rating of {risk_rating} with a risk score of {risk_score}.
 
-Security leadership should prioritize remediation of exploited vulnerabilities, review internet-facing assets,
-validate identity controls, and confirm that remediation actions are tracked to completion.
+The environment currently shows {critical} AWS critical findings,
+{kev} known exploited vulnerability indicators, and {azure_total}
+Azure network and storage exposure findings.
+
+Security leadership should prioritize exploited vulnerabilities,
+internet-facing cloud resources, exposed management services, identity
+controls, and tracked remediation across AWS and Azure.
 """
 
 
 def generate_ai_analysis(summary, remediation_playbook):
-    """Generate a deterministic executive AI-style summary without requiring API access."""
+    """Generate a deterministic multi-cloud executive analysis."""
     top_actions = remediation_playbook[:3]
+
+    multi_cloud_rating = summary.get(
+        "Multi-Cloud Risk Rating",
+        summary.get("Risk Rating", "UNKNOWN"),
+    )
+    multi_cloud_score = summary.get(
+        "Multi-Cloud Risk Score",
+        summary.get("Average Risk Score", 0),
+    )
+    azure_total_findings = summary.get(
+        "Azure Total Findings",
+        0,
+    )
 
     lines = [
         "Executive Analysis:",
         "",
-        f"The current cloud security risk posture is classified as {summary.get('Risk Rating', 'UNKNOWN')}.",
-        "Priority should be given to findings that combine high exploitability, known exploitation intelligence, and public exposure.",
+        (
+            "The current multi-cloud security risk posture is "
+            f"classified as {multi_cloud_rating} with a risk "
+            f"score of {multi_cloud_score}."
+        ),
+        (
+            f"Azure contributes {azure_total_findings} network "
+            "and storage exposure findings to the current posture."
+        ),
+        (
+            "Priority should be given to findings that combine "
+            "high exploitability, known exploitation intelligence, "
+            "and public exposure."
+        ),
         "",
         "Recommended Focus Areas:",
         "1. Remediate critical and KEV-associated vulnerabilities.",
@@ -1231,8 +1269,45 @@ if page == "Risk Trends":
 
                 trend_rows.append({
                     "Scan Time": data.get("scan_time"),
-                    "Security Score": summary_data.get("security_score", 0),
-                    "Risk Rating": summary_data.get("risk_rating", "UNKNOWN"),
+                    "Security Score": summary_data.get(
+                        "security_score",
+                        0,
+                    ),
+                    "Risk Rating": summary_data.get(
+                        "risk_rating",
+                        "UNKNOWN",
+                    ),
+                    "Multi-Cloud Security Score": summary_data.get(
+                        "multi_cloud_security_score",
+                        summary_data.get("security_score", 0),
+                    ),
+                    "Multi-Cloud Risk Score": summary_data.get(
+                        "multi_cloud_risk_score",
+                        0,
+                    ),
+                    "Multi-Cloud Risk Rating": summary_data.get(
+                        "multi_cloud_risk_rating",
+                        summary_data.get(
+                            "risk_rating",
+                            "UNKNOWN",
+                        ),
+                    ),
+                    "Azure Critical Findings": summary_data.get(
+                        "azure_critical_findings",
+                        0,
+                    ),
+                    "Azure High Findings": summary_data.get(
+                        "azure_high_findings",
+                        0,
+                    ),
+                    "Azure Medium Findings": summary_data.get(
+                        "azure_medium_findings",
+                        0,
+                    ),
+                    "Azure Total Findings": summary_data.get(
+                        "azure_total_findings",
+                        0,
+                    ),
                     "Assets": summary_data.get("assets", 0),
                     "EC2 Assets": summary_data.get("ec2_assets", 0),
                     "IAM Users": summary_data.get("iam_users", 0),
@@ -1260,7 +1335,34 @@ if page == "Risk Trends":
         col1.metric("Latest Security Score", latest["Security Score"])
         col2.metric("Latest Risk Rating", latest["Risk Rating"])
         col3.metric("Latest Assets", latest["Assets"])
-        col4.metric("Latest Remediation Actions", latest["Remediation Actions"])
+        col4.metric(
+            "Latest Remediation Actions",
+            latest["Remediation Actions"],
+        )
+
+        (
+            multi_metric_col1,
+            multi_metric_col2,
+            multi_metric_col3,
+            multi_metric_col4,
+        ) = st.columns(4)
+
+        multi_metric_col1.metric(
+            "Multi-Cloud Security Score",
+            latest["Multi-Cloud Security Score"],
+        )
+        multi_metric_col2.metric(
+            "Multi-Cloud Risk Score",
+            latest["Multi-Cloud Risk Score"],
+        )
+        multi_metric_col3.metric(
+            "Multi-Cloud Rating",
+            latest["Multi-Cloud Risk Rating"],
+        )
+        multi_metric_col4.metric(
+            "Azure Findings",
+            latest["Azure Total Findings"],
+        )
 
         if len(trend_df) >= 2:
             previous = trend_df.iloc[-2]
@@ -1268,7 +1370,22 @@ if page == "Risk Trends":
             score_delta = latest["Security Score"] - previous["Security Score"]
             securityhub_delta = latest["Security Hub Findings"] - previous["Security Hub Findings"]
             guardduty_delta = latest["GuardDuty Findings"] - previous["GuardDuty Findings"]
-            remediation_delta = latest["Remediation Actions"] - previous["Remediation Actions"]
+            remediation_delta = (
+                latest["Remediation Actions"]
+                - previous["Remediation Actions"]
+            )
+            multi_cloud_risk_delta = (
+                latest["Multi-Cloud Risk Score"]
+                - previous["Multi-Cloud Risk Score"]
+            )
+            multi_cloud_security_delta = (
+                latest["Multi-Cloud Security Score"]
+                - previous["Multi-Cloud Security Score"]
+            )
+            azure_findings_delta = (
+                latest["Azure Total Findings"]
+                - previous["Azure Total Findings"]
+            )
 
             st.subheader("Executive Risk Delta")
 
@@ -1291,12 +1408,41 @@ if page == "Risk Trends":
 
             delta_col4.metric(
                 "Remediation Actions Change",
-                remediation_delta
+                remediation_delta,
+            )
+
+            (
+                multi_delta_col1,
+                multi_delta_col2,
+                multi_delta_col3,
+            ) = st.columns(3)
+
+            multi_delta_col1.metric(
+                "Multi-Cloud Risk Change",
+                multi_cloud_risk_delta,
+            )
+            multi_delta_col2.metric(
+                "Multi-Cloud Security Change",
+                multi_cloud_security_delta,
+            )
+            multi_delta_col3.metric(
+                "Azure Findings Change",
+                azure_findings_delta,
             )
 
         st.subheader("Security Score Over Time")
         st.line_chart(
             trend_df.set_index("Scan Time")["Security Score"]
+        )
+
+        st.subheader("Multi-Cloud Risk Over Time")
+        st.line_chart(
+            trend_df.set_index("Scan Time")[
+                [
+                    "Multi-Cloud Risk Score",
+                    "Multi-Cloud Security Score",
+                ]
+            ]
         )
 
         st.subheader("Findings Trend")
@@ -1305,6 +1451,7 @@ if page == "Risk Trends":
             [
                 "Security Hub Findings",
                 "GuardDuty Findings",
+                "Azure Total Findings",
                 "KEV CVEs",
                 "Critical Vulnerabilities"
             ]
@@ -1383,7 +1530,43 @@ if page == "Risk Trends":
 
                 compare_col5.metric(
                     "GuardDuty Findings Delta",
-                    latest_summary.get("guardduty_findings", 0) - previous_summary.get("guardduty_findings", 0)
+                    latest_summary.get(
+                        "guardduty_findings",
+                        0,
+                    )
+                    - previous_summary.get(
+                        "guardduty_findings",
+                        0,
+                    ),
+                )
+
+                (
+                    compare_multi_col1,
+                    compare_multi_col2,
+                ) = st.columns(2)
+
+                compare_multi_col1.metric(
+                    "Multi-Cloud Risk Delta",
+                    latest_summary.get(
+                        "multi_cloud_risk_score",
+                        0,
+                    )
+                    - previous_summary.get(
+                        "multi_cloud_risk_score",
+                        0,
+                    ),
+                )
+
+                compare_multi_col2.metric(
+                    "Azure Findings Delta",
+                    latest_summary.get(
+                        "azure_total_findings",
+                        0,
+                    )
+                    - previous_summary.get(
+                        "azure_total_findings",
+                        0,
+                    ),
                 )
 
                 demo_caption(
@@ -6411,6 +6594,31 @@ if st.button(
                 snapshot_summary = {
                     "security_score": max(0, 100 - int(avg_risk)),
                     "risk_rating": risk_rating,
+                    "multi_cloud_security_score": round(
+                        max(
+                            0,
+                            100 - float(multi_cloud_risk_score),
+                        ),
+                        2,
+                    ),
+                    "multi_cloud_risk_score": (
+                        multi_cloud_risk_score
+                    ),
+                    "multi_cloud_risk_rating": (
+                        multi_cloud_risk_rating
+                    ),
+                    "azure_critical_findings": (
+                        azure_finding_summary["critical"]
+                    ),
+                    "azure_high_findings": (
+                        azure_finding_summary["high"]
+                    ),
+                    "azure_medium_findings": (
+                        azure_finding_summary["medium"]
+                    ),
+                    "azure_total_findings": (
+                        azure_finding_summary["total"]
+                    ),
                     "assets": len(snapshot_assets),
                     "accounts_scanned": 1,
                     "ec2_assets": len([
