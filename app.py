@@ -93,6 +93,13 @@ except Exception:
     analyze_storage_exposure = None
 
 try:
+    from azure_network_exposure import (
+        analyze_azure_network_exposure,
+    )
+except Exception:
+    analyze_azure_network_exposure = None
+
+try:
     from streamlit_autorefresh import st_autorefresh
     AUTOREFRESH_AVAILABLE = True
 except Exception:
@@ -5240,6 +5247,52 @@ if selected_client_data is not None:
                             None,
                         )
 
+                    if analyze_azure_network_exposure is not None:
+                        network_exposure = (
+                            analyze_azure_network_exposure(
+                                network_security_groups=(
+                                    discovery_result.get(
+                                        "network_security_groups",
+                                        [],
+                                    )
+                                ),
+                                public_ip_addresses=(
+                                    discovery_result.get(
+                                        "public_ip_addresses",
+                                        [],
+                                    )
+                                ),
+                                network_interfaces=(
+                                    discovery_result.get(
+                                        "network_interfaces",
+                                        [],
+                                    )
+                                ),
+                                virtual_machines=(
+                                    discovery_result.get(
+                                        "virtual_machines",
+                                        [],
+                                    )
+                                ),
+                            )
+                        )
+
+                        st.session_state[
+                            "azure_network_exposure"
+                        ] = network_exposure
+                        st.session_state[
+                            "azure_network_exposure_client"
+                        ] = selected_client_data[1]
+                    else:
+                        st.session_state.pop(
+                            "azure_network_exposure",
+                            None,
+                        )
+                        st.session_state.pop(
+                            "azure_network_exposure_client",
+                            None,
+                        )
+
                     st.sidebar.success(
                         "Azure resource discovery completed."
                     )
@@ -5443,6 +5496,258 @@ if azure_discovery:
             )
         else:
             demo_info("No Azure storage accounts discovered.")
+
+    st.divider()
+
+azure_network_exposure = st.session_state.get(
+    "azure_network_exposure"
+)
+
+if azure_network_exposure:
+    st.header("Azure Network Exposure Analysis")
+
+    network_client_name = st.session_state.get(
+        "azure_network_exposure_client",
+        "Selected Azure Client",
+    )
+
+    demo_caption(
+        f"Latest network exposure analysis for "
+        f"{network_client_name}"
+    )
+
+    network_summary = azure_network_exposure.get(
+        "summary",
+        {},
+    )
+
+    (
+        network_col1,
+        network_col2,
+        network_col3,
+        network_col4,
+        network_col5,
+    ) = st.columns(5)
+
+    network_col1.metric(
+        "Network Security Groups",
+        network_summary.get(
+            "network_security_groups",
+            0,
+        ),
+    )
+    network_col2.metric(
+        "Exposed NSGs",
+        network_summary.get(
+            "exposed_network_security_groups",
+            0,
+        ),
+    )
+    network_col3.metric(
+        "Public IPs",
+        network_summary.get(
+            "public_ip_addresses",
+            0,
+        ),
+    )
+    network_col4.metric(
+        "Internet-Facing VMs",
+        network_summary.get(
+            "internet_facing_virtual_machines",
+            0,
+        ),
+    )
+    network_col5.metric(
+        "Total Findings",
+        network_summary.get(
+            "total_findings",
+            0,
+        ),
+    )
+
+    (
+        severity_col1,
+        severity_col2,
+        severity_col3,
+        severity_col4,
+    ) = st.columns(4)
+
+    severity_col1.metric(
+        "Critical Findings",
+        network_summary.get(
+            "critical_findings",
+            0,
+        ),
+    )
+    severity_col2.metric(
+        "High Findings",
+        network_summary.get(
+            "high_findings",
+            0,
+        ),
+    )
+    severity_col3.metric(
+        "Medium Findings",
+        network_summary.get(
+            "medium_findings",
+            0,
+        ),
+    )
+    severity_col4.metric(
+        "Unassigned Public IPs",
+        network_summary.get(
+            "unassigned_public_ip_addresses",
+            0,
+        ),
+    )
+
+    network_findings = azure_network_exposure.get(
+        "findings",
+        [],
+    )
+    network_security_groups = azure_network_exposure.get(
+        "network_security_groups",
+        [],
+    )
+    public_ip_addresses = azure_network_exposure.get(
+        "public_ip_addresses",
+        [],
+    )
+    analyzed_virtual_machines = azure_network_exposure.get(
+        "virtual_machines",
+        [],
+    )
+
+    high_risk_network_findings = [
+        finding
+        for finding in network_findings
+        if str(
+            finding.get("severity", "")
+        ).strip().upper() in {"CRITICAL", "HIGH"}
+    ]
+
+    exposed_network_security_groups = [
+        network_security_group
+        for network_security_group in network_security_groups
+        if network_security_group.get("internet_exposed")
+    ]
+
+    internet_facing_virtual_machines = [
+        virtual_machine
+        for virtual_machine in analyzed_virtual_machines
+        if virtual_machine.get("internet_exposed")
+    ]
+
+    (
+        network_findings_tab,
+        high_risk_network_tab,
+        exposed_nsg_tab,
+        public_ip_tab,
+        internet_vm_tab,
+    ) = st.tabs(
+        [
+            "All Findings",
+            "Critical and High Risk",
+            "Exposed NSGs",
+            "Public IP Addresses",
+            "Internet-Facing VMs",
+        ]
+    )
+
+    with network_findings_tab:
+        if network_findings:
+            network_findings_df = pd.DataFrame(
+                network_findings
+            )
+
+            network_severity_order = {
+                "CRITICAL": 4,
+                "HIGH": 3,
+                "MEDIUM": 2,
+                "LOW": 1,
+            }
+
+            network_findings_df[
+                "Severity Rank"
+            ] = (
+                network_findings_df["severity"]
+                .astype(str)
+                .str.upper()
+                .map(network_severity_order)
+                .fillna(0)
+            )
+
+            network_findings_df = (
+                network_findings_df.sort_values(
+                    by="Severity Rank",
+                    ascending=False,
+                ).drop(
+                    columns=["Severity Rank"]
+                )
+            )
+
+            demo_dataframe(
+                network_findings_df,
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No Azure network exposure findings "
+                "were identified."
+            )
+
+    with high_risk_network_tab:
+        if high_risk_network_findings:
+            demo_dataframe(
+                pd.DataFrame(
+                    high_risk_network_findings
+                ),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No critical or high-risk Azure network "
+                "findings were identified."
+            )
+
+    with exposed_nsg_tab:
+        if exposed_network_security_groups:
+            demo_dataframe(
+                pd.DataFrame(
+                    exposed_network_security_groups
+                ),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No internet-exposed network security "
+                "groups were identified."
+            )
+
+    with public_ip_tab:
+        if public_ip_addresses:
+            demo_dataframe(
+                pd.DataFrame(public_ip_addresses),
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Azure public IP addresses were discovered."
+            )
+
+    with internet_vm_tab:
+        if internet_facing_virtual_machines:
+            demo_dataframe(
+                pd.DataFrame(
+                    internet_facing_virtual_machines
+                ),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No internet-facing Azure virtual machines "
+                "were identified."
+            )
 
     st.divider()
 
