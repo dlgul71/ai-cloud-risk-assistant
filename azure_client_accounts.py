@@ -2,9 +2,14 @@
 
 try:
     from azure.identity import ClientSecretCredential
-    from azure.mgmt.resource import SubscriptionClient
 except ImportError:
     ClientSecretCredential = None
+
+try:
+    from azure.mgmt.resource.subscriptions import (
+        SubscriptionClient,
+    )
+except ImportError:
     SubscriptionClient = None
 
 
