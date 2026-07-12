@@ -31,6 +31,11 @@ from risk_engine import (
     calculate_unified_risk,
     summarize_azure_findings,
 )
+from cloud_scan_routing import (
+    build_azure_snapshot_assets,
+    normalize_cloud_provider,
+    summarize_azure_resources,
+)
 from scan_engine_phase3_assumerole import run_client_scan
 from snapshot_engine import save_scan_snapshot
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
@@ -6477,10 +6482,51 @@ if st.button(
 
     with st.spinner("Running autonomous scan..."):
         try:
-            if run_scan is None:
-                raise RuntimeError("scan_engine.run_scan is not available.")
+            selected_cloud_provider = (
+                normalize_cloud_provider(
+                    selected_client_data[5]
+                    if selected_client_data
+                    else "AWS"
+                )
+            )
 
-            if selected_client_data:
+            results = {}
+
+            if (
+                selected_client_data
+                and selected_cloud_provider == "AZURE"
+            ):
+                if not azure_resource_discovery:
+                    raise RuntimeError(
+                        "Run Azure Resource Discovery before "
+                        "starting the DGS Sentinel Azure scan."
+                    )
+
+                azure_resource_counts = (
+                    summarize_azure_resources(
+                        azure_resource_discovery
+                    )
+                )
+
+                demo_success(
+                    "Azure posture scan completed using the "
+                    "latest Azure discovery results. "
+                    f"Virtual machines: "
+                    f"{azure_resource_counts['virtual_machines']}. "
+                    f"Storage accounts: "
+                    f"{azure_resource_counts['storage_accounts']}. "
+                    f"Network security groups: "
+                    f"{azure_resource_counts['network_security_groups']}. "
+                    f"Public IP addresses: "
+                    f"{azure_resource_counts['public_ip_addresses']}."
+                )
+
+            elif selected_client_data:
+                if run_client_scan is None:
+                    raise RuntimeError(
+                        "AWS client scan engine is not available."
+                    )
+
                 role_arn = selected_client_data[3]
 
                 results = run_client_scan(
@@ -6568,6 +6614,11 @@ if st.button(
                         width="stretch"
                     )
             else:
+                if run_scan is None:
+                    raise RuntimeError(
+                        "scan_engine.run_scan is not available."
+                    )
+
                 run_scan()
 
             snapshot_assets = []
@@ -6590,6 +6641,29 @@ if st.button(
                         "risk_score": asset[8],
                         "last_scan": asset[9]
                     })
+
+                if (
+                    selected_client_data
+                    and selected_cloud_provider == "AZURE"
+                ):
+                    snapshot_assets = (
+                        build_azure_snapshot_assets(
+                            azure_resource_discovery,
+                            subscription_id=(
+                                selected_client_data[6]
+                            ),
+                        )
+                    )
+
+                    azure_resource_counts = (
+                        summarize_azure_resources(
+                            azure_resource_discovery
+                        )
+                    )
+                else:
+                    azure_resource_counts = (
+                        summarize_azure_resources(None)
+                    )
 
                 snapshot_summary = {
                     "security_score": max(0, 100 - int(avg_risk)),
@@ -6619,6 +6693,32 @@ if st.button(
                     "azure_total_findings": (
                         azure_finding_summary["total"]
                     ),
+                    "azure_virtual_machines": (
+                        azure_resource_counts[
+                            "virtual_machines"
+                        ]
+                    ),
+                    "azure_storage_accounts": (
+                        azure_resource_counts[
+                            "storage_accounts"
+                        ]
+                    ),
+                    "azure_network_security_groups": (
+                        azure_resource_counts[
+                            "network_security_groups"
+                        ]
+                    ),
+                    "azure_public_ip_addresses": (
+                        azure_resource_counts[
+                            "public_ip_addresses"
+                        ]
+                    ),
+                    "azure_network_interfaces": (
+                        azure_resource_counts[
+                            "network_interfaces"
+                        ]
+                    ),
+                    "cloud_provider": selected_cloud_provider,
                     "assets": len(snapshot_assets),
                     "accounts_scanned": 1,
                     "ec2_assets": len([
