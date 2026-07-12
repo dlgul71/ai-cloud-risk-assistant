@@ -6491,12 +6491,32 @@ if st.button(
             )
 
             results = {}
+            azure_scan_discovery = None
 
             if (
                 selected_client_data
                 and selected_cloud_provider == "AZURE"
             ):
-                if not azure_resource_discovery:
+                azure_scan_discovery = azure_discovery
+
+                discovery_client_name = st.session_state.get(
+                    "azure_resource_discovery_client"
+                )
+
+                if (
+                    not demo_mode_enabled()
+                    and discovery_client_name
+                    and discovery_client_name
+                    != selected_client_data[1]
+                ):
+                    raise RuntimeError(
+                        "The current Azure discovery results belong "
+                        f"to {discovery_client_name}, not "
+                        f"{selected_client_data[1]}. Run Azure "
+                        "Resource Discovery again."
+                    )
+
+                if not azure_scan_discovery:
                     raise RuntimeError(
                         "Run Azure Resource Discovery before "
                         "starting the DGS Sentinel Azure scan."
@@ -6504,7 +6524,7 @@ if st.button(
 
                 azure_resource_counts = (
                     summarize_azure_resources(
-                        azure_resource_discovery
+                        azure_scan_discovery
                     )
                 )
 
@@ -6648,7 +6668,7 @@ if st.button(
                 ):
                     snapshot_assets = (
                         build_azure_snapshot_assets(
-                            azure_resource_discovery,
+                            azure_scan_discovery,
                             subscription_id=(
                                 selected_client_data[6]
                             ),
@@ -6657,7 +6677,7 @@ if st.button(
 
                     azure_resource_counts = (
                         summarize_azure_resources(
-                            azure_resource_discovery
+                            azure_scan_discovery
                         )
                     )
                 else:
