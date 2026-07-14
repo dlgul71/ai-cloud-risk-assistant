@@ -70,3 +70,14 @@ DGS Sentinel AI v1.2 successfully completed the full Azure remediation lifecycle
 6. Post-action verification
 7. Tamper-evident evidence storage
 8. Risk-reduction confirmation through rescanning
+
+## Post-Validation Cleanup
+
+After successful validation:
+
+- The temporary `Storage Account Contributor` role assignment was removed.
+- Role-assignment verification returned an empty result.
+- The test resource group `dgs-sentinel-test-rg` was deleted.
+- The test Storage Account `dgssentinel0792` was deleted with the resource group.
+- Final Azure resource-group verification returned `false`.
+- The DGS Azure app registration and subscription were not removed.
