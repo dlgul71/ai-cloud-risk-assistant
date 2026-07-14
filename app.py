@@ -91,6 +91,11 @@ except Exception:
     discover_azure_resources = None
 
 try:
+    from azure.mgmt.storage import StorageManagementClient
+except Exception:
+    StorageManagementClient = None
+
+try:
     from azure_security_posture import discover_azure_security_posture
 except Exception:
     discover_azure_security_posture = None
@@ -3352,6 +3357,10 @@ if page == "Execution Center":
         "Evidence Hash",
         "Evidence Authentication Type",
         "Evidence Key ID",
+        "Cloud Provider",
+        "Azure Subscription ID",
+        "Azure Tenant ID",
+        "Azure Client ID",
     ]
 
     if actions:
@@ -3813,11 +3822,23 @@ if page == "Execution Center":
                 except Exception as e:
                     st.error(f"Simulation failed: {e}")
 
-        st.subheader("Guarded Live S3 Remediation")
+        st.subheader("Guarded Live Cloud Remediation")
+
+        live_enabled_adapters = {
+            "S3_BLOCK_PUBLIC_ACCESS",
+            "AZURE_STORAGE_HARDENING",
+        }
+
+        is_azure_live_action = (
+            selected_adapter == "AZURE_STORAGE_HARDENING"
+        )
+        is_aws_live_action = (
+            selected_adapter == "S3_BLOCK_PUBLIC_ACCESS"
+        )
 
         demo_caption(
-            "Live remediation is restricted to approved S3 exposure actions, "
-            "a saved client account, an assumed AWS role, and the exact "
+            "Live remediation is restricted to approved actions, "
+            "resources permanently bound to the action, and the exact "
             "authorization phrase."
         )
 
@@ -3829,14 +3850,15 @@ if page == "Execution Center":
         elif not GUARDRAILS.live_execution_enabled:
             demo_info(
                 "Live remediation is disabled. Set "
-                "DGS_LIVE_REMEDIATION_ENABLED=true only in an authorized "
-                "environment."
+                "DGS_LIVE_REMEDIATION_ENABLED=true only in an "
+                "authorized environment."
             )
 
-        elif selected_adapter != "S3_BLOCK_PUBLIC_ACCESS":
+        elif selected_adapter not in live_enabled_adapters:
             demo_info(
-                "This adapter remains simulation-only. Only the guarded "
-                "S3 Block Public Access adapter supports live execution."
+                "This adapter remains simulation-only. Guarded live "
+                "execution is available only for approved S3 and Azure "
+                "Storage remediation actions."
             )
 
         elif selected_action["Approval Status"] != "Approved":
@@ -3849,25 +3871,48 @@ if page == "Execution Center":
                 "This remediation action has already been completed."
             )
 
-        else:
+        elif is_azure_live_action:
             live_client_name = selected_action["Client Name"]
-            live_account_id = selected_action["AWS Account ID"]
-            live_role_arn = selected_action["Role ARN"]
+            live_subscription_id = selected_action[
+                "Azure Subscription ID"
+            ]
+            live_tenant_id = selected_action["Azure Tenant ID"]
+            live_azure_client_id = selected_action["Azure Client ID"]
 
-            if not live_account_id:
+            missing_azure_binding = any(
+                pd.isna(value) or not str(value).strip()
+                for value in (
+                    live_subscription_id,
+                    live_tenant_id,
+                    live_azure_client_id,
+                )
+            )
+
+            if missing_azure_binding:
                 demo_warning(
-                    "This action is not bound to an AWS account and cannot "
+                    "This action is missing its bound Azure "
+                    "subscription, tenant, or client ID and cannot "
                     "be executed live."
                 )
 
-            elif not live_role_arn:
+            elif create_azure_credential is None:
                 demo_warning(
-                    "This action has no bound remediation role. Internal or "
-                    "legacy actions remain simulation-only."
+                    "The Azure credential module is unavailable."
+                )
+
+            elif StorageManagementClient is None:
+                demo_warning(
+                    "The Azure Storage Management SDK is unavailable."
                 )
 
             else:
-                live_account_id = str(live_account_id)
+                live_subscription_id = str(
+                    live_subscription_id
+                ).strip()
+                live_tenant_id = str(live_tenant_id).strip()
+                live_azure_client_id = str(
+                    live_azure_client_id
+                ).strip()
 
                 live_plan = build_execution_plan(
                     action_type=selected_action["Action Type"],
@@ -3877,6 +3922,149 @@ if page == "Execution Center":
                 demo_write(
                     "**Bound client:**",
                     live_client_name or "Unnamed Client",
+                )
+                demo_write(
+                    "**Cloud provider:**",
+                    "Azure",
+                )
+                demo_write(
+                    "**Bound Azure subscription:**",
+                    live_subscription_id,
+                )
+                demo_write(
+                    "**Target Azure Storage account:**",
+                    live_plan.get("resource_id", "UNKNOWN"),
+                )
+
+                live_azure_secret = st.text_input(
+                    "Azure client secret for live remediation",
+                    type="password",
+                    key="live_azure_remediation_secret",
+                    help=(
+                        "Used only for this live execution. "
+                        "The secret is not stored."
+                    ),
+                )
+
+                confirmation_phrase = st.text_input(
+                    "Live execution confirmation phrase",
+                    type="password",
+                    key="live_remediation_confirmation",
+                    help=(
+                        "Enter exactly: "
+                        "AUTHORIZE LIVE AWS REMEDIATION"
+                    ),
+                )
+
+                operator_acknowledgement = st.checkbox(
+                    (
+                        "I confirm that this approved action may "
+                        "permanently modify the Azure subscription "
+                        "bound to this action."
+                    ),
+                    key="live_remediation_acknowledgement",
+                )
+
+                live_button_enabled = (
+                    operator_acknowledgement
+                    and bool(live_azure_secret)
+                    and confirmation_phrase
+                    == "AUTHORIZE LIVE AWS REMEDIATION"
+                )
+
+                if st.button(
+                    "Execute Guarded Live Azure Storage Remediation",
+                    disabled=not live_button_enabled,
+                    key="execute_guarded_live_remediation",
+                ):
+                    try:
+                        credential = create_azure_credential(
+                            tenant_id=live_tenant_id,
+                            client_id=live_azure_client_id,
+                            client_secret=live_azure_secret,
+                        )
+
+                        live_azure_storage_client = (
+                            StorageManagementClient(
+                                credential,
+                                live_subscription_id,
+                            )
+                        )
+
+                        live_result = execute_live_action(
+                            action_id=int(selected_action_id),
+                            expected_subscription_id=(
+                                live_subscription_id
+                            ),
+                            azure_storage_client=(
+                                live_azure_storage_client
+                            ),
+                            confirmation_phrase=confirmation_phrase,
+                            actor=(
+                                settings.app_username
+                                or "Authenticated Operator"
+                            ),
+                        )
+
+                        demo_success(
+                            "Guarded live Azure Storage remediation "
+                            "completed and verified."
+                        )
+                        demo_json(live_result)
+                        st.rerun()
+
+                    except ValueError as error:
+                        st.error(
+                            f"Live remediation blocked: {error}"
+                        )
+
+                    except Exception as error:
+                        logger.exception(
+                            "Guarded Azure live remediation failed."
+                        )
+                        st.error(
+                            f"Live remediation failed: {error}"
+                        )
+
+        elif is_aws_live_action:
+            live_client_name = selected_action["Client Name"]
+            live_account_id = selected_action["AWS Account ID"]
+            live_role_arn = selected_action["Role ARN"]
+
+            if (
+                pd.isna(live_account_id)
+                or not str(live_account_id).strip()
+            ):
+                demo_warning(
+                    "This action is not bound to an AWS account and "
+                    "cannot be executed live."
+                )
+
+            elif (
+                pd.isna(live_role_arn)
+                or not str(live_role_arn).strip()
+            ):
+                demo_warning(
+                    "This action has no bound remediation role. "
+                    "Internal or legacy actions remain simulation-only."
+                )
+
+            else:
+                live_account_id = str(live_account_id).strip()
+                live_role_arn = str(live_role_arn).strip()
+
+                live_plan = build_execution_plan(
+                    action_type=selected_action["Action Type"],
+                    finding=selected_action["Finding"],
+                )
+
+                demo_write(
+                    "**Bound client:**",
+                    live_client_name or "Unnamed Client",
+                )
+                demo_write(
+                    "**Cloud provider:**",
+                    "AWS",
                 )
                 demo_write(
                     "**Bound AWS account:**",
@@ -3899,8 +4087,9 @@ if page == "Execution Center":
 
                 operator_acknowledgement = st.checkbox(
                     (
-                        "I confirm that this approved action may modify "
-                        "the AWS account permanently bound to this action."
+                        "I confirm that this approved action may "
+                        "permanently modify the AWS account bound "
+                        "to this action."
                     ),
                     key="live_remediation_acknowledgement",
                 )
@@ -3923,13 +4112,11 @@ if page == "Execution Center":
 
                         if client_session is None:
                             raise ValueError(
-                                "Unable to assume the remediation role "
-                                "bound to this action."
+                                "Unable to assume the remediation "
+                                "role bound to this action."
                             )
 
-                        live_s3_client = client_session.client(
-                            "s3"
-                        )
+                        live_s3_client = client_session.client("s3")
 
                         live_result = execute_live_action(
                             action_id=int(selected_action_id),
@@ -3943,7 +4130,8 @@ if page == "Execution Center":
                         )
 
                         demo_success(
-                            "Guarded live S3 remediation completed."
+                            "Guarded live S3 remediation completed "
+                            "and verified."
                         )
                         demo_json(live_result)
                         st.rerun()
@@ -3955,7 +4143,7 @@ if page == "Execution Center":
 
                     except Exception as error:
                         logger.exception(
-                            "Guarded live remediation failed."
+                            "Guarded AWS live remediation failed."
                         )
                         st.error(
                             f"Live remediation failed: {error}"
