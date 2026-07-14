@@ -1,4 +1,5 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 import remediation_guardrails
 from remediation_live_actions import execute_controlled_action
@@ -6,6 +7,14 @@ from remediation_live_actions import execute_controlled_action
 
 S3_ACTION = "Generate S3 Exposure Remediation Task"
 IAM_ACTION = "Generate IAM MFA and Access Key Review Task"
+AZURE_STORAGE_ACTION = "Generate Azure Storage Hardening Task"
+AZURE_SUBSCRIPTION_ID = "0792ff8b-1860-475a-9310-56c73cd71572"
+AZURE_RESOURCE_ID = (
+    f"/subscriptions/{AZURE_SUBSCRIPTION_ID}"
+    "/resourceGroups/dgs-sentinel-test-rg"
+    "/providers/Microsoft.Storage"
+    "/storageAccounts/dgssentineltest"
+)
 CONFIRMATION = "AUTHORIZE LIVE AWS REMEDIATION"
 
 
@@ -144,3 +153,121 @@ def test_non_s3_live_adapter_remains_blocked(
 
     assert result["status"] == "BLOCKED"
     assert "not enabled for live execution" in result["message"].lower()
+
+class FakeAzurePipelineResponse:
+    def __init__(self, request_id, status_code=200):
+        self.http_response = SimpleNamespace(
+            headers={"x-ms-request-id": request_id},
+            status_code=status_code,
+        )
+
+
+class FakeAzureStorageOperations:
+    def update(
+        self,
+        resource_group_name,
+        account_name,
+        parameters,
+        **kwargs,
+    ):
+        hook = kwargs.get("raw_response_hook")
+
+        if hook:
+            hook(
+                FakeAzurePipelineResponse(
+                    "azure-live-update-request",
+                )
+            )
+
+        return SimpleNamespace(
+            public_network_access="Disabled",
+            enable_https_traffic_only=True,
+            minimum_tls_version="TLS1_2",
+            allow_shared_key_access=False,
+            allow_blob_public_access=False,
+        )
+
+    def get_properties(
+        self,
+        resource_group_name,
+        account_name,
+        **kwargs,
+    ):
+        hook = kwargs.get("raw_response_hook")
+
+        if hook:
+            hook(
+                FakeAzurePipelineResponse(
+                    "azure-live-verification-request",
+                )
+            )
+
+        return SimpleNamespace(
+            public_network_access="Disabled",
+            enable_https_traffic_only=True,
+            minimum_tls_version="TLS1_2",
+            allow_shared_key_access=False,
+            allow_blob_public_access=False,
+        )
+
+
+class FakeAzureStorageClient:
+    def __init__(self):
+        self.storage_accounts = FakeAzureStorageOperations()
+
+
+def test_azure_storage_simulation_does_not_require_client():
+    result = execute_controlled_action(
+        action_type=AZURE_STORAGE_ACTION,
+        finding=f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        approval_status="Approved",
+        execution_mode="Simulation",
+    )
+
+    assert result["status"] == "SIMULATED"
+    assert result["adapter"] == "AZURE_STORAGE_HARDENING"
+
+
+def test_live_azure_storage_action_executes_with_injected_client(
+    monkeypatch,
+):
+    enable_live_remediation(monkeypatch)
+
+    result = execute_controlled_action(
+        action_type=AZURE_STORAGE_ACTION,
+        finding=f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        approval_status="Approved",
+        execution_mode="Live",
+        confirmation_phrase=CONFIRMATION,
+        expected_subscription_id=AZURE_SUBSCRIPTION_ID,
+        azure_storage_client=FakeAzureStorageClient(),
+    )
+
+    assert result["status"] == "EXECUTED"
+    assert result["verification_status"] == "VERIFIED"
+    assert result["mode"] == "Live"
+    assert result["adapter"] == "AZURE_STORAGE_HARDENING"
+    assert result["resource_id"] == AZURE_RESOURCE_ID
+    assert result["subscription_id"] == AZURE_SUBSCRIPTION_ID
+    assert result["request_id"] == "azure-live-update-request"
+    assert result["verification_request_id"] == (
+        "azure-live-verification-request"
+    )
+
+
+def test_live_azure_storage_action_requires_subscription_id(
+    monkeypatch,
+):
+    enable_live_remediation(monkeypatch)
+
+    result = execute_controlled_action(
+        action_type=AZURE_STORAGE_ACTION,
+        finding=f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        approval_status="Approved",
+        execution_mode="Live",
+        confirmation_phrase=CONFIRMATION,
+        azure_storage_client=FakeAzureStorageClient(),
+    )
+
+    assert result["status"] == "BLOCKED"
+    assert "subscription" in result["message"].lower()
