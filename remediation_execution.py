@@ -128,6 +128,10 @@ def init_execution_db():
         aws_account_id TEXT,
         client_name TEXT,
         role_arn TEXT,
+        cloud_provider TEXT DEFAULT 'AWS',
+        azure_subscription_id TEXT,
+        azure_tenant_id TEXT,
+        azure_client_id TEXT,
         adapter TEXT,
         resource_id TEXT,
         request_id TEXT,
@@ -152,6 +156,10 @@ def init_execution_db():
         "aws_account_id",
         "client_name",
         "role_arn",
+        "cloud_provider",
+        "azure_subscription_id",
+        "azure_tenant_id",
+        "azure_client_id",
         "adapter",
         "resource_id",
         "request_id",
@@ -183,11 +191,19 @@ def create_execution_action(
     aws_account_id=None,
     client_name=None,
     role_arn=None,
+    cloud_provider="AWS",
+    azure_subscription_id=None,
+    azure_tenant_id=None,
+    azure_client_id=None,
 ):
     init_execution_db()
 
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+
+    normalized_provider = (
+        str(cloud_provider or "AWS").strip() or "AWS"
+    )
 
     cursor.execute("""
     SELECT id
@@ -195,6 +211,8 @@ def create_execution_action(
     WHERE finding = ?
       AND action_type = ?
       AND COALESCE(aws_account_id, '') = COALESCE(?, '')
+      AND COALESCE(cloud_provider, 'AWS') = ?
+      AND COALESCE(azure_subscription_id, '') = COALESCE(?, '')
       AND execution_status NOT IN ('Completed', 'Failed')
     ORDER BY id DESC
     LIMIT 1
@@ -202,6 +220,8 @@ def create_execution_action(
         finding,
         action_type,
         aws_account_id,
+        normalized_provider,
+        azure_subscription_id,
     ))
 
     existing_action = cursor.fetchone()
@@ -227,9 +247,13 @@ def create_execution_action(
         notes,
         aws_account_id,
         client_name,
-        role_arn
+        role_arn,
+        cloud_provider,
+        azure_subscription_id,
+        azure_tenant_id,
+        azure_client_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         str(datetime.now(UTC)),
         finding,
@@ -242,6 +266,10 @@ def create_execution_action(
         aws_account_id,
         client_name,
         role_arn,
+        normalized_provider,
+        azure_subscription_id,
+        azure_tenant_id,
+        azure_client_id,
     ))
 
     action_id = cursor.lastrowid
@@ -292,7 +320,11 @@ def get_execution_actions():
         executed_at,
         evidence_hash,
         evidence_authentication_type,
-        evidence_key_id
+        evidence_key_id,
+        cloud_provider,
+        azure_subscription_id,
+        azure_tenant_id,
+        azure_client_id
     FROM remediation_actions
     ORDER BY id DESC
     """)
@@ -466,10 +498,12 @@ def simulate_execution(action_id):
 
 def execute_live_action(
     action_id,
-    expected_account_id,
-    s3_client,
-    confirmation_phrase,
+    expected_account_id=None,
+    s3_client=None,
+    confirmation_phrase="",
     actor="DGS Sentinel AI",
+    expected_subscription_id=None,
+    azure_storage_client=None,
 ):
     """Execute one approved remediation action in guarded live mode."""
 
@@ -487,7 +521,11 @@ def execute_live_action(
             execution_status,
             aws_account_id,
             client_name,
-            role_arn
+            role_arn,
+            cloud_provider,
+            azure_subscription_id,
+            azure_tenant_id,
+            azure_client_id
         FROM remediation_actions
         WHERE id = ?
         """,
@@ -510,20 +548,46 @@ def execute_live_action(
         bound_account_id,
         bound_client_name,
         bound_role_arn,
+        bound_cloud_provider,
+        bound_subscription_id,
+        bound_tenant_id,
+        bound_azure_client_id,
     ) = action
 
-    if not bound_account_id:
-        connection.close()
-        raise ValueError(
-            "This remediation action is not bound to an AWS account."
-        )
+    is_azure_action = (
+        action_type == "Generate Azure Storage Hardening Task"
+    )
 
-    if str(bound_account_id) != str(expected_account_id):
-        connection.close()
-        raise ValueError(
-            "The selected AWS account does not match the "
-            "account bound to this remediation action."
-        )
+    if is_azure_action:
+        if not bound_subscription_id:
+            connection.close()
+            raise ValueError(
+                "This remediation action is not bound to an "
+                "Azure subscription."
+            )
+
+        if str(bound_subscription_id) != str(
+            expected_subscription_id
+        ):
+            connection.close()
+            raise ValueError(
+                "The selected Azure subscription does not match "
+                "the subscription bound to this remediation action."
+            )
+
+    else:
+        if not bound_account_id:
+            connection.close()
+            raise ValueError(
+                "This remediation action is not bound to an AWS account."
+            )
+
+        if str(bound_account_id) != str(expected_account_id):
+            connection.close()
+            raise ValueError(
+                "The selected AWS account does not match the "
+                "account bound to this remediation action."
+            )
 
     if approval_status != "Approved":
         connection.close()
@@ -549,8 +613,20 @@ def execute_live_action(
         approval_status=approval_status,
         execution_mode="Live",
         confirmation_phrase=confirmation_phrase,
-        expected_account_id=expected_account_id,
-        s3_client=s3_client,
+        expected_account_id=(
+            None if is_azure_action else expected_account_id
+        ),
+        s3_client=None if is_azure_action else s3_client,
+        expected_subscription_id=(
+            expected_subscription_id
+            if is_azure_action
+            else None
+        ),
+        azure_storage_client=(
+            azure_storage_client
+            if is_azure_action
+            else None
+        ),
     )
 
     result_status = controlled_result.get("status")
