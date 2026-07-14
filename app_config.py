@@ -144,6 +144,27 @@ class AppSettings:
             get_setting("AWS_REGION", "us-east-1")
         )
     )
+    azure_tenant_id: str | None = field(
+        default_factory=lambda: get_setting(
+            "AZURE_TENANT_ID"
+        )
+    )
+    azure_client_id: str | None = field(
+        default_factory=lambda: get_setting(
+            "AZURE_CLIENT_ID"
+        )
+    )
+    azure_client_secret: str | None = field(
+        default_factory=lambda: get_setting(
+            "AZURE_CLIENT_SECRET"
+        ),
+        repr=False,
+    )
+    azure_subscription_id: str | None = field(
+        default_factory=lambda: get_setting(
+            "AZURE_SUBSCRIPTION_ID"
+        )
+    )
     public_demo_mode: bool = field(
         default_factory=lambda: get_bool(
             "DGS_PUBLIC_DEMO_MODE",
@@ -211,6 +232,14 @@ class AppSettings:
             "app_env": self.app_env,
             "log_level": self.log_level,
             "aws_region": self.aws_region,
+            "azure_configured": all(
+                (
+                    self.azure_tenant_id,
+                    self.azure_client_id,
+                    self.azure_client_secret,
+                    self.azure_subscription_id,
+                )
+            ),
             "public_demo_mode": self.public_demo_mode,
             "live_remediation_enabled": (
                 self.live_remediation_enabled

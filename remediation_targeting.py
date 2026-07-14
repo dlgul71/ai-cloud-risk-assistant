@@ -10,6 +10,20 @@ def extract_resource_target(action_type, finding):
             "supported": bool(bucket_name)
         }
 
+
+    if action_type == "Generate Azure Storage Hardening Task":
+        resource_id = finding_text.replace(
+            "Azure Storage Risk - ",
+            "",
+            1,
+        ).strip()
+
+        return {
+            "resource_type": "AZURE_STORAGE_ACCOUNT",
+            "resource_id": resource_id,
+            "supported": bool(resource_id),
+        }
+
     if action_type == "Generate IAM MFA and Access Key Review Task":
         username = finding_text.replace("IAM Risk - ", "").strip()
 

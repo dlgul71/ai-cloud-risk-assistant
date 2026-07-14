@@ -11,6 +11,7 @@ class RemediationGuardrails:
     allowed_actions: tuple = (
         "Generate IAM MFA and Access Key Review Task",
         "Generate S3 Exposure Remediation Task",
+        "Generate Azure Storage Hardening Task",
         "Generate Incident Response Investigation Task",
         "Generate Cloud Security Posture Remediation Task",
         "Generate Monitoring Review Task",

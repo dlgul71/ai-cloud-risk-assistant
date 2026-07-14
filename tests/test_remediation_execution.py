@@ -7,6 +7,16 @@ import remediation_execution
 
 
 S3_ACTION = "Generate S3 Exposure Remediation Task"
+AZURE_STORAGE_ACTION = "Generate Azure Storage Hardening Task"
+AZURE_SUBSCRIPTION_ID = (
+    "0792ff8b-1860-475a-9310-56c73cd71572"
+)
+AZURE_RESOURCE_ID = (
+    f"/subscriptions/{AZURE_SUBSCRIPTION_ID}"
+    "/resourceGroups/dgs-sentinel-test-rg"
+    "/providers/Microsoft.Storage"
+    "/storageAccounts/dgssentineltest"
+)
 CONFIRMATION = "AUTHORIZE LIVE AWS REMEDIATION"
 
 
@@ -947,3 +957,278 @@ def test_verify_execution_evidence_audits_tampered_result(
     )
     assert "Status=TAMPERED" in events[-1][1]
     assert events[-1][2] == "Evidence Auditor"
+
+def test_create_execution_action_stores_azure_binding(
+    execution_database,
+):
+    result = remediation_execution.create_execution_action(
+        finding=f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        action_type=AZURE_STORAGE_ACTION,
+        priority="HIGH",
+        notes="Azure storage hardening test",
+        cloud_provider="Azure",
+        azure_subscription_id=AZURE_SUBSCRIPTION_ID,
+        azure_tenant_id="tenant-123",
+        azure_client_id="client-123",
+        client_name="Azure Example Client",
+    )
+
+    connection = sqlite3.connect(execution_database)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            cloud_provider,
+            azure_subscription_id,
+            azure_tenant_id,
+            azure_client_id,
+            client_name
+        FROM remediation_actions
+        WHERE id = ?
+        """,
+        (result["action_id"],),
+    )
+
+    binding = cursor.fetchone()
+    connection.close()
+
+    assert binding == (
+        "Azure",
+        AZURE_SUBSCRIPTION_ID,
+        "tenant-123",
+        "client-123",
+        "Azure Example Client",
+    )
+
+
+def test_execute_live_azure_action_uses_subscription_binding(
+    execution_database,
+    monkeypatch,
+):
+    result = remediation_execution.create_execution_action(
+        finding=f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        action_type=AZURE_STORAGE_ACTION,
+        priority="HIGH",
+        notes="Azure storage hardening test",
+        cloud_provider="Azure",
+        azure_subscription_id=AZURE_SUBSCRIPTION_ID,
+        azure_tenant_id="tenant-123",
+        azure_client_id="client-123",
+        client_name="Azure Example Client",
+    )
+
+    remediation_execution.update_execution_action(
+        action_id=result["action_id"],
+        approval_status="Approved",
+        execution_status="Ready",
+    )
+
+    captured = {}
+
+    def fake_execute_controlled_action(**kwargs):
+        captured.update(kwargs)
+
+        return {
+            "status": "EXECUTED",
+            "verification_status": "VERIFIED",
+            "mode": "Live",
+            "adapter": "AZURE_STORAGE_HARDENING",
+            "resource_id": AZURE_RESOURCE_ID,
+            "subscription_id": AZURE_SUBSCRIPTION_ID,
+            "request_id": "azure-request-123",
+            "verification_request_id": "azure-verify-123",
+            "message": (
+                "Azure Storage Account security hardening was "
+                "applied and verified."
+            ),
+        }
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        fake_execute_controlled_action,
+    )
+
+    azure_storage_client = object()
+
+    live_result = remediation_execution.execute_live_action(
+        action_id=result["action_id"],
+        expected_subscription_id=AZURE_SUBSCRIPTION_ID,
+        azure_storage_client=azure_storage_client,
+        confirmation_phrase=CONFIRMATION,
+        actor="Azure Security Administrator",
+    )
+
+    assert live_result["status"] == "Completed"
+    assert live_result["adapter"] == "AZURE_STORAGE_HARDENING"
+    assert live_result["resource_id"] == AZURE_RESOURCE_ID
+
+    assert captured["expected_subscription_id"] == (
+        AZURE_SUBSCRIPTION_ID
+    )
+    assert captured["azure_storage_client"] is azure_storage_client
+    assert captured["expected_account_id"] is None
+    assert captured["s3_client"] is None
+
+    assert read_action(
+        execution_database,
+        result["action_id"],
+    ) == (
+        "Approved",
+        "Completed",
+        "Live",
+    )
+
+    evidence = read_execution_evidence(
+        execution_database,
+        result["action_id"],
+    )
+
+    assert evidence[:6] == (
+        "AZURE_STORAGE_HARDENING",
+        AZURE_RESOURCE_ID,
+        "azure-request-123",
+        "azure-verify-123",
+        "VERIFIED",
+        (
+            "Azure Storage Account security hardening was "
+            "applied and verified."
+        ),
+    )
+
+
+def test_execute_live_azure_action_rejects_subscription_mismatch(
+    execution_database,
+    monkeypatch,
+):
+    result = remediation_execution.create_execution_action(
+        finding=f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        action_type=AZURE_STORAGE_ACTION,
+        cloud_provider="Azure",
+        azure_subscription_id=AZURE_SUBSCRIPTION_ID,
+        azure_tenant_id="tenant-123",
+        azure_client_id="client-123",
+        client_name="Azure Example Client",
+    )
+
+    remediation_execution.update_execution_action(
+        action_id=result["action_id"],
+        approval_status="Approved",
+        execution_status="Ready",
+    )
+
+    monkeypatch.setattr(
+        remediation_execution,
+        "execute_controlled_action",
+        lambda **kwargs: pytest.fail(
+            "Azure adapter must not run for a subscription mismatch."
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="does not match",
+    ):
+        remediation_execution.execute_live_action(
+            action_id=result["action_id"],
+            expected_subscription_id="different-subscription",
+            azure_storage_client=object(),
+            confirmation_phrase=CONFIRMATION,
+        )
+
+def test_create_actions_from_azure_storage_plan(
+    execution_database,
+):
+    remediation_plan = [
+        {
+            "category": "Azure Storage",
+            "finding": (
+                f"Azure Storage Risk - {AZURE_RESOURCE_ID}"
+            ),
+            "priority": "HIGH",
+        }
+    ]
+
+    created = (
+        remediation_execution.create_actions_from_remediation_plan(
+            remediation_plan=remediation_plan,
+            client_name="Azure Example Client",
+            cloud_provider="Azure",
+            azure_subscription_id=AZURE_SUBSCRIPTION_ID,
+            azure_tenant_id="tenant-123",
+            azure_client_id="client-123",
+        )
+    )
+
+    assert len(created) == 1
+    assert created[0]["action_type"] == (
+        "Generate Azure Storage Hardening Task"
+    )
+    assert created[0]["cloud_provider"] == "Azure"
+    assert created[0]["azure_subscription_id"] == (
+        AZURE_SUBSCRIPTION_ID
+    )
+
+    connection = sqlite3.connect(execution_database)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            action_type,
+            cloud_provider,
+            azure_subscription_id,
+            azure_tenant_id,
+            azure_client_id,
+            client_name
+        FROM remediation_actions
+        WHERE finding = ?
+        """,
+        (
+            f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        ),
+    )
+
+    stored_action = cursor.fetchone()
+    connection.close()
+
+    assert stored_action == (
+        "Generate Azure Storage Hardening Task",
+        "Azure",
+        AZURE_SUBSCRIPTION_ID,
+        "tenant-123",
+        "client-123",
+        "Azure Example Client",
+    )
+
+
+def test_create_actions_from_aws_data_exposure_plan(
+    execution_database,
+):
+    remediation_plan = [
+        {
+            "category": "Data Exposure",
+            "finding": "S3 Risk - example-plan-bucket",
+            "priority": "HIGH",
+        }
+    ]
+
+    created = (
+        remediation_execution.create_actions_from_remediation_plan(
+            remediation_plan=remediation_plan,
+            aws_account_id="123456789012",
+            client_name="Example Client",
+            role_arn=(
+                "arn:aws:iam::123456789012:"
+                "role/DGSSentinelRemediation"
+            ),
+        )
+    )
+
+    assert len(created) == 1
+    assert created[0]["action_type"] == (
+        "Generate S3 Exposure Remediation Task"
+    )
+    assert created[0]["aws_account_id"] == "123456789012"
+    assert created[0]["cloud_provider"] == "AWS"

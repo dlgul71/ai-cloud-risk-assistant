@@ -27,7 +27,15 @@ from demo_mode import (
 )
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from risk_engine import calculate_unified_risk
+from risk_engine import (
+    calculate_unified_risk,
+    summarize_azure_findings,
+)
+from cloud_scan_routing import (
+    build_azure_snapshot_assets,
+    normalize_cloud_provider,
+    summarize_azure_resources,
+)
 from scan_engine_phase3_assumerole import run_client_scan
 from snapshot_engine import save_scan_snapshot
 from kev_lookup import check_cve_in_kev, fetch_cisa_kev
@@ -67,6 +75,54 @@ except Exception:
     init_client_db = None
     add_client = None
     get_clients = None
+
+try:
+    from azure_client_accounts import (
+        create_azure_credential,
+        test_azure_subscription,
+    )
+except Exception:
+    create_azure_credential = None
+    test_azure_subscription = None
+
+try:
+    from azure_resource_discovery import discover_azure_resources
+except Exception:
+    discover_azure_resources = None
+
+try:
+    from azure.mgmt.storage import StorageManagementClient
+except Exception:
+    StorageManagementClient = None
+
+try:
+    from azure_security_posture import discover_azure_security_posture
+except Exception:
+    discover_azure_security_posture = None
+
+try:
+    from azure_storage_exposure import analyze_storage_exposure
+except Exception:
+    analyze_storage_exposure = None
+
+try:
+    from remediation_execution import (
+        create_actions_from_remediation_plan,
+    )
+except Exception:
+    create_actions_from_remediation_plan = None
+
+try:
+    from azure_network_exposure import (
+        analyze_azure_network_exposure,
+    )
+except Exception:
+    analyze_azure_network_exposure = None
+
+try:
+    from azure_demo_data import build_azure_demo_dataset
+except Exception:
+    build_azure_demo_dataset = None
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -464,29 +520,67 @@ def highlight_priority(row):
 
 
 def generate_risk_narrative(summary):
-    """Generate an executive narrative from summary metrics."""
-    risk_rating = summary.get("Risk Rating", "UNKNOWN")
+    """Generate a multi-cloud executive risk narrative."""
+    risk_rating = summary.get(
+        "Multi-Cloud Risk Rating",
+        summary.get("Risk Rating", "UNKNOWN"),
+    )
+    risk_score = summary.get(
+        "Multi-Cloud Risk Score",
+        summary.get("Average Risk Score", 0),
+    )
     critical = summary.get("Critical Findings", 0)
     kev = summary.get("KEV Exploited Findings", 0)
+    azure_total = summary.get("Azure Total Findings", 0)
 
     return f"""
-DGS Sentinel AI assessed cloud security posture and identified an overall rating of {risk_rating}.
-The environment currently shows {critical} critical findings and {kev} known exploited vulnerability indicators.
+DGS Sentinel AI assessed the multi-cloud security posture and identified an
+overall rating of {risk_rating} with a risk score of {risk_score}.
 
-Security leadership should prioritize remediation of exploited vulnerabilities, review internet-facing assets,
-validate identity controls, and confirm that remediation actions are tracked to completion.
+The environment currently shows {critical} AWS critical findings,
+{kev} known exploited vulnerability indicators, and {azure_total}
+Azure network and storage exposure findings.
+
+Security leadership should prioritize exploited vulnerabilities,
+internet-facing cloud resources, exposed management services, identity
+controls, and tracked remediation across AWS and Azure.
 """
 
 
 def generate_ai_analysis(summary, remediation_playbook):
-    """Generate a deterministic executive AI-style summary without requiring API access."""
+    """Generate a deterministic multi-cloud executive analysis."""
     top_actions = remediation_playbook[:3]
+
+    multi_cloud_rating = summary.get(
+        "Multi-Cloud Risk Rating",
+        summary.get("Risk Rating", "UNKNOWN"),
+    )
+    multi_cloud_score = summary.get(
+        "Multi-Cloud Risk Score",
+        summary.get("Average Risk Score", 0),
+    )
+    azure_total_findings = summary.get(
+        "Azure Total Findings",
+        0,
+    )
 
     lines = [
         "Executive Analysis:",
         "",
-        f"The current cloud security risk posture is classified as {summary.get('Risk Rating', 'UNKNOWN')}.",
-        "Priority should be given to findings that combine high exploitability, known exploitation intelligence, and public exposure.",
+        (
+            "The current multi-cloud security risk posture is "
+            f"classified as {multi_cloud_rating} with a risk "
+            f"score of {multi_cloud_score}."
+        ),
+        (
+            f"Azure contributes {azure_total_findings} network "
+            "and storage exposure findings to the current posture."
+        ),
+        (
+            "Priority should be given to findings that combine "
+            "high exploitability, known exploitation intelligence, "
+            "and public exposure."
+        ),
         "",
         "Recommended Focus Areas:",
         "1. Remediate critical and KEV-associated vulnerabilities.",
@@ -1192,8 +1286,45 @@ if page == "Risk Trends":
 
                 trend_rows.append({
                     "Scan Time": data.get("scan_time"),
-                    "Security Score": summary_data.get("security_score", 0),
-                    "Risk Rating": summary_data.get("risk_rating", "UNKNOWN"),
+                    "Security Score": summary_data.get(
+                        "security_score",
+                        0,
+                    ),
+                    "Risk Rating": summary_data.get(
+                        "risk_rating",
+                        "UNKNOWN",
+                    ),
+                    "Multi-Cloud Security Score": summary_data.get(
+                        "multi_cloud_security_score",
+                        summary_data.get("security_score", 0),
+                    ),
+                    "Multi-Cloud Risk Score": summary_data.get(
+                        "multi_cloud_risk_score",
+                        0,
+                    ),
+                    "Multi-Cloud Risk Rating": summary_data.get(
+                        "multi_cloud_risk_rating",
+                        summary_data.get(
+                            "risk_rating",
+                            "UNKNOWN",
+                        ),
+                    ),
+                    "Azure Critical Findings": summary_data.get(
+                        "azure_critical_findings",
+                        0,
+                    ),
+                    "Azure High Findings": summary_data.get(
+                        "azure_high_findings",
+                        0,
+                    ),
+                    "Azure Medium Findings": summary_data.get(
+                        "azure_medium_findings",
+                        0,
+                    ),
+                    "Azure Total Findings": summary_data.get(
+                        "azure_total_findings",
+                        0,
+                    ),
                     "Assets": summary_data.get("assets", 0),
                     "EC2 Assets": summary_data.get("ec2_assets", 0),
                     "IAM Users": summary_data.get("iam_users", 0),
@@ -1221,7 +1352,34 @@ if page == "Risk Trends":
         col1.metric("Latest Security Score", latest["Security Score"])
         col2.metric("Latest Risk Rating", latest["Risk Rating"])
         col3.metric("Latest Assets", latest["Assets"])
-        col4.metric("Latest Remediation Actions", latest["Remediation Actions"])
+        col4.metric(
+            "Latest Remediation Actions",
+            latest["Remediation Actions"],
+        )
+
+        (
+            multi_metric_col1,
+            multi_metric_col2,
+            multi_metric_col3,
+            multi_metric_col4,
+        ) = st.columns(4)
+
+        multi_metric_col1.metric(
+            "Multi-Cloud Security Score",
+            latest["Multi-Cloud Security Score"],
+        )
+        multi_metric_col2.metric(
+            "Multi-Cloud Risk Score",
+            latest["Multi-Cloud Risk Score"],
+        )
+        multi_metric_col3.metric(
+            "Multi-Cloud Rating",
+            latest["Multi-Cloud Risk Rating"],
+        )
+        multi_metric_col4.metric(
+            "Azure Findings",
+            latest["Azure Total Findings"],
+        )
 
         if len(trend_df) >= 2:
             previous = trend_df.iloc[-2]
@@ -1229,7 +1387,22 @@ if page == "Risk Trends":
             score_delta = latest["Security Score"] - previous["Security Score"]
             securityhub_delta = latest["Security Hub Findings"] - previous["Security Hub Findings"]
             guardduty_delta = latest["GuardDuty Findings"] - previous["GuardDuty Findings"]
-            remediation_delta = latest["Remediation Actions"] - previous["Remediation Actions"]
+            remediation_delta = (
+                latest["Remediation Actions"]
+                - previous["Remediation Actions"]
+            )
+            multi_cloud_risk_delta = (
+                latest["Multi-Cloud Risk Score"]
+                - previous["Multi-Cloud Risk Score"]
+            )
+            multi_cloud_security_delta = (
+                latest["Multi-Cloud Security Score"]
+                - previous["Multi-Cloud Security Score"]
+            )
+            azure_findings_delta = (
+                latest["Azure Total Findings"]
+                - previous["Azure Total Findings"]
+            )
 
             st.subheader("Executive Risk Delta")
 
@@ -1252,12 +1425,41 @@ if page == "Risk Trends":
 
             delta_col4.metric(
                 "Remediation Actions Change",
-                remediation_delta
+                remediation_delta,
+            )
+
+            (
+                multi_delta_col1,
+                multi_delta_col2,
+                multi_delta_col3,
+            ) = st.columns(3)
+
+            multi_delta_col1.metric(
+                "Multi-Cloud Risk Change",
+                multi_cloud_risk_delta,
+            )
+            multi_delta_col2.metric(
+                "Multi-Cloud Security Change",
+                multi_cloud_security_delta,
+            )
+            multi_delta_col3.metric(
+                "Azure Findings Change",
+                azure_findings_delta,
             )
 
         st.subheader("Security Score Over Time")
         st.line_chart(
             trend_df.set_index("Scan Time")["Security Score"]
+        )
+
+        st.subheader("Multi-Cloud Risk Over Time")
+        st.line_chart(
+            trend_df.set_index("Scan Time")[
+                [
+                    "Multi-Cloud Risk Score",
+                    "Multi-Cloud Security Score",
+                ]
+            ]
         )
 
         st.subheader("Findings Trend")
@@ -1266,6 +1468,7 @@ if page == "Risk Trends":
             [
                 "Security Hub Findings",
                 "GuardDuty Findings",
+                "Azure Total Findings",
                 "KEV CVEs",
                 "Critical Vulnerabilities"
             ]
@@ -1344,7 +1547,43 @@ if page == "Risk Trends":
 
                 compare_col5.metric(
                     "GuardDuty Findings Delta",
-                    latest_summary.get("guardduty_findings", 0) - previous_summary.get("guardduty_findings", 0)
+                    latest_summary.get(
+                        "guardduty_findings",
+                        0,
+                    )
+                    - previous_summary.get(
+                        "guardduty_findings",
+                        0,
+                    ),
+                )
+
+                (
+                    compare_multi_col1,
+                    compare_multi_col2,
+                ) = st.columns(2)
+
+                compare_multi_col1.metric(
+                    "Multi-Cloud Risk Delta",
+                    latest_summary.get(
+                        "multi_cloud_risk_score",
+                        0,
+                    )
+                    - previous_summary.get(
+                        "multi_cloud_risk_score",
+                        0,
+                    ),
+                )
+
+                compare_multi_col2.metric(
+                    "Azure Findings Delta",
+                    latest_summary.get(
+                        "azure_total_findings",
+                        0,
+                    )
+                    - previous_summary.get(
+                        "azure_total_findings",
+                        0,
+                    ),
                 )
 
                 demo_caption(
@@ -3032,6 +3271,7 @@ if page == "Execution Center":
         simulate_all_approved_actions,
         execute_live_action,
         verify_execution_evidence,
+        create_actions_from_remediation_plan,
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
@@ -3125,6 +3365,10 @@ if page == "Execution Center":
         "Evidence Hash",
         "Evidence Authentication Type",
         "Evidence Key ID",
+        "Cloud Provider",
+        "Azure Subscription ID",
+        "Azure Tenant ID",
+        "Azure Client ID",
     ]
 
     if actions:
@@ -3586,11 +3830,23 @@ if page == "Execution Center":
                 except Exception as e:
                     st.error(f"Simulation failed: {e}")
 
-        st.subheader("Guarded Live S3 Remediation")
+        st.subheader("Guarded Live Cloud Remediation")
+
+        live_enabled_adapters = {
+            "S3_BLOCK_PUBLIC_ACCESS",
+            "AZURE_STORAGE_HARDENING",
+        }
+
+        is_azure_live_action = (
+            selected_adapter == "AZURE_STORAGE_HARDENING"
+        )
+        is_aws_live_action = (
+            selected_adapter == "S3_BLOCK_PUBLIC_ACCESS"
+        )
 
         demo_caption(
-            "Live remediation is restricted to approved S3 exposure actions, "
-            "a saved client account, an assumed AWS role, and the exact "
+            "Live remediation is restricted to approved actions, "
+            "resources permanently bound to the action, and the exact "
             "authorization phrase."
         )
 
@@ -3602,14 +3858,15 @@ if page == "Execution Center":
         elif not GUARDRAILS.live_execution_enabled:
             demo_info(
                 "Live remediation is disabled. Set "
-                "DGS_LIVE_REMEDIATION_ENABLED=true only in an authorized "
-                "environment."
+                "DGS_LIVE_REMEDIATION_ENABLED=true only in an "
+                "authorized environment."
             )
 
-        elif selected_adapter != "S3_BLOCK_PUBLIC_ACCESS":
+        elif selected_adapter not in live_enabled_adapters:
             demo_info(
-                "This adapter remains simulation-only. Only the guarded "
-                "S3 Block Public Access adapter supports live execution."
+                "This adapter remains simulation-only. Guarded live "
+                "execution is available only for approved S3 and Azure "
+                "Storage remediation actions."
             )
 
         elif selected_action["Approval Status"] != "Approved":
@@ -3622,25 +3879,48 @@ if page == "Execution Center":
                 "This remediation action has already been completed."
             )
 
-        else:
+        elif is_azure_live_action:
             live_client_name = selected_action["Client Name"]
-            live_account_id = selected_action["AWS Account ID"]
-            live_role_arn = selected_action["Role ARN"]
+            live_subscription_id = selected_action[
+                "Azure Subscription ID"
+            ]
+            live_tenant_id = selected_action["Azure Tenant ID"]
+            live_azure_client_id = selected_action["Azure Client ID"]
 
-            if not live_account_id:
+            missing_azure_binding = any(
+                pd.isna(value) or not str(value).strip()
+                for value in (
+                    live_subscription_id,
+                    live_tenant_id,
+                    live_azure_client_id,
+                )
+            )
+
+            if missing_azure_binding:
                 demo_warning(
-                    "This action is not bound to an AWS account and cannot "
+                    "This action is missing its bound Azure "
+                    "subscription, tenant, or client ID and cannot "
                     "be executed live."
                 )
 
-            elif not live_role_arn:
+            elif create_azure_credential is None:
                 demo_warning(
-                    "This action has no bound remediation role. Internal or "
-                    "legacy actions remain simulation-only."
+                    "The Azure credential module is unavailable."
+                )
+
+            elif StorageManagementClient is None:
+                demo_warning(
+                    "The Azure Storage Management SDK is unavailable."
                 )
 
             else:
-                live_account_id = str(live_account_id)
+                live_subscription_id = str(
+                    live_subscription_id
+                ).strip()
+                live_tenant_id = str(live_tenant_id).strip()
+                live_azure_client_id = str(
+                    live_azure_client_id
+                ).strip()
 
                 live_plan = build_execution_plan(
                     action_type=selected_action["Action Type"],
@@ -3650,6 +3930,149 @@ if page == "Execution Center":
                 demo_write(
                     "**Bound client:**",
                     live_client_name or "Unnamed Client",
+                )
+                demo_write(
+                    "**Cloud provider:**",
+                    "Azure",
+                )
+                demo_write(
+                    "**Bound Azure subscription:**",
+                    live_subscription_id,
+                )
+                demo_write(
+                    "**Target Azure Storage account:**",
+                    live_plan.get("resource_id", "UNKNOWN"),
+                )
+
+                live_azure_secret = st.text_input(
+                    "Azure client secret for live remediation",
+                    type="password",
+                    key="live_azure_remediation_secret",
+                    help=(
+                        "Used only for this live execution. "
+                        "The secret is not stored."
+                    ),
+                )
+
+                confirmation_phrase = st.text_input(
+                    "Live execution confirmation phrase",
+                    type="password",
+                    key="live_remediation_confirmation",
+                    help=(
+                        "Enter exactly: "
+                        "AUTHORIZE LIVE AWS REMEDIATION"
+                    ),
+                )
+
+                operator_acknowledgement = st.checkbox(
+                    (
+                        "I confirm that this approved action may "
+                        "permanently modify the Azure subscription "
+                        "bound to this action."
+                    ),
+                    key="live_remediation_acknowledgement",
+                )
+
+                live_button_enabled = (
+                    operator_acknowledgement
+                    and bool(live_azure_secret)
+                    and confirmation_phrase
+                    == "AUTHORIZE LIVE AWS REMEDIATION"
+                )
+
+                if st.button(
+                    "Execute Guarded Live Azure Storage Remediation",
+                    disabled=not live_button_enabled,
+                    key="execute_guarded_live_remediation",
+                ):
+                    try:
+                        credential = create_azure_credential(
+                            tenant_id=live_tenant_id,
+                            client_id=live_azure_client_id,
+                            client_secret=live_azure_secret,
+                        )
+
+                        live_azure_storage_client = (
+                            StorageManagementClient(
+                                credential,
+                                live_subscription_id,
+                            )
+                        )
+
+                        live_result = execute_live_action(
+                            action_id=int(selected_action_id),
+                            expected_subscription_id=(
+                                live_subscription_id
+                            ),
+                            azure_storage_client=(
+                                live_azure_storage_client
+                            ),
+                            confirmation_phrase=confirmation_phrase,
+                            actor=(
+                                settings.app_username
+                                or "Authenticated Operator"
+                            ),
+                        )
+
+                        demo_success(
+                            "Guarded live Azure Storage remediation "
+                            "completed and verified."
+                        )
+                        demo_json(live_result)
+                        st.rerun()
+
+                    except ValueError as error:
+                        st.error(
+                            f"Live remediation blocked: {error}"
+                        )
+
+                    except Exception as error:
+                        logger.exception(
+                            "Guarded Azure live remediation failed."
+                        )
+                        st.error(
+                            f"Live remediation failed: {error}"
+                        )
+
+        elif is_aws_live_action:
+            live_client_name = selected_action["Client Name"]
+            live_account_id = selected_action["AWS Account ID"]
+            live_role_arn = selected_action["Role ARN"]
+
+            if (
+                pd.isna(live_account_id)
+                or not str(live_account_id).strip()
+            ):
+                demo_warning(
+                    "This action is not bound to an AWS account and "
+                    "cannot be executed live."
+                )
+
+            elif (
+                pd.isna(live_role_arn)
+                or not str(live_role_arn).strip()
+            ):
+                demo_warning(
+                    "This action has no bound remediation role. "
+                    "Internal or legacy actions remain simulation-only."
+                )
+
+            else:
+                live_account_id = str(live_account_id).strip()
+                live_role_arn = str(live_role_arn).strip()
+
+                live_plan = build_execution_plan(
+                    action_type=selected_action["Action Type"],
+                    finding=selected_action["Finding"],
+                )
+
+                demo_write(
+                    "**Bound client:**",
+                    live_client_name or "Unnamed Client",
+                )
+                demo_write(
+                    "**Cloud provider:**",
+                    "AWS",
                 )
                 demo_write(
                     "**Bound AWS account:**",
@@ -3672,8 +4095,9 @@ if page == "Execution Center":
 
                 operator_acknowledgement = st.checkbox(
                     (
-                        "I confirm that this approved action may modify "
-                        "the AWS account permanently bound to this action."
+                        "I confirm that this approved action may "
+                        "permanently modify the AWS account bound "
+                        "to this action."
                     ),
                     key="live_remediation_acknowledgement",
                 )
@@ -3696,13 +4120,11 @@ if page == "Execution Center":
 
                         if client_session is None:
                             raise ValueError(
-                                "Unable to assume the remediation role "
-                                "bound to this action."
+                                "Unable to assume the remediation "
+                                "role bound to this action."
                             )
 
-                        live_s3_client = client_session.client(
-                            "s3"
-                        )
+                        live_s3_client = client_session.client("s3")
 
                         live_result = execute_live_action(
                             action_id=int(selected_action_id),
@@ -3716,7 +4138,8 @@ if page == "Execution Center":
                         )
 
                         demo_success(
-                            "Guarded live S3 remediation completed."
+                            "Guarded live S3 remediation completed "
+                            "and verified."
                         )
                         demo_json(live_result)
                         st.rerun()
@@ -3728,7 +4151,7 @@ if page == "Execution Center":
 
                     except Exception as error:
                         logger.exception(
-                            "Guarded live remediation failed."
+                            "Guarded AWS live remediation failed."
                         )
                         st.error(
                             f"Live remediation failed: {error}"
@@ -4937,7 +5360,8 @@ if page == "Client Accounts":
     st.header("Client Account Management")
 
     demo_markdown(
-        "Add AWS client accounts using read-only IAM AssumeRole access."
+        "Register AWS accounts or Azure subscriptions for multicloud "
+        "security visibility."
     )
 
     if add_client is None or get_clients is None:
@@ -4946,10 +5370,32 @@ if page == "Client Accounts":
         )
         st.stop()
 
+    cloud_provider = st.selectbox(
+        "Cloud Provider",
+        ["AWS", "Azure"],
+        key="client_cloud_provider",
+    )
+
     with st.form("client_account_form"):
         client_name = st.text_input("Client Name")
-        aws_account_id = st.text_input("AWS Account ID")
-        role_arn = st.text_input("AWS Role ARN")
+
+        aws_account_id = None
+        role_arn = None
+        azure_subscription_id = None
+        azure_tenant_id = None
+        azure_client_id = None
+
+        if cloud_provider == "AWS":
+            aws_account_id = st.text_input("AWS Account ID")
+            role_arn = st.text_input("AWS Role ARN")
+        else:
+            azure_subscription_id = st.text_input(
+                "Azure Subscription ID"
+            )
+            azure_tenant_id = st.text_input("Azure Tenant ID")
+            azure_client_id = st.text_input(
+                "Azure Application (Client) ID"
+            )
 
         environment = st.selectbox(
             "Environment",
@@ -4964,14 +5410,30 @@ if page == "Client Accounts":
         submitted = st.form_submit_button("Add Client Account")
 
         if submitted:
-            if client_name and aws_account_id and role_arn:
-                add_client(
-                    client_name,
-                    aws_account_id,
-                    role_arn,
-                    environment
+            provider_fields_complete = (
+                aws_account_id and role_arn
+                if cloud_provider == "AWS"
+                else (
+                    azure_subscription_id
+                    and azure_tenant_id
+                    and azure_client_id
                 )
-                demo_success("Client account added successfully.")
+            )
+
+            if client_name and provider_fields_complete:
+                add_client(
+                    client_name=client_name,
+                    aws_account_id=aws_account_id,
+                    role_arn=role_arn,
+                    environment=environment,
+                    cloud_provider=cloud_provider,
+                    azure_subscription_id=azure_subscription_id,
+                    azure_tenant_id=azure_tenant_id,
+                    azure_client_id=azure_client_id,
+                )
+                demo_success(
+                    f"{cloud_provider} client account added successfully."
+                )
             else:
                 st.error("Please complete all required fields.")
 
@@ -4987,7 +5449,11 @@ if page == "Client Accounts":
                 "Client Name",
                 "AWS Account ID",
                 "Role ARN",
-                "Environment"
+                "Environment",
+                "Cloud Provider",
+                "Azure Subscription ID",
+                "Azure Tenant ID",
+                "Azure Client ID",
             ]
         )
 
@@ -5018,7 +5484,11 @@ if get_clients is not None:
         client_options = [
             "DGS Internal / Default AWS Account"
         ] + [
-            f"{client[1]} | {client[2]} | {client[4]}"
+            (
+                f"{client[1]} | "
+                f"{client[6] if str(client[5] or 'AWS').upper() == 'AZURE' else client[2]} "
+                f"| {client[4]}"
+            )
             for client in saved_clients
         ]
 
@@ -5058,38 +5528,296 @@ else:
     )
 
 # ============================================================
-# TEST CLIENT AWS CONNECTION
+# TEST CLIENT CLOUD CONNECTION
 # ============================================================
 
 if selected_client_data is not None:
 
-    if st.sidebar.button(
-        "Test Client AWS Connection",
-        key="test_client_connection"
-    ):
+    selected_provider = (
+        str(selected_client_data[5] or "AWS").strip().upper()
+    )
 
-        role_arn = selected_client_data[3]
+    if selected_provider == "AZURE":
+        azure_secret = st.sidebar.text_input(
+            "Azure Client Secret",
+            type="password",
+            key="azure_connection_client_secret",
+            help=(
+                "Used only for this connection test. "
+                "The secret is not stored in the client database."
+            ),
+        )
 
-        session = assume_client_role(role_arn)
-
-        if session:
-            try:
-                sts = session.client("sts")
-                identity = sts.get_caller_identity()
-
-                st.sidebar.success(
-                    f"Connected to AWS Account: {identity['Account']}"
-                )
-
-            except Exception as e:
+        if st.sidebar.button(
+            "Test Client Azure Connection",
+            key="test_azure_client_connection",
+        ):
+            if test_azure_subscription is None:
                 st.sidebar.error(
-                    f"Connection test failed: {e}"
+                    "Azure validation module is unavailable."
                 )
+            elif not azure_secret:
+                st.sidebar.error(
+                    "Enter the Azure client secret before testing."
+                )
+            else:
+                try:
+                    identity = test_azure_subscription(
+                        tenant_id=selected_client_data[7],
+                        client_id=selected_client_data[8],
+                        client_secret=azure_secret,
+                        subscription_id=selected_client_data[6],
+                    )
+
+                    st.sidebar.success(
+                        "Connected to Azure Subscription: "
+                        f"{identity['display_name']} "
+                        f"({identity['subscription_id']})"
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Azure client connection test failed."
+                    )
+                    st.sidebar.error(
+                        f"Azure connection test failed: {exc}"
+                    )
+
+        if st.sidebar.button(
+            "Run Azure Resource Discovery",
+            key="run_azure_resource_discovery",
+        ):
+            if discover_azure_resources is None:
+                st.sidebar.error(
+                    "Azure resource discovery module is unavailable."
+                )
+            elif not azure_secret:
+                st.sidebar.error(
+                    "Enter the Azure client secret before discovery."
+                )
+            else:
+                try:
+                    credential = create_azure_credential(
+                        tenant_id=selected_client_data[7],
+                        client_id=selected_client_data[8],
+                        client_secret=azure_secret,
+                    )
+
+                    discovery_result = discover_azure_resources(
+                        credential=credential,
+                        subscription_id=selected_client_data[6],
+                    )
+
+                    st.session_state[
+                        "azure_resource_discovery"
+                    ] = discovery_result
+                    st.session_state[
+                        "azure_resource_discovery_client"
+                    ] = selected_client_data[1]
+
+                    if analyze_storage_exposure is not None:
+                        storage_exposure = analyze_storage_exposure(
+                            discovery_result.get(
+                                "storage_accounts",
+                                [],
+                            )
+                        )
+
+                        st.session_state[
+                            "azure_storage_exposure"
+                        ] = storage_exposure
+                        st.session_state[
+                            "azure_storage_exposure_client"
+                        ] = selected_client_data[1]
+                    else:
+                        st.session_state.pop(
+                            "azure_storage_exposure",
+                            None,
+                        )
+                        st.session_state.pop(
+                            "azure_storage_exposure_client",
+                            None,
+                        )
+
+                    if analyze_azure_network_exposure is not None:
+                        network_exposure = (
+                            analyze_azure_network_exposure(
+                                network_security_groups=(
+                                    discovery_result.get(
+                                        "network_security_groups",
+                                        [],
+                                    )
+                                ),
+                                public_ip_addresses=(
+                                    discovery_result.get(
+                                        "public_ip_addresses",
+                                        [],
+                                    )
+                                ),
+                                network_interfaces=(
+                                    discovery_result.get(
+                                        "network_interfaces",
+                                        [],
+                                    )
+                                ),
+                                virtual_machines=(
+                                    discovery_result.get(
+                                        "virtual_machines",
+                                        [],
+                                    )
+                                ),
+                            )
+                        )
+
+                        st.session_state[
+                            "azure_network_exposure"
+                        ] = network_exposure
+                        st.session_state[
+                            "azure_network_exposure_client"
+                        ] = selected_client_data[1]
+                    else:
+                        st.session_state.pop(
+                            "azure_network_exposure",
+                            None,
+                        )
+                        st.session_state.pop(
+                            "azure_network_exposure_client",
+                            None,
+                        )
+
+                    discovery_status = str(
+                        discovery_result.get(
+                            "discovery_status",
+                            "COMPLETE",
+                        )
+                    ).strip().upper()
+
+                    discovery_errors = discovery_result.get(
+                        "errors",
+                        [],
+                    )
+
+                    if discovery_status == "PARTIAL":
+                        st.sidebar.warning(
+                            "Azure discovery completed with "
+                            f"{len(discovery_errors)} partial "
+                            "failure(s). Available results were "
+                            "preserved."
+                        )
+                    else:
+                        st.sidebar.success(
+                            "Azure resource discovery completed."
+                        )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Azure resource discovery failed."
+                    )
+                    st.sidebar.error(
+                        f"Azure discovery failed: {exc}"
+                    )
+
+        azure_security_location = st.sidebar.text_input(
+            "Defender for Cloud Location",
+            value="centralus",
+            key="azure_security_center_location",
+            help=(
+                "Azure Security Center location used by the "
+                "Defender for Cloud management API."
+            ),
+        )
+
+        if st.sidebar.button(
+            "Run Azure Security Posture",
+            key="run_azure_security_posture",
+        ):
+            if discover_azure_security_posture is None:
+                st.sidebar.error(
+                    "Azure security posture module is unavailable."
+                )
+            elif create_azure_credential is None:
+                st.sidebar.error(
+                    "Azure credential module is unavailable."
+                )
+            elif not azure_secret:
+                st.sidebar.error(
+                    "Enter the Azure client secret before scanning."
+                )
+            elif not azure_security_location:
+                st.sidebar.error(
+                    "Enter the Defender for Cloud location."
+                )
+            else:
+                try:
+                    credential = create_azure_credential(
+                        tenant_id=selected_client_data[7],
+                        client_id=selected_client_data[8],
+                        client_secret=azure_secret,
+                    )
+
+                    posture_result = (
+                        discover_azure_security_posture(
+                            credential=credential,
+                            subscription_id=selected_client_data[6],
+                            asc_location=azure_security_location,
+                        )
+                    )
+
+                    st.session_state[
+                        "azure_security_posture"
+                    ] = posture_result
+                    st.session_state[
+                        "azure_security_posture_client"
+                    ] = selected_client_data[1]
+
+                    st.sidebar.success(
+                        "Azure security posture discovery completed."
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Azure security posture discovery failed."
+                    )
+                    st.sidebar.error(
+                        f"Azure security posture failed: {exc}"
+                    )
+
+    else:
+        if st.sidebar.button(
+            "Test Client AWS Connection",
+            key="test_client_connection",
+        ):
+            role_arn = selected_client_data[3]
+            session = assume_client_role(role_arn)
+
+            if session:
+                try:
+                    sts = session.client("sts")
+                    identity = sts.get_caller_identity()
+
+                    st.sidebar.success(
+                        "Connected to AWS Account: "
+                        f"{identity['Account']}"
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "AWS client connection test failed."
+                    )
+                    st.sidebar.error(
+                        f"Connection test failed: {exc}"
+                    )
+            else:
+                st.sidebar.error(
+                    "Unable to assume the selected AWS client role."
+                )
+
 else:
     st.sidebar.info(
-    "Select a saved client from Active Client Account to enable AWS connection test."
-)
-    
+        "Select a saved client account to enable "
+        "the cloud connection test."
+    )
+
 # ============================================================
 # MAIN DASHBOARD HEADER
 # ============================================================
@@ -5099,6 +5827,874 @@ if page != "Dashboard":
 
 st.title("🛡️ DGS Sentinel AI")
 demo_caption("AI-Powered CAASM / CSPM / CNAPP / SIEM Platform")
+
+azure_discovery = st.session_state.get(
+    "azure_resource_discovery"
+)
+azure_network_exposure = st.session_state.get(
+    "azure_network_exposure"
+)
+azure_storage_exposure = st.session_state.get(
+    "azure_storage_exposure"
+)
+
+azure_display_client_name = "Selected Azure Client"
+
+if (
+    demo_mode_enabled()
+    and build_azure_demo_dataset is not None
+):
+    azure_demo_dataset = build_azure_demo_dataset()
+
+    azure_discovery = azure_demo_dataset["discovery"]
+    azure_network_exposure = azure_demo_dataset[
+        "network_exposure"
+    ]
+    azure_storage_exposure = azure_demo_dataset[
+        "storage_exposure"
+    ]
+    azure_display_client_name = azure_demo_dataset[
+        "client_name"
+    ]
+
+    demo_warning(
+        "Azure Demo Dataset — Sanitized sample Azure "
+        "resources and exposure findings are displayed."
+    )
+
+if azure_discovery:
+    st.header("Azure Resource Discovery")
+
+    azure_client_name = st.session_state.get(
+        "azure_resource_discovery_client",
+        azure_display_client_name,
+    )
+
+    demo_caption(
+        f"Latest Azure discovery results for {azure_client_name}"
+    )
+
+    azure_summary = azure_discovery.get("summary", {})
+
+    azure_discovery_status = str(
+        azure_discovery.get(
+            "discovery_status",
+            "COMPLETE",
+        )
+    ).strip().upper()
+
+    azure_discovery_errors = azure_discovery.get(
+        "errors",
+        [],
+    )
+
+    azure_started_at = azure_discovery.get("started_at")
+    azure_completed_at = azure_discovery.get("completed_at")
+    azure_service_status = azure_discovery.get(
+        "service_status",
+        {},
+    )
+
+    scan_timestamp_parts = []
+
+    if azure_started_at:
+        scan_timestamp_parts.append(
+            f"Started: {azure_started_at}"
+        )
+
+    if azure_completed_at:
+        scan_timestamp_parts.append(
+            f"Completed: {azure_completed_at}"
+        )
+
+    if scan_timestamp_parts:
+        demo_caption(
+            " | ".join(scan_timestamp_parts)
+        )
+
+    if azure_service_status:
+        service_status_rows = []
+
+        for resource_type, status_details in (
+            azure_service_status.items()
+        ):
+            error_details = (
+                status_details.get("error") or {}
+            )
+
+            service_status_rows.append(
+                {
+                    "Resource Category": (
+                        resource_type.replace(
+                            "_",
+                            " ",
+                        ).title()
+                    ),
+                    "Status": status_details.get(
+                        "status",
+                        "UNKNOWN",
+                    ),
+                    "Resource Count": status_details.get(
+                        "resource_count",
+                        0,
+                    ),
+                    "Scanned At": status_details.get(
+                        "scanned_at",
+                    ),
+                    "Error": error_details.get(
+                        "message",
+                    ),
+                }
+            )
+
+        complete_service_count = sum(
+            row["Status"] == "COMPLETE"
+            for row in service_status_rows
+        )
+        failed_service_count = sum(
+            row["Status"] == "FAILED"
+            for row in service_status_rows
+        )
+
+        (
+            service_col1,
+            service_col2,
+            service_col3,
+        ) = st.columns(3)
+
+        service_col1.metric(
+            "Services Complete",
+            complete_service_count,
+        )
+        service_col2.metric(
+            "Services Failed",
+            failed_service_count,
+        )
+        service_col3.metric(
+            "Services Checked",
+            len(service_status_rows),
+        )
+
+        with st.expander(
+            "Azure service discovery status",
+            expanded=failed_service_count > 0,
+        ):
+            demo_dataframe(
+                pd.DataFrame(service_status_rows),
+                width="stretch",
+            )
+
+    if azure_discovery_status == "PARTIAL":
+        st.warning(
+            "Azure discovery returned partial results. "
+            "Resources that were discovered successfully are "
+            "shown below."
+        )
+
+        with st.expander(
+            "View Azure discovery errors",
+            expanded=False,
+        ):
+            if azure_discovery_errors:
+                demo_dataframe(
+                    pd.DataFrame(azure_discovery_errors),
+                    width="stretch",
+                )
+            else:
+                demo_info(
+                    "No structured Azure discovery errors "
+                    "were returned."
+                )
+
+    azure_col1, azure_col2, azure_col3 = st.columns(3)
+
+    azure_col1.metric(
+        "Resource Groups",
+        azure_summary.get("resource_groups", 0),
+    )
+    azure_col2.metric(
+        "Virtual Machines",
+        azure_summary.get("virtual_machines", 0),
+    )
+    azure_col3.metric(
+        "Storage Accounts",
+        azure_summary.get("storage_accounts", 0),
+    )
+
+    resource_groups = azure_discovery.get(
+        "resource_groups",
+        [],
+    )
+    virtual_machines = azure_discovery.get(
+        "virtual_machines",
+        [],
+    )
+    storage_accounts = azure_discovery.get(
+        "storage_accounts",
+        [],
+    )
+
+    azure_tab1, azure_tab2, azure_tab3 = st.tabs(
+        [
+            "Resource Groups",
+            "Virtual Machines",
+            "Storage Accounts",
+        ]
+    )
+
+    with azure_tab1:
+        if resource_groups:
+            demo_dataframe(
+                pd.DataFrame(resource_groups),
+                width="stretch",
+            )
+        else:
+            demo_info("No Azure resource groups discovered.")
+
+    with azure_tab2:
+        if virtual_machines:
+            demo_dataframe(
+                pd.DataFrame(virtual_machines),
+                width="stretch",
+            )
+        else:
+            demo_info("No Azure virtual machines discovered.")
+
+    with azure_tab3:
+        if storage_accounts:
+            demo_dataframe(
+                pd.DataFrame(storage_accounts),
+                width="stretch",
+            )
+        else:
+            demo_info("No Azure storage accounts discovered.")
+
+    st.divider()
+
+if azure_network_exposure:
+    st.header("Azure Network Exposure Analysis")
+
+    network_client_name = st.session_state.get(
+        "azure_network_exposure_client",
+        azure_display_client_name,
+    )
+
+    demo_caption(
+        f"Latest network exposure analysis for "
+        f"{network_client_name}"
+    )
+
+    network_summary = azure_network_exposure.get(
+        "summary",
+        {},
+    )
+
+    (
+        network_col1,
+        network_col2,
+        network_col3,
+        network_col4,
+        network_col5,
+    ) = st.columns(5)
+
+    network_col1.metric(
+        "Network Security Groups",
+        network_summary.get(
+            "network_security_groups",
+            0,
+        ),
+    )
+    network_col2.metric(
+        "Exposed NSGs",
+        network_summary.get(
+            "exposed_network_security_groups",
+            0,
+        ),
+    )
+    network_col3.metric(
+        "Public IPs",
+        network_summary.get(
+            "public_ip_addresses",
+            0,
+        ),
+    )
+    network_col4.metric(
+        "Internet-Facing VMs",
+        network_summary.get(
+            "internet_facing_virtual_machines",
+            0,
+        ),
+    )
+    network_col5.metric(
+        "Total Findings",
+        network_summary.get(
+            "total_findings",
+            0,
+        ),
+    )
+
+    (
+        severity_col1,
+        severity_col2,
+        severity_col3,
+        severity_col4,
+    ) = st.columns(4)
+
+    severity_col1.metric(
+        "Critical Findings",
+        network_summary.get(
+            "critical_findings",
+            0,
+        ),
+    )
+    severity_col2.metric(
+        "High Findings",
+        network_summary.get(
+            "high_findings",
+            0,
+        ),
+    )
+    severity_col3.metric(
+        "Medium Findings",
+        network_summary.get(
+            "medium_findings",
+            0,
+        ),
+    )
+    severity_col4.metric(
+        "Unassigned Public IPs",
+        network_summary.get(
+            "unassigned_public_ip_addresses",
+            0,
+        ),
+    )
+
+    network_findings = azure_network_exposure.get(
+        "findings",
+        [],
+    )
+    network_security_groups = azure_network_exposure.get(
+        "network_security_groups",
+        [],
+    )
+    public_ip_addresses = azure_network_exposure.get(
+        "public_ip_addresses",
+        [],
+    )
+    analyzed_virtual_machines = azure_network_exposure.get(
+        "virtual_machines",
+        [],
+    )
+
+    high_risk_network_findings = [
+        finding
+        for finding in network_findings
+        if str(
+            finding.get("severity", "")
+        ).strip().upper() in {"CRITICAL", "HIGH"}
+    ]
+
+    exposed_network_security_groups = [
+        network_security_group
+        for network_security_group in network_security_groups
+        if network_security_group.get("internet_exposed")
+    ]
+
+    internet_facing_virtual_machines = [
+        virtual_machine
+        for virtual_machine in analyzed_virtual_machines
+        if virtual_machine.get("internet_exposed")
+    ]
+
+    (
+        network_findings_tab,
+        high_risk_network_tab,
+        exposed_nsg_tab,
+        public_ip_tab,
+        internet_vm_tab,
+    ) = st.tabs(
+        [
+            "All Findings",
+            "Critical and High Risk",
+            "Exposed NSGs",
+            "Public IP Addresses",
+            "Internet-Facing VMs",
+        ]
+    )
+
+    with network_findings_tab:
+        if network_findings:
+            network_findings_df = pd.DataFrame(
+                network_findings
+            )
+
+            network_severity_order = {
+                "CRITICAL": 4,
+                "HIGH": 3,
+                "MEDIUM": 2,
+                "LOW": 1,
+            }
+
+            network_findings_df[
+                "Severity Rank"
+            ] = (
+                network_findings_df["severity"]
+                .astype(str)
+                .str.upper()
+                .map(network_severity_order)
+                .fillna(0)
+            )
+
+            network_findings_df = (
+                network_findings_df.sort_values(
+                    by="Severity Rank",
+                    ascending=False,
+                ).drop(
+                    columns=["Severity Rank"]
+                )
+            )
+
+            demo_dataframe(
+                network_findings_df,
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No Azure network exposure findings "
+                "were identified."
+            )
+
+    with high_risk_network_tab:
+        if high_risk_network_findings:
+            demo_dataframe(
+                pd.DataFrame(
+                    high_risk_network_findings
+                ),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No critical or high-risk Azure network "
+                "findings were identified."
+            )
+
+    with exposed_nsg_tab:
+        if exposed_network_security_groups:
+            demo_dataframe(
+                pd.DataFrame(
+                    exposed_network_security_groups
+                ),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No internet-exposed network security "
+                "groups were identified."
+            )
+
+    with public_ip_tab:
+        if public_ip_addresses:
+            demo_dataframe(
+                pd.DataFrame(public_ip_addresses),
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Azure public IP addresses were discovered."
+            )
+
+    with internet_vm_tab:
+        if internet_facing_virtual_machines:
+            demo_dataframe(
+                pd.DataFrame(
+                    internet_facing_virtual_machines
+                ),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No internet-facing Azure virtual machines "
+                "were identified."
+            )
+
+    st.divider()
+
+if azure_storage_exposure:
+    st.header("Azure Storage Exposure Analysis")
+
+    storage_client_name = st.session_state.get(
+        "azure_storage_exposure_client",
+        azure_display_client_name,
+    )
+
+    demo_caption(
+        f"Latest storage security analysis for {storage_client_name}"
+    )
+
+    storage_summary = azure_storage_exposure.get(
+        "summary",
+        {},
+    )
+
+    (
+        storage_col1,
+        storage_col2,
+        storage_col3,
+        storage_col4,
+        storage_col5,
+    ) = st.columns(5)
+
+    storage_col1.metric(
+        "Storage Accounts",
+        storage_summary.get("storage_accounts", 0),
+    )
+    storage_col2.metric(
+        "Exposed Accounts",
+        storage_summary.get("exposed_accounts", 0),
+    )
+    storage_col3.metric(
+        "High Findings",
+        storage_summary.get("high", 0),
+    )
+    storage_col4.metric(
+        "Medium Findings",
+        storage_summary.get("medium", 0),
+    )
+    storage_col5.metric(
+        "Total Findings",
+        storage_summary.get("findings", 0),
+    )
+
+    storage_accounts = azure_storage_exposure.get(
+        "storage_accounts",
+        [],
+    )
+    storage_findings = azure_storage_exposure.get(
+        "findings",
+        [],
+    )
+
+    high_storage_findings = [
+        finding
+        for finding in storage_findings
+        if str(
+            finding.get("severity", "")
+        ).strip().lower() in {"critical", "high"}
+    ]
+
+    (
+        storage_findings_tab,
+        exposed_storage_tab,
+        storage_configuration_tab,
+    ) = st.tabs(
+        [
+            "All Findings",
+            "High-Risk Findings",
+            "Storage Configuration",
+        ]
+    )
+
+    with storage_findings_tab:
+        if storage_findings:
+            storage_findings_df = pd.DataFrame(
+                storage_findings
+            )
+
+            severity_order = {
+                "Critical": 4,
+                "High": 3,
+                "Medium": 2,
+                "Low": 1,
+            }
+
+            storage_findings_df[
+                "Severity Rank"
+            ] = storage_findings_df[
+                "severity"
+            ].map(severity_order).fillna(0)
+
+            storage_findings_df = (
+                storage_findings_df.sort_values(
+                    by="Severity Rank",
+                    ascending=False,
+                ).drop(
+                    columns=["Severity Rank"]
+                )
+            )
+
+            demo_dataframe(
+                storage_findings_df,
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No Azure storage exposure findings were identified."
+            )
+
+    with exposed_storage_tab:
+        if high_storage_findings:
+            demo_dataframe(
+                pd.DataFrame(high_storage_findings),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No critical or high-risk storage findings "
+                "were identified."
+            )
+
+    with storage_configuration_tab:
+        if storage_accounts:
+            demo_dataframe(
+                pd.DataFrame(storage_accounts),
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Azure storage accounts were discovered."
+            )
+
+    st.subheader("Azure Storage Remediation Actions")
+
+    selected_provider = (
+        str(selected_client_data[5] or "AWS").strip().upper()
+        if selected_client_data is not None
+        else ""
+    )
+
+    azure_action_creation_allowed = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_EXECUTE_REMEDIATION,
+    )
+
+    valid_azure_binding = (
+        selected_client_data is not None
+        and selected_provider == "AZURE"
+        and bool(selected_client_data[6])
+        and bool(selected_client_data[7])
+        and bool(selected_client_data[8])
+    )
+
+    unique_storage_targets = {}
+
+    severity_rank = {
+        "critical": 4,
+        "high": 3,
+        "medium": 2,
+        "low": 1,
+    }
+
+    for finding in storage_findings:
+        resource_id = str(
+            finding.get("resource_id") or ""
+        ).strip()
+
+        if not resource_id:
+            continue
+
+        severity = str(
+            finding.get("severity") or "Medium"
+        ).strip()
+
+        existing = unique_storage_targets.get(resource_id)
+
+        if (
+            existing is None
+            or severity_rank.get(severity.lower(), 0)
+            > severity_rank.get(
+                str(existing.get("priority", "")).lower(),
+                0,
+            )
+        ):
+            unique_storage_targets[resource_id] = {
+                "category": "Azure Storage",
+                "finding": (
+                    f"Azure Storage Risk - {resource_id}"
+                ),
+                "priority": severity.upper(),
+            }
+
+    remediation_plan = list(
+        unique_storage_targets.values()
+    )
+
+    demo_caption(
+        "Creates one approval-controlled remediation action per "
+        "affected Azure Storage account. Duplicate open actions "
+        "are reused."
+    )
+
+    if demo_mode_enabled():
+        demo_info(
+            "Action creation is disabled while the sanitized Azure "
+            "demo dataset is active."
+        )
+
+    elif not azure_action_creation_allowed:
+        demo_info(
+            "Your role is not authorized to create executable "
+            "remediation actions."
+        )
+
+    elif not valid_azure_binding:
+        demo_info(
+            "Select a saved Azure client with subscription, tenant, "
+            "and client IDs before creating remediation actions."
+        )
+
+    elif create_actions_from_remediation_plan is None:
+        demo_warning(
+            "The remediation action creation module is unavailable."
+        )
+
+    elif not remediation_plan:
+        demo_success(
+            "No Azure Storage findings require remediation actions."
+        )
+
+    elif st.button(
+        "Create Azure Storage Remediation Actions",
+        key="create_azure_storage_remediation_actions",
+    ):
+        try:
+            created_actions = (
+                create_actions_from_remediation_plan(
+                    remediation_plan=remediation_plan,
+                    client_name=selected_client_data[1],
+                    cloud_provider="Azure",
+                    azure_subscription_id=(
+                        selected_client_data[6]
+                    ),
+                    azure_tenant_id=selected_client_data[7],
+                    azure_client_id=selected_client_data[8],
+                )
+            )
+
+            demo_success(
+                f"Processed {len(created_actions)} Azure Storage "
+                "remediation action(s). Review and approve them "
+                "in the Execution Center."
+            )
+
+            demo_json(created_actions)
+
+        except Exception as error:
+            logger.exception(
+                "Azure Storage remediation action creation failed."
+            )
+            st.error(
+                f"Unable to create Azure remediation actions: {error}"
+            )
+
+    st.divider()
+
+
+azure_posture = st.session_state.get(
+    "azure_security_posture"
+)
+
+if azure_posture:
+    st.header("Microsoft Defender for Cloud")
+
+    azure_posture_client = st.session_state.get(
+        "azure_security_posture_client",
+        "Selected Azure Client",
+    )
+
+    demo_caption(
+        f"Latest Azure security posture for {azure_posture_client}"
+    )
+
+    posture_summary = azure_posture.get("summary", {})
+
+    posture_col1, posture_col2, posture_col3, posture_col4 = (
+        st.columns(4)
+    )
+
+    posture_col1.metric(
+        "Secure Scores",
+        posture_summary.get("secure_scores", 0),
+    )
+    posture_col2.metric(
+        "Assessments",
+        posture_summary.get("assessments", 0),
+    )
+    posture_col3.metric(
+        "Healthy",
+        posture_summary.get("healthy", 0),
+    )
+    posture_col4.metric(
+        "Unhealthy",
+        posture_summary.get("unhealthy", 0),
+    )
+
+    secure_scores = azure_posture.get(
+        "secure_scores",
+        [],
+    )
+    assessments = azure_posture.get(
+        "assessments",
+        [],
+    )
+
+    unhealthy_assessments = [
+        assessment
+        for assessment in assessments
+        if str(
+            assessment.get("status_code", "")
+        ).lower() == "unhealthy"
+    ]
+
+    score_tab, unhealthy_tab, all_assessments_tab = st.tabs(
+        [
+            "Secure Scores",
+            "Unhealthy Assessments",
+            "All Assessments",
+        ]
+    )
+
+    with score_tab:
+        if secure_scores:
+            secure_scores_df = pd.DataFrame(secure_scores)
+
+            demo_dataframe(
+                secure_scores_df,
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Defender for Cloud secure scores were returned."
+            )
+
+    with unhealthy_tab:
+        if unhealthy_assessments:
+            unhealthy_df = pd.DataFrame(
+                unhealthy_assessments
+            )
+
+            demo_dataframe(
+                unhealthy_df,
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No unhealthy Defender assessments were returned."
+            )
+
+    with all_assessments_tab:
+        if assessments:
+            assessments_df = pd.DataFrame(assessments)
+
+            demo_dataframe(
+                assessments_df,
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Defender for Cloud assessments were returned."
+            )
+
+    st.divider()
 
 if selected_client_data:
     demo_success(
@@ -5121,12 +6717,47 @@ kev_count = len(df[df["KEV Exploited"] == 1]) if not df.empty else 0
 avg_risk = round(df["Risk Score"].mean(), 2) if not df.empty else 0
 risk_rating = calculate_risk_rating(avg_risk)
 
+azure_finding_summary = summarize_azure_findings(
+    network_exposure=azure_network_exposure,
+    storage_exposure=azure_storage_exposure,
+)
+
+multi_cloud_risk_score = round(
+    calculate_unified_risk(
+        base_risk=avg_risk,
+        securityhub_count=0,
+        guardduty_count=0,
+        azure_critical_count=azure_finding_summary[
+            "critical"
+        ],
+        azure_high_count=azure_finding_summary["high"],
+        azure_medium_count=azure_finding_summary[
+            "medium"
+        ],
+    ),
+    2,
+)
+
+multi_cloud_risk_rating = calculate_risk_rating(
+    multi_cloud_risk_score
+)
+
 summary = {
     "Critical Findings": critical_count,
     "High Findings": high_count,
     "KEV Exploited Findings": kev_count,
     "Average Risk Score": avg_risk,
-    "Risk Rating": risk_rating
+    "Risk Rating": risk_rating,
+    "Azure Critical Findings": azure_finding_summary[
+        "critical"
+    ],
+    "Azure High Findings": azure_finding_summary["high"],
+    "Azure Medium Findings": azure_finding_summary[
+        "medium"
+    ],
+    "Azure Total Findings": azure_finding_summary["total"],
+    "Multi-Cloud Risk Score": multi_cloud_risk_score,
+    "Multi-Cloud Risk Rating": multi_cloud_risk_rating,
 }
 
 remediation_playbook = generate_remediation_playbook(df)
@@ -5179,10 +6810,71 @@ if st.button(
 
     with st.spinner("Running autonomous scan..."):
         try:
-            if run_scan is None:
-                raise RuntimeError("scan_engine.run_scan is not available.")
+            selected_cloud_provider = (
+                normalize_cloud_provider(
+                    selected_client_data[5]
+                    if selected_client_data
+                    else "AWS"
+                )
+            )
 
-            if selected_client_data:
+            results = {}
+            azure_scan_discovery = None
+
+            if (
+                selected_client_data
+                and selected_cloud_provider == "AZURE"
+            ):
+                azure_scan_discovery = azure_discovery
+
+                discovery_client_name = st.session_state.get(
+                    "azure_resource_discovery_client"
+                )
+
+                if (
+                    not demo_mode_enabled()
+                    and discovery_client_name
+                    and discovery_client_name
+                    != selected_client_data[1]
+                ):
+                    raise RuntimeError(
+                        "The current Azure discovery results belong "
+                        f"to {discovery_client_name}, not "
+                        f"{selected_client_data[1]}. Run Azure "
+                        "Resource Discovery again."
+                    )
+
+                if not azure_scan_discovery:
+                    raise RuntimeError(
+                        "Run Azure Resource Discovery before "
+                        "starting the DGS Sentinel Azure scan."
+                    )
+
+                azure_resource_counts = (
+                    summarize_azure_resources(
+                        azure_scan_discovery
+                    )
+                )
+
+                demo_success(
+                    "Azure posture scan completed using the "
+                    "latest Azure discovery results. "
+                    f"Virtual machines: "
+                    f"{azure_resource_counts['virtual_machines']}. "
+                    f"Storage accounts: "
+                    f"{azure_resource_counts['storage_accounts']}. "
+                    f"Network security groups: "
+                    f"{azure_resource_counts['network_security_groups']}. "
+                    f"Public IP addresses: "
+                    f"{azure_resource_counts['public_ip_addresses']}."
+                )
+
+            elif selected_client_data:
+                if run_client_scan is None:
+                    raise RuntimeError(
+                        "AWS client scan engine is not available."
+                    )
+
                 role_arn = selected_client_data[3]
 
                 results = run_client_scan(
@@ -5270,6 +6962,11 @@ if st.button(
                         width="stretch"
                     )
             else:
+                if run_scan is None:
+                    raise RuntimeError(
+                        "scan_engine.run_scan is not available."
+                    )
+
                 run_scan()
 
             snapshot_assets = []
@@ -5293,9 +6990,83 @@ if st.button(
                         "last_scan": asset[9]
                     })
 
+                if (
+                    selected_client_data
+                    and selected_cloud_provider == "AZURE"
+                ):
+                    snapshot_assets = (
+                        build_azure_snapshot_assets(
+                            azure_scan_discovery,
+                            subscription_id=(
+                                selected_client_data[6]
+                            ),
+                        )
+                    )
+
+                    azure_resource_counts = (
+                        summarize_azure_resources(
+                            azure_scan_discovery
+                        )
+                    )
+                else:
+                    azure_resource_counts = (
+                        summarize_azure_resources(None)
+                    )
+
                 snapshot_summary = {
                     "security_score": max(0, 100 - int(avg_risk)),
                     "risk_rating": risk_rating,
+                    "multi_cloud_security_score": round(
+                        max(
+                            0,
+                            100 - float(multi_cloud_risk_score),
+                        ),
+                        2,
+                    ),
+                    "multi_cloud_risk_score": (
+                        multi_cloud_risk_score
+                    ),
+                    "multi_cloud_risk_rating": (
+                        multi_cloud_risk_rating
+                    ),
+                    "azure_critical_findings": (
+                        azure_finding_summary["critical"]
+                    ),
+                    "azure_high_findings": (
+                        azure_finding_summary["high"]
+                    ),
+                    "azure_medium_findings": (
+                        azure_finding_summary["medium"]
+                    ),
+                    "azure_total_findings": (
+                        azure_finding_summary["total"]
+                    ),
+                    "azure_virtual_machines": (
+                        azure_resource_counts[
+                            "virtual_machines"
+                        ]
+                    ),
+                    "azure_storage_accounts": (
+                        azure_resource_counts[
+                            "storage_accounts"
+                        ]
+                    ),
+                    "azure_network_security_groups": (
+                        azure_resource_counts[
+                            "network_security_groups"
+                        ]
+                    ),
+                    "azure_public_ip_addresses": (
+                        azure_resource_counts[
+                            "public_ip_addresses"
+                        ]
+                    ),
+                    "azure_network_interfaces": (
+                        azure_resource_counts[
+                            "network_interfaces"
+                        ]
+                    ),
+                    "cloud_provider": selected_cloud_provider,
                     "assets": len(snapshot_assets),
                     "accounts_scanned": 1,
                     "ec2_assets": len([
@@ -5414,18 +7185,47 @@ demo_caption(
 
 st.header("Executive Security Overview")
 
-metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+(
+    metric_col1,
+    metric_col2,
+    metric_col3,
+    metric_col4,
+    metric_col5,
+) = st.columns(5)
 
-metric_col1.metric("Critical Findings", critical_count)
-metric_col2.metric("KEV Findings", kev_count)
-metric_col3.metric("Average Risk Score", avg_risk)
-metric_col4.metric("Risk Rating", risk_rating)
+metric_col1.metric(
+    "AWS Critical Findings",
+    critical_count,
+)
+metric_col2.metric(
+    "Azure Findings",
+    azure_finding_summary["total"],
+)
+metric_col3.metric(
+    "AWS Baseline Risk",
+    avg_risk,
+)
+metric_col4.metric(
+    "Multi-Cloud Risk",
+    multi_cloud_risk_score,
+)
+metric_col5.metric(
+    "Risk Rating",
+    multi_cloud_risk_rating,
+)
+
+demo_caption(
+    "Azure severity contribution: "
+    f"{azure_finding_summary['critical']} critical, "
+    f"{azure_finding_summary['high']} high, and "
+    f"{azure_finding_summary['medium']} medium findings."
+)
 
 gauge_fig = go.Figure(
     go.Indicator(
         mode="gauge+number",
-        value=avg_risk,
-        title={"text": "Enterprise Security Risk Gauge"},
+        value=multi_cloud_risk_score,
+        title={"text": "Enterprise Multi-Cloud Risk Gauge"},
         gauge={
             "axis": {"range": [0, 100]},
             "bar": {"color": "darkblue"},
