@@ -106,6 +106,13 @@ except Exception:
     analyze_storage_exposure = None
 
 try:
+    from remediation_execution import (
+        create_actions_from_remediation_plan,
+    )
+except Exception:
+    create_actions_from_remediation_plan = None
+
+try:
     from azure_network_exposure import (
         analyze_azure_network_exposure,
     )
@@ -3264,6 +3271,7 @@ if page == "Execution Center":
         simulate_all_approved_actions,
         execute_live_action,
         verify_execution_evidence,
+        create_actions_from_remediation_plan,
     )
     from remediation_audit import get_remediation_audit
     from remediation_guardrails import GUARDRAILS
@@ -6444,6 +6452,138 @@ if azure_storage_exposure:
         else:
             demo_info(
                 "No Azure storage accounts were discovered."
+            )
+
+    st.subheader("Azure Storage Remediation Actions")
+
+    selected_provider = (
+        str(selected_client_data[5] or "AWS").strip().upper()
+        if selected_client_data is not None
+        else ""
+    )
+
+    azure_action_creation_allowed = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_EXECUTE_REMEDIATION,
+    )
+
+    valid_azure_binding = (
+        selected_client_data is not None
+        and selected_provider == "AZURE"
+        and bool(selected_client_data[6])
+        and bool(selected_client_data[7])
+        and bool(selected_client_data[8])
+    )
+
+    unique_storage_targets = {}
+
+    severity_rank = {
+        "critical": 4,
+        "high": 3,
+        "medium": 2,
+        "low": 1,
+    }
+
+    for finding in storage_findings:
+        resource_id = str(
+            finding.get("resource_id") or ""
+        ).strip()
+
+        if not resource_id:
+            continue
+
+        severity = str(
+            finding.get("severity") or "Medium"
+        ).strip()
+
+        existing = unique_storage_targets.get(resource_id)
+
+        if (
+            existing is None
+            or severity_rank.get(severity.lower(), 0)
+            > severity_rank.get(
+                str(existing.get("priority", "")).lower(),
+                0,
+            )
+        ):
+            unique_storage_targets[resource_id] = {
+                "category": "Azure Storage",
+                "finding": (
+                    f"Azure Storage Risk - {resource_id}"
+                ),
+                "priority": severity.upper(),
+            }
+
+    remediation_plan = list(
+        unique_storage_targets.values()
+    )
+
+    demo_caption(
+        "Creates one approval-controlled remediation action per "
+        "affected Azure Storage account. Duplicate open actions "
+        "are reused."
+    )
+
+    if demo_mode_enabled():
+        demo_info(
+            "Action creation is disabled while the sanitized Azure "
+            "demo dataset is active."
+        )
+
+    elif not azure_action_creation_allowed:
+        demo_info(
+            "Your role is not authorized to create executable "
+            "remediation actions."
+        )
+
+    elif not valid_azure_binding:
+        demo_info(
+            "Select a saved Azure client with subscription, tenant, "
+            "and client IDs before creating remediation actions."
+        )
+
+    elif create_actions_from_remediation_plan is None:
+        demo_warning(
+            "The remediation action creation module is unavailable."
+        )
+
+    elif not remediation_plan:
+        demo_success(
+            "No Azure Storage findings require remediation actions."
+        )
+
+    elif st.button(
+        "Create Azure Storage Remediation Actions",
+        key="create_azure_storage_remediation_actions",
+    ):
+        try:
+            created_actions = (
+                create_actions_from_remediation_plan(
+                    remediation_plan=remediation_plan,
+                    client_name=selected_client_data[1],
+                    cloud_provider="Azure",
+                    azure_subscription_id=(
+                        selected_client_data[6]
+                    ),
+                    azure_tenant_id=selected_client_data[7],
+                    azure_client_id=selected_client_data[8],
+                )
+            )
+
+            demo_success(
+                f"Processed {len(created_actions)} Azure Storage "
+                "remediation action(s). Review and approve them "
+                "in the Execution Center."
+            )
+
+            demo_json(created_actions)
+
+        except Exception as error:
+            logger.exception(
+                "Azure Storage remediation action creation failed."
+            )
+            st.error(
+                f"Unable to create Azure remediation actions: {error}"
             )
 
     st.divider()
