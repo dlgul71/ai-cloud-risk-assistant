@@ -1136,3 +1136,99 @@ def test_execute_live_azure_action_rejects_subscription_mismatch(
             azure_storage_client=object(),
             confirmation_phrase=CONFIRMATION,
         )
+
+def test_create_actions_from_azure_storage_plan(
+    execution_database,
+):
+    remediation_plan = [
+        {
+            "category": "Azure Storage",
+            "finding": (
+                f"Azure Storage Risk - {AZURE_RESOURCE_ID}"
+            ),
+            "priority": "HIGH",
+        }
+    ]
+
+    created = (
+        remediation_execution.create_actions_from_remediation_plan(
+            remediation_plan=remediation_plan,
+            client_name="Azure Example Client",
+            cloud_provider="Azure",
+            azure_subscription_id=AZURE_SUBSCRIPTION_ID,
+            azure_tenant_id="tenant-123",
+            azure_client_id="client-123",
+        )
+    )
+
+    assert len(created) == 1
+    assert created[0]["action_type"] == (
+        "Generate Azure Storage Hardening Task"
+    )
+    assert created[0]["cloud_provider"] == "Azure"
+    assert created[0]["azure_subscription_id"] == (
+        AZURE_SUBSCRIPTION_ID
+    )
+
+    connection = sqlite3.connect(execution_database)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            action_type,
+            cloud_provider,
+            azure_subscription_id,
+            azure_tenant_id,
+            azure_client_id,
+            client_name
+        FROM remediation_actions
+        WHERE finding = ?
+        """,
+        (
+            f"Azure Storage Risk - {AZURE_RESOURCE_ID}",
+        ),
+    )
+
+    stored_action = cursor.fetchone()
+    connection.close()
+
+    assert stored_action == (
+        "Generate Azure Storage Hardening Task",
+        "Azure",
+        AZURE_SUBSCRIPTION_ID,
+        "tenant-123",
+        "client-123",
+        "Azure Example Client",
+    )
+
+
+def test_create_actions_from_aws_data_exposure_plan(
+    execution_database,
+):
+    remediation_plan = [
+        {
+            "category": "Data Exposure",
+            "finding": "S3 Risk - example-plan-bucket",
+            "priority": "HIGH",
+        }
+    ]
+
+    created = (
+        remediation_execution.create_actions_from_remediation_plan(
+            remediation_plan=remediation_plan,
+            aws_account_id="123456789012",
+            client_name="Example Client",
+            role_arn=(
+                "arn:aws:iam::123456789012:"
+                "role/DGSSentinelRemediation"
+            ),
+        )
+    )
+
+    assert len(created) == 1
+    assert created[0]["action_type"] == (
+        "Generate S3 Exposure Remediation Task"
+    )
+    assert created[0]["aws_account_id"] == "123456789012"
+    assert created[0]["cloud_provider"] == "AWS"

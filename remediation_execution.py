@@ -1017,8 +1017,16 @@ def create_actions_from_remediation_plan(
     aws_account_id=None,
     client_name=None,
     role_arn=None,
+    cloud_provider="AWS",
+    azure_subscription_id=None,
+    azure_tenant_id=None,
+    azure_client_id=None,
 ):
     created_actions = []
+
+    normalized_provider = (
+        str(cloud_provider or "AWS").strip() or "AWS"
+    )
 
     for item in remediation_plan:
         category = item.get("category", "Monitoring")
@@ -1026,16 +1034,29 @@ def create_actions_from_remediation_plan(
         priority = item.get("priority", "STANDARD")
 
         if category == "Identity & Access":
-            action_type = "Generate IAM MFA and Access Key Review Task"
+            action_type = (
+                "Generate IAM MFA and Access Key Review Task"
+            )
+
+        elif category == "Azure Storage":
+            action_type = (
+                "Generate Azure Storage Hardening Task"
+            )
 
         elif category == "Data Exposure":
-            action_type = "Generate S3 Exposure Remediation Task"
+            action_type = (
+                "Generate S3 Exposure Remediation Task"
+            )
 
         elif category == "Threat Detection":
-            action_type = "Generate Incident Response Investigation Task"
+            action_type = (
+                "Generate Incident Response Investigation Task"
+            )
 
         elif category == "Security Posture":
-            action_type = "Generate Cloud Security Posture Remediation Task"
+            action_type = (
+                "Generate Cloud Security Posture Remediation Task"
+            )
 
         else:
             action_type = "Generate Monitoring Review Task"
@@ -1045,22 +1066,35 @@ def create_actions_from_remediation_plan(
             action_type=action_type,
             priority=priority,
             notes=(
-                "Automatically generated from DGS Sentinel AI remediation plan. "
-                "Simulation mode only. Human approval required."
+                "Automatically generated from DGS Sentinel AI "
+                "remediation plan. Human approval required before "
+                "live execution."
             ),
             aws_account_id=aws_account_id,
             client_name=client_name,
             role_arn=role_arn,
+            cloud_provider=normalized_provider,
+            azure_subscription_id=azure_subscription_id,
+            azure_tenant_id=azure_tenant_id,
+            azure_client_id=azure_client_id,
         )
 
-        created_actions.append({
-            "finding": finding,
-            "action_type": action_type,
-            "priority": priority,
-            "aws_account_id": aws_account_id,
-            "client_name": client_name,
-            "role_arn": role_arn,
-        })
+        created_actions.append(
+            {
+                "finding": finding,
+                "action_type": action_type,
+                "priority": priority,
+                "aws_account_id": aws_account_id,
+                "client_name": client_name,
+                "role_arn": role_arn,
+                "cloud_provider": normalized_provider,
+                "azure_subscription_id": (
+                    azure_subscription_id
+                ),
+                "azure_tenant_id": azure_tenant_id,
+                "azure_client_id": azure_client_id,
+            }
+        )
 
     return created_actions
 
