@@ -504,6 +504,7 @@ def execute_live_action(
     actor="DGS Sentinel AI",
     expected_subscription_id=None,
     azure_storage_client=None,
+    azure_network_client=None,
 ):
     """Execute one approved remediation action in guarded live mode."""
 
@@ -554,8 +555,17 @@ def execute_live_action(
         bound_azure_client_id,
     ) = action
 
-    is_azure_action = (
+    is_azure_action = action_type in {
+        "Generate Azure Storage Hardening Task",
+        "Generate Azure NSG Rule Restriction Task",
+    }
+
+    is_azure_storage_action = (
         action_type == "Generate Azure Storage Hardening Task"
+    )
+
+    is_azure_nsg_action = (
+        action_type == "Generate Azure NSG Rule Restriction Task"
     )
 
     if is_azure_action:
@@ -624,7 +634,12 @@ def execute_live_action(
         ),
         azure_storage_client=(
             azure_storage_client
-            if is_azure_action
+            if is_azure_storage_action
+            else None
+        ),
+        azure_network_client=(
+            azure_network_client
+            if is_azure_nsg_action
             else None
         ),
     )
@@ -728,7 +743,8 @@ def execute_live_action(
         if result_status == "FAILED":
             executed_at = str(datetime.now(UTC))
             evidence_hash = _calculate_execution_evidence_hash(
-                build_evidence("Failed", executed_at)
+                build_evidence("Failed", executed_at),
+                evidence_hmac_key,
             )
 
             cursor.execute(
@@ -1041,6 +1057,11 @@ def create_actions_from_remediation_plan(
         elif category == "Azure Storage":
             action_type = (
                 "Generate Azure Storage Hardening Task"
+            )
+
+        elif category == "Azure Network":
+            action_type = (
+                "Generate Azure NSG Rule Restriction Task"
             )
 
         elif category == "Data Exposure":

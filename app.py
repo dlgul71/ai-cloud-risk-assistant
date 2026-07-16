@@ -96,6 +96,11 @@ except Exception:
     StorageManagementClient = None
 
 try:
+    from azure.mgmt.network import NetworkManagementClient
+except Exception:
+    NetworkManagementClient = None
+
+try:
     from azure_security_posture import discover_azure_security_posture
 except Exception:
     discover_azure_security_posture = None
@@ -3835,10 +3840,18 @@ if page == "Execution Center":
         live_enabled_adapters = {
             "S3_BLOCK_PUBLIC_ACCESS",
             "AZURE_STORAGE_HARDENING",
+            "AZURE_NSG_RULE_RESTRICTION",
         }
 
-        is_azure_live_action = (
+        is_azure_storage_live_action = (
             selected_adapter == "AZURE_STORAGE_HARDENING"
+        )
+        is_azure_nsg_live_action = (
+            selected_adapter == "AZURE_NSG_RULE_RESTRICTION"
+        )
+        is_azure_live_action = (
+            is_azure_storage_live_action
+            or is_azure_nsg_live_action
         )
         is_aws_live_action = (
             selected_adapter == "S3_BLOCK_PUBLIC_ACCESS"
@@ -3908,9 +3921,20 @@ if page == "Execution Center":
                     "The Azure credential module is unavailable."
                 )
 
-            elif StorageManagementClient is None:
+            elif (
+                is_azure_storage_live_action
+                and StorageManagementClient is None
+            ):
                 demo_warning(
                     "The Azure Storage Management SDK is unavailable."
+                )
+
+            elif (
+                is_azure_nsg_live_action
+                and NetworkManagementClient is None
+            ):
+                demo_warning(
+                    "The Azure Network Management SDK is unavailable."
                 )
 
             else:
@@ -3940,8 +3964,20 @@ if page == "Execution Center":
                     live_subscription_id,
                 )
                 demo_write(
-                    "**Target Azure Storage account:**",
+                    "**Target Azure resource:**",
                     live_plan.get("resource_id", "UNKNOWN"),
+                )
+
+                if is_azure_nsg_live_action:
+                    demo_write(
+                        "**Target NSG rule:**",
+                        live_plan.get("rule_name", "UNKNOWN"),
+                    )
+
+                azure_remediation_label = (
+                    "Azure Storage"
+                    if is_azure_storage_live_action
+                    else "Azure NSG Rule"
                 )
 
                 live_azure_secret = st.text_input(
@@ -3981,7 +4017,10 @@ if page == "Execution Center":
                 )
 
                 if st.button(
-                    "Execute Guarded Live Azure Storage Remediation",
+                    (
+                        f"Execute Guarded Live "
+                        f"{azure_remediation_label} Remediation"
+                    ),
                     disabled=not live_button_enabled,
                     key="execute_guarded_live_remediation",
                 ):
@@ -3992,12 +4031,24 @@ if page == "Execution Center":
                             client_secret=live_azure_secret,
                         )
 
-                        live_azure_storage_client = (
-                            StorageManagementClient(
-                                credential,
-                                live_subscription_id,
+                        live_azure_storage_client = None
+                        live_azure_network_client = None
+
+                        if is_azure_storage_live_action:
+                            live_azure_storage_client = (
+                                StorageManagementClient(
+                                    credential,
+                                    live_subscription_id,
+                                )
                             )
-                        )
+
+                        elif is_azure_nsg_live_action:
+                            live_azure_network_client = (
+                                NetworkManagementClient(
+                                    credential,
+                                    live_subscription_id,
+                                )
+                            )
 
                         live_result = execute_live_action(
                             action_id=int(selected_action_id),
@@ -4007,6 +4058,9 @@ if page == "Execution Center":
                             azure_storage_client=(
                                 live_azure_storage_client
                             ),
+                            azure_network_client=(
+                                live_azure_network_client
+                            ),
                             confirmation_phrase=confirmation_phrase,
                             actor=(
                                 settings.app_username
@@ -4015,8 +4069,8 @@ if page == "Execution Center":
                         )
 
                         demo_success(
-                            "Guarded live Azure Storage remediation "
-                            "completed and verified."
+                            f"Guarded live {azure_remediation_label} "
+                            "remediation completed and verified."
                         )
                         demo_json(live_result)
                         st.rerun()
@@ -6315,6 +6369,153 @@ if azure_network_exposure:
             demo_success(
                 "No internet-facing Azure virtual machines "
                 "were identified."
+            )
+
+    st.subheader("Azure NSG Remediation Actions")
+
+    selected_provider = (
+        str(selected_client_data[5] or "AWS").strip().upper()
+        if selected_client_data is not None
+        else ""
+    )
+
+    azure_network_action_creation_allowed = has_permission(
+        st.session_state.get("user_role"),
+        PERMISSION_EXECUTE_REMEDIATION,
+    )
+
+    valid_azure_network_binding = (
+        selected_client_data is not None
+        and selected_provider == "AZURE"
+        and bool(selected_client_data[6])
+        and bool(selected_client_data[7])
+        and bool(selected_client_data[8])
+    )
+
+    unique_nsg_rule_targets = {}
+
+    network_severity_rank = {
+        "critical": 4,
+        "high": 3,
+        "medium": 2,
+        "low": 1,
+    }
+
+    for finding in network_findings:
+        if (
+            finding.get("resource_type")
+            != "AZURE_NETWORK_SECURITY_GROUP"
+        ):
+            continue
+
+        resource_id = str(
+            finding.get("resource_id") or ""
+        ).strip()
+        rule_name = str(
+            finding.get("rule_name") or ""
+        ).strip()
+
+        if not resource_id or not rule_name:
+            continue
+
+        target_key = (resource_id, rule_name)
+        severity = str(
+            finding.get("severity") or "Medium"
+        ).strip()
+
+        existing = unique_nsg_rule_targets.get(target_key)
+
+        if (
+            existing is None
+            or network_severity_rank.get(
+                severity.lower(),
+                0,
+            )
+            > network_severity_rank.get(
+                str(existing.get("priority", "")).lower(),
+                0,
+            )
+        ):
+            unique_nsg_rule_targets[target_key] = {
+                "category": "Azure Network",
+                "finding": (
+                    f"Azure NSG Risk - {resource_id} "
+                    f"| Rule: {rule_name}"
+                ),
+                "priority": severity.upper(),
+            }
+
+    network_remediation_plan = list(
+        unique_nsg_rule_targets.values()
+    )
+
+    demo_caption(
+        "Creates one approval-controlled remediation action per "
+        "internet-exposed Azure NSG rule. Duplicate open actions "
+        "are reused."
+    )
+
+    if demo_mode_enabled():
+        demo_info(
+            "Action creation is disabled while the sanitized Azure "
+            "demo dataset is active."
+        )
+
+    elif not azure_network_action_creation_allowed:
+        demo_info(
+            "Your role is not authorized to create executable "
+            "remediation actions."
+        )
+
+    elif not valid_azure_network_binding:
+        demo_info(
+            "Select a saved Azure client with subscription, tenant, "
+            "and client IDs before creating NSG remediation actions."
+        )
+
+    elif create_actions_from_remediation_plan is None:
+        demo_warning(
+            "The remediation action creation module is unavailable."
+        )
+
+    elif not network_remediation_plan:
+        demo_success(
+            "No Azure NSG findings require remediation actions."
+        )
+
+    elif st.button(
+        "Create Azure NSG Remediation Actions",
+        key="create_azure_nsg_remediation_actions",
+    ):
+        try:
+            created_actions = (
+                create_actions_from_remediation_plan(
+                    remediation_plan=network_remediation_plan,
+                    client_name=selected_client_data[1],
+                    cloud_provider="Azure",
+                    azure_subscription_id=(
+                        selected_client_data[6]
+                    ),
+                    azure_tenant_id=selected_client_data[7],
+                    azure_client_id=selected_client_data[8],
+                )
+            )
+
+            demo_success(
+                f"Processed {len(created_actions)} Azure NSG "
+                "remediation action(s). Review and approve them "
+                "in the Execution Center."
+            )
+
+            demo_json(created_actions)
+
+        except Exception as error:
+            logger.exception(
+                "Azure NSG remediation action creation failed."
+            )
+            st.error(
+                f"Unable to create Azure NSG remediation "
+                f"actions: {error}"
             )
 
     st.divider()

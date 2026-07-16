@@ -1,5 +1,6 @@
 from remediation_aws_adapters import execute_s3_public_access_block
 from remediation_azure_adapters import (
+    execute_azure_nsg_rule_restriction,
     execute_azure_storage_account_hardening,
 )
 from remediation_guardrails import validate_live_execution_request
@@ -10,6 +11,9 @@ SUPPORTED_ACTIONS = {
     "Generate IAM MFA and Access Key Review Task": "IAM_REVIEW",
     "Generate S3 Exposure Remediation Task": "S3_BLOCK_PUBLIC_ACCESS",
     "Generate Azure Storage Hardening Task": "AZURE_STORAGE_HARDENING",
+    "Generate Azure NSG Rule Restriction Task": (
+        "AZURE_NSG_RULE_RESTRICTION"
+    ),
     "Generate Incident Response Investigation Task": (
         "INCIDENT_RESPONSE_TASK"
     ),
@@ -23,6 +27,7 @@ SUPPORTED_ACTIONS = {
 LIVE_ENABLED_ADAPTERS = {
     "S3_BLOCK_PUBLIC_ACCESS",
     "AZURE_STORAGE_HARDENING",
+    "AZURE_NSG_RULE_RESTRICTION",
 }
 
 
@@ -36,6 +41,7 @@ def execute_controlled_action(
     s3_client=None,
     expected_subscription_id=None,
     azure_storage_client=None,
+    azure_network_client=None,
 ):
     guardrail_result = validate_live_execution_request(
         action_type=action_type,
@@ -130,7 +136,7 @@ def execute_controlled_action(
                 s3_client=s3_client,
             )
 
-        else:
+        elif adapter == "AZURE_STORAGE_HARDENING":
             if not expected_subscription_id:
                 return {
                     "status": "BLOCKED",
@@ -154,6 +160,27 @@ def execute_controlled_action(
                 )
             )
 
+        elif adapter == "AZURE_NSG_RULE_RESTRICTION":
+            if not expected_subscription_id:
+                return {
+                    "status": "BLOCKED",
+                    "mode": "Live",
+                    "adapter": adapter,
+                    "action_type": action_type,
+                    "finding": finding,
+                    "message": (
+                        "The expected Azure subscription ID is "
+                        "required for live NSG remediation."
+                    ),
+                }
+
+            execution_result = execute_azure_nsg_rule_restriction(
+                resource_id=target.get("resource_id"),
+                rule_name=target.get("rule_name"),
+                expected_subscription_id=expected_subscription_id,
+                network_client=azure_network_client,
+            )
+
     except ValueError as error:
         return {
             "status": "BLOCKED",
@@ -165,11 +192,11 @@ def execute_controlled_action(
         }
 
     except Exception as error:
-        provider = (
-            "S3"
-            if adapter == "S3_BLOCK_PUBLIC_ACCESS"
-            else "Azure Storage"
-        )
+        provider = {
+            "S3_BLOCK_PUBLIC_ACCESS": "S3",
+            "AZURE_STORAGE_HARDENING": "Azure Storage",
+            "AZURE_NSG_RULE_RESTRICTION": "Azure NSG",
+        }.get(adapter, "cloud")
 
         return {
             "status": "FAILED",
@@ -211,6 +238,7 @@ def build_execution_plan(action_type, finding):
         "finding": finding,
         "resource_type": target.get("resource_type"),
         "resource_id": target.get("resource_id"),
+        "rule_name": target.get("rule_name"),
         "target_supported": target.get("supported", False),
         "execution_mode": "Simulation",
         "live_execution_enabled": (
@@ -253,6 +281,19 @@ def get_adapter_readiness_matrix():
                 "Generate Azure Storage Hardening Task"
             ),
             "Resource Type": "AZURE_STORAGE_ACCOUNT",
+            "Simulation Ready": True,
+            "Live Execution": "Guarded",
+            "Approval Required": True,
+            "Readiness": "Controlled Testing",
+        },
+        {
+            "Adapter": "AZURE_NSG_RULE_RESTRICTION",
+            "Action Type": (
+                "Generate Azure NSG Rule Restriction Task"
+            ),
+            "Resource Type": (
+                "AZURE_NETWORK_SECURITY_GROUP_RULE"
+            ),
             "Simulation Ready": True,
             "Live Execution": "Guarded",
             "Approval Required": True,
