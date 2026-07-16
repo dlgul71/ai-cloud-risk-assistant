@@ -743,7 +743,8 @@ def execute_live_action(
         if result_status == "FAILED":
             executed_at = str(datetime.now(UTC))
             evidence_hash = _calculate_execution_evidence_hash(
-                build_evidence("Failed", executed_at)
+                build_evidence("Failed", executed_at),
+                evidence_hmac_key,
             )
 
             cursor.execute(

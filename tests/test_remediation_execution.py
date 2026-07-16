@@ -313,6 +313,14 @@ def test_execute_live_action_records_failed_result(
 
     assert events[-1][0] == "LIVE_REMEDIATION_FAILED"
 
+    integrity = remediation_execution.verify_execution_evidence(
+        action_id
+    )
+
+    assert integrity["status"] == "VERIFIED"
+    assert len(integrity["stored_hash"]) == 64
+    assert integrity["stored_hash"] == integrity["calculated_hash"]
+
 
 def test_execute_live_action_rejects_completed_action(
     execution_database,
