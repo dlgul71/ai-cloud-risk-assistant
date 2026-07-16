@@ -24,6 +24,30 @@ def extract_resource_target(action_type, finding):
             "supported": bool(resource_id),
         }
 
+
+    if action_type == "Generate Azure NSG Rule Restriction Task":
+        target_text = finding_text.replace(
+            "Azure NSG Risk - ",
+            "",
+            1,
+        ).strip()
+
+        resource_id, separator, rule_name = target_text.partition(
+            " | Rule: "
+        )
+
+        resource_id = resource_id.strip()
+        rule_name = rule_name.strip()
+
+        return {
+            "resource_type": "AZURE_NETWORK_SECURITY_GROUP_RULE",
+            "resource_id": resource_id,
+            "rule_name": rule_name,
+            "supported": bool(
+                separator and resource_id and rule_name
+            ),
+        }
+
     if action_type == "Generate IAM MFA and Access Key Review Task":
         username = finding_text.replace("IAM Risk - ", "").strip()
 
