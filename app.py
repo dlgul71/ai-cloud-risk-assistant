@@ -1711,7 +1711,8 @@ if page == "System Health":
 
     demo_caption(
         "Production readiness, configuration, storage, "
-        "database, dependency, and AWS connectivity checks."
+        "database, dependency, AWS identity, and Splunk HEC "
+        "connectivity checks."
     )
 
     include_aws_health_check = st.checkbox(
@@ -1720,6 +1721,15 @@ if page == "System Health":
         help=(
             "Performs a read-only AWS identity request "
             "using the current credential chain."
+        )
+    )
+
+    include_splunk_health_check = st.checkbox(
+        "Include Splunk HEC connectivity check",
+        value=False,
+        help=(
+            "Sends a clearly identified platform-health "
+            "test event to the configured Splunk HEC endpoint."
         )
     )
 
@@ -1733,7 +1743,8 @@ if page == "System Health":
             st.session_state[
                 "system_health_results"
             ] = run_health_checks(
-                include_aws=include_aws_health_check
+                include_aws=include_aws_health_check,
+                include_splunk=include_splunk_health_check,
             )
 
     health_results = st.session_state.get(

@@ -14,6 +14,7 @@ from botocore.config import Config
 
 from app_config import settings
 from app_logging import get_logger
+from splunk_hec import SplunkHECError, send_event
 
 
 logger = get_logger("dgs_sentinel.health")
@@ -146,6 +147,22 @@ def check_configuration() -> list[dict[str, str]]:
             (
                 f"{summary['remediation_evidence_previous_key_count']} "
                 "previous key(s) configured"
+            ),
+        )
+    )
+
+    splunk_configured = bool(
+        summary.get("splunk_hec_configured", False)
+    )
+
+    results.append(
+        _result(
+            "Splunk HEC configuration",
+            "PASS" if splunk_configured else "WARN",
+            (
+                "HEC URL and token configured"
+                if splunk_configured
+                else "HEC URL or token not configured"
             ),
         )
     )
@@ -347,8 +364,69 @@ def check_aws_identity() -> list[dict[str, str]]:
         ]
 
 
+def check_splunk_hec(
+    sender: Any = send_event,
+) -> list[dict[str, str]]:
+    """Send a clearly identified health-check event to Splunk HEC."""
+
+    if not (
+        settings.splunk_hec_url
+        and settings.splunk_hec_token
+    ):
+        return [
+            _result(
+                "Splunk HEC connectivity",
+                "WARN",
+                "Splunk HEC is not configured",
+            )
+        ]
+
+    try:
+        result = sender(
+            {
+                "event_type": "dgs_sentinel_health_check",
+                "component": "splunk_hec",
+                "status": "PASS",
+                "checked_at": datetime.now(UTC).isoformat(),
+            },
+            fields={
+                "event_category": "platform_health",
+                "component": "splunk_hec",
+            },
+        )
+
+        return [
+            _result(
+                "Splunk HEC connectivity",
+                "PASS",
+                (
+                    "Test event accepted by Splunk HEC: "
+                    f"{result.get('splunk_text', 'Success')}"
+                ),
+            )
+        ]
+
+    except SplunkHECError as error:
+        logger.warning(
+            "Splunk HEC health check failed",
+            extra={
+                "event": "splunk_hec_health_failure",
+                "error_type": type(error).__name__,
+            },
+        )
+
+        return [
+            _result(
+                "Splunk HEC connectivity",
+                "FAIL",
+                str(error),
+            )
+        ]
+
+
 def run_health_checks(
     include_aws: bool = False,
+    include_splunk: bool = False,
 ) -> dict[str, Any]:
     checks = []
 
@@ -359,6 +437,9 @@ def run_health_checks(
 
     if include_aws:
         checks.extend(check_aws_identity())
+
+    if include_splunk:
+        checks.extend(check_splunk_hec())
 
     fail_count = sum(
         item["Status"] == "FAIL"
@@ -402,6 +483,7 @@ def run_health_checks(
             "warning_count": warning_count,
             "fail_count": fail_count,
             "aws_check_included": include_aws,
+            "splunk_check_included": include_splunk,
         },
     )
 
