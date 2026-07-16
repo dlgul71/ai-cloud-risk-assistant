@@ -3279,6 +3279,7 @@ if page == "Execution Center":
         create_actions_from_remediation_plan,
     )
     from remediation_audit import get_remediation_audit
+    from splunk_audit_export import export_audit_events
     from remediation_guardrails import GUARDRAILS
     from remediation_live_actions import (
         get_adapter_for_action,
@@ -4293,6 +4294,58 @@ if page == "Execution Center":
                 file_name="dgs_sentinel_execution_audit.csv",
                 mime="text/csv"
             )
+
+            st.subheader("Splunk SIEM Export")
+
+            splunk_configured = bool(
+                settings.splunk_hec_url
+                and settings.splunk_hec_token
+            )
+
+            if splunk_configured:
+                demo_info(
+                    "Splunk HEC is configured. "
+                    f"Index: {settings.splunk_index}; "
+                    f"Source: {settings.splunk_source}; "
+                    f"Sourcetype: {settings.splunk_sourcetype}"
+                )
+            else:
+                demo_info(
+                    "Configure SPLUNK_HEC_URL and SPLUNK_HEC_TOKEN "
+                    "to enable secure audit-event export."
+                )
+
+            if st.button(
+                "Send Filtered Audit Events to Splunk",
+                disabled=(
+                    not splunk_configured
+                    or not can_execute_remediation
+                ),
+                key="send_audit_events_to_splunk",
+            ):
+                export_result = export_audit_events(
+                    audit_df.itertuples(
+                        index=False,
+                        name=None,
+                    )
+                )
+
+                if export_result["failed"] == 0:
+                    demo_success(
+                        "Splunk export completed: "
+                        f"{export_result['sent']} event(s) sent."
+                    )
+                else:
+                    st.warning(
+                        "Splunk export completed with failures: "
+                        f"{export_result['sent']} sent, "
+                        f"{export_result['failed']} failed."
+                    )
+
+                demo_dataframe(
+                    pd.DataFrame(export_result["results"]),
+                    width="stretch",
+                )
 
         else:
             demo_info("No execution audit events found yet.")

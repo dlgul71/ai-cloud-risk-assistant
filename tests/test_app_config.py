@@ -315,3 +315,97 @@ def test_safe_summary_reports_azure_without_exposing_secret():
 
     assert summary["azure_configured"] is True
     assert "azure-summary-client-secret" not in rendered_summary
+
+def test_splunk_settings_read_environment_values(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SPLUNK_HEC_URL",
+        "https://splunk.example.com:8088/services/collector",
+    )
+    monkeypatch.setenv(
+        "SPLUNK_HEC_TOKEN",
+        "splunk-hec-test-token",  # pragma: allowlist secret
+    )
+    monkeypatch.setenv(
+        "SPLUNK_INDEX",
+        "dgs_security",
+    )
+    monkeypatch.setenv(
+        "SPLUNK_SOURCE",
+        "dgs_sentinel_test",
+    )
+    monkeypatch.setenv(
+        "SPLUNK_SOURCETYPE",
+        "dgs:security:event",
+    )
+    monkeypatch.setenv(
+        "SPLUNK_VERIFY_SSL",
+        "false",
+    )
+    monkeypatch.setenv(
+        "SPLUNK_TIMEOUT_SECONDS",
+        "20",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.splunk_hec_url == (
+        "https://splunk.example.com:8088/services/collector"
+    )
+    assert settings.splunk_hec_token == "splunk-hec-test-token"
+    assert settings.splunk_index == "dgs_security"
+    assert settings.splunk_source == "dgs_sentinel_test"
+    assert settings.splunk_sourcetype == "dgs:security:event"
+    assert settings.splunk_verify_ssl is False
+    assert settings.splunk_timeout_seconds == 20
+
+
+def test_splunk_settings_use_safe_defaults(
+    monkeypatch,
+):
+    for key in (
+        "SPLUNK_HEC_URL",
+        "SPLUNK_HEC_TOKEN",
+        "SPLUNK_INDEX",
+        "SPLUNK_SOURCE",
+        "SPLUNK_SOURCETYPE",
+        "SPLUNK_VERIFY_SSL",
+        "SPLUNK_TIMEOUT_SECONDS",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    monkeypatch.setattr(
+        app_config,
+        "_streamlit_secret",
+        lambda key: None,
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.splunk_hec_url is None
+    assert settings.splunk_hec_token is None
+    assert settings.splunk_index == "main"
+    assert settings.splunk_source == "dgs_sentinel_ai"
+    assert settings.splunk_sourcetype == "_json"
+    assert settings.splunk_verify_ssl is True
+    assert settings.splunk_timeout_seconds == 10
+
+
+def test_safe_summary_does_not_expose_splunk_token():
+    settings = app_config.AppSettings(
+        splunk_hec_url=(
+            "https://splunk.example.com:8088/services/collector"
+        ),
+        splunk_hec_token=(
+            "splunk-summary-secret-token"
+        ),
+        splunk_index="dgs_security",
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert "splunk-summary-secret-token" not in rendered_summary
+    assert summary["splunk_hec_configured"] is True
+    assert summary["splunk_index"] == "dgs_security"
