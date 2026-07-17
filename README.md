@@ -270,7 +270,6 @@ export AWS_REGION=us-east-1
 - CI/CD security analytics
 - RBAC authentication
 - Multi-tenant SaaS architecture
-- Splunk integration
 - Security Lake ingestion
 - Axonius-style asset correlation
 - Real-time threat intelligence feeds
@@ -526,7 +525,6 @@ export AWS_REGION=us-east-1
 - CI/CD security analytics
 - RBAC authentication
 - Multi-tenant SaaS architecture
-- Splunk integration
 - Security Lake ingestion
 - Axonius-style asset correlation
 - Real-time threat intelligence feeds
