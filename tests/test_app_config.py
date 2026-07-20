@@ -409,3 +409,97 @@ def test_safe_summary_does_not_expose_splunk_token():
     assert "splunk-summary-secret-token" not in rendered_summary
     assert summary["splunk_hec_configured"] is True
     assert summary["splunk_index"] == "dgs_security"
+
+
+def test_axonius_settings_read_environment_values(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "AXONIUS_BASE_URL",
+        "https://axonius.example.com",
+    )
+    monkeypatch.setenv(
+        "AXONIUS_API_KEY",
+        "axonius-test-api-key",
+    )
+    monkeypatch.setenv(
+        "AXONIUS_API_SECRET",
+        "axonius-test-api-secret",
+    )
+    monkeypatch.setenv(
+        "AXONIUS_VERIFY_SSL",
+        "false",
+    )
+    monkeypatch.setenv(
+        "AXONIUS_TIMEOUT_SECONDS",
+        "20",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.axonius_base_url == (
+        "https://axonius.example.com"
+    )
+    assert settings.axonius_api_key == (
+        "axonius-test-api-key"
+    )
+    assert settings.axonius_api_secret == (
+        "axonius-test-api-secret"
+    )
+    assert settings.axonius_verify_ssl is False
+    assert settings.axonius_timeout_seconds == 20
+
+
+def test_axonius_placeholders_are_not_configured():
+    settings = app_config.AppSettings(
+        axonius_base_url="https://your-axon-instance",
+        axonius_api_key="your-api-key",  # pragma: allowlist secret
+        axonius_api_secret="your-api-secret",  # pragma: allowlist secret
+    )
+
+    summary = settings.safe_summary()
+
+    assert summary["axonius_configured"] is False
+
+
+def test_safe_summary_does_not_expose_axonius_secrets():
+    settings = app_config.AppSettings(
+        axonius_base_url="https://axonius.example.com",
+        axonius_api_key="axonius-summary-api-key",  # pragma: allowlist secret
+        axonius_api_secret="axonius-summary-api-secret",  # pragma: allowlist secret
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert "axonius-summary-api-key" not in rendered_summary
+    assert "axonius-summary-api-secret" not in rendered_summary
+    assert summary["axonius_configured"] is True
+
+
+def test_axonius_settings_use_safe_defaults(
+    monkeypatch,
+):
+    for key in (
+        "AXONIUS_BASE_URL",
+        "AXONIUS_API_KEY",
+        "AXONIUS_API_SECRET",
+        "AXONIUS_VERIFY_SSL",
+        "AXONIUS_TIMEOUT_SECONDS",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    monkeypatch.setattr(
+        app_config,
+        "_streamlit_secret",
+        lambda key: None,
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.axonius_base_url is None
+    assert settings.axonius_api_key is None
+    assert settings.axonius_api_secret is None
+    assert settings.axonius_verify_ssl is True
+    assert settings.axonius_timeout_seconds == 30
+    assert settings.safe_summary()["axonius_configured"] is False
