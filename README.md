@@ -270,7 +270,6 @@ export AWS_REGION=us-east-1
 - CI/CD security analytics
 - RBAC authentication
 - Multi-tenant SaaS architecture
-- Splunk integration
 - Security Lake ingestion
 - Axonius-style asset correlation
 - Real-time threat intelligence feeds
@@ -526,7 +525,6 @@ export AWS_REGION=us-east-1
 - CI/CD security analytics
 - RBAC authentication
 - Multi-tenant SaaS architecture
-- Splunk integration
 - Security Lake ingestion
 - Axonius-style asset correlation
 - Real-time threat intelligence feeds
@@ -697,6 +695,53 @@ Supported application roles are:
 
 Role names are normalized without regard to capitalization. Missing or invalid
 role values default safely to `Viewer`.
+
+---
+
+# 📡 Splunk SIEM Integration
+
+DGS Sentinel AI can export filtered remediation audit events to Splunk through
+the HTTP Event Collector (HEC).
+
+## Splunk HEC Configuration
+
+~~~bash
+export SPLUNK_HEC_URL="https://splunk.example.com:8088"
+export SPLUNK_HEC_TOKEN="replace-with-a-secure-hec-token"
+export SPLUNK_INDEX="dgs_security"
+export SPLUNK_SOURCE="dgs_sentinel_ai"
+export SPLUNK_SOURCETYPE="dgs:security:event"
+export SPLUNK_VERIFY_SSL="true"
+export SPLUNK_TIMEOUT_SECONDS="10"
+~~~
+
+The application automatically normalizes the HEC URL to:
+
+~~~text
+/services/collector/event
+~~~
+
+The HEC token is excluded from application configuration summaries and must
+never be committed to Git, logs, screenshots, or documentation.
+
+## Audit Event Export
+
+From the **Execution Center**:
+
+1. Open the **Execution Audit Trail**.
+2. Optionally filter records by remediation action ID.
+3. Select **Send Filtered Audit Events to Splunk**.
+4. Review the event-level delivery results.
+
+Each exported event includes:
+
+- Audit ID and action ID
+- Event timestamp and event type
+- Event detail and actor
+- Product and schema metadata
+- Splunk index, source, and sourcetype metadata
+
+Only users with remediation-execution permission can initiate the export.
 
 ---
 

@@ -213,6 +213,58 @@ class AppSettings:
             )
         )
     )
+    splunk_hec_url: str | None = field(
+        default_factory=lambda: get_first_setting(
+            "SPLUNK_HEC_URL",
+            "splunk.hec_url",
+        )
+    )
+    splunk_hec_token: str | None = field(
+        default_factory=lambda: get_first_setting(
+            "SPLUNK_HEC_TOKEN",
+            "splunk.hec_token",
+        ),
+        repr=False,
+    )
+    splunk_index: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "SPLUNK_INDEX",
+                "splunk.index",
+                default="main",
+            )
+        )
+    )
+    splunk_source: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "SPLUNK_SOURCE",
+                "splunk.source",
+                default="dgs_sentinel_ai",
+            )
+        )
+    )
+    splunk_sourcetype: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "SPLUNK_SOURCETYPE",
+                "splunk.sourcetype",
+                default="_json",
+            )
+        )
+    )
+    splunk_verify_ssl: bool = field(
+        default_factory=lambda: get_bool(
+            "SPLUNK_VERIFY_SSL",
+            True,
+        )
+    )
+    splunk_timeout_seconds: int = field(
+        default_factory=lambda: get_int(
+            "SPLUNK_TIMEOUT_SECONDS",
+            10,
+        )
+    )
     remediation_evidence_hmac_key: str | None = field(
         default_factory=lambda: get_setting(
             "DGS_REMEDIATION_EVIDENCE_HMAC_KEY"
@@ -255,6 +307,17 @@ class AppSettings:
                 and self.app_password
             ),
             "app_role": self.app_role,
+            "splunk_hec_configured": bool(
+                self.splunk_hec_url
+                and self.splunk_hec_token
+            ),
+            "splunk_index": self.splunk_index,
+            "splunk_source": self.splunk_source,
+            "splunk_sourcetype": self.splunk_sourcetype,
+            "splunk_verify_ssl": self.splunk_verify_ssl,
+            "splunk_timeout_seconds": (
+                self.splunk_timeout_seconds
+            ),
             "remediation_evidence_hmac_configured": bool(
                 self.remediation_evidence_hmac_key
             ),

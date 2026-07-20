@@ -203,3 +203,172 @@ def test_configuration_passes_with_hmac_key_and_reports_previous_keys(
     assert signing_result["Status"] == "PASS"
     assert previous_keys_result["Status"] == "PASS"
     assert previous_keys_result["Detail"] == "2 previous key(s) configured"
+
+
+def test_configuration_reports_splunk_hec_configured(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "settings",
+        SimpleNamespace(
+            safe_summary=lambda: {
+                "app_env": "production",
+                "aws_region": "us-east-1",
+                "openai_configured": True,
+                "app_credentials_configured": True,
+                "live_remediation_enabled": False,
+                "remediation_evidence_hmac_configured": True,
+                "remediation_evidence_previous_key_count": 0,
+                "splunk_hec_configured": True,
+            },
+        ),
+    )
+
+    results = health_checks.check_configuration()
+
+    splunk_result = next(
+        result
+        for result in results
+        if result["Component"] == "Splunk HEC configuration"
+    )
+
+    assert splunk_result["Status"] == "PASS"
+    assert splunk_result["Detail"] == (
+        "HEC URL and token configured"
+    )
+
+
+def test_splunk_hec_health_check_passes(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "settings",
+        SimpleNamespace(
+            splunk_hec_url="https://splunk.example.com:8088",
+            splunk_hec_token="test-token",
+        ),
+    )
+
+    captured = {}
+
+    def fake_sender(event, **kwargs):
+        captured["event"] = event
+        captured["kwargs"] = kwargs
+
+        return {
+            "status": "SENT",
+            "splunk_text": "Success",
+        }
+
+    results = health_checks.check_splunk_hec(
+        sender=fake_sender
+    )
+
+    assert results[0]["Status"] == "PASS"
+    assert "accepted" in results[0]["Detail"]
+    assert captured["event"]["event_type"] == (
+        "dgs_sentinel_health_check"
+    )
+    assert captured["kwargs"]["fields"] == {
+        "event_category": "platform_health",
+        "component": "splunk_hec",
+    }
+
+
+def test_splunk_hec_health_check_warns_when_unconfigured(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "settings",
+        SimpleNamespace(
+            splunk_hec_url=None,
+            splunk_hec_token=None,
+        ),
+    )
+
+    results = health_checks.check_splunk_hec()
+
+    assert results == [
+        {
+            "Component": "Splunk HEC connectivity",
+            "Status": "WARN",
+            "Detail": "Splunk HEC is not configured",
+        }
+    ]
+
+
+def test_splunk_hec_health_check_reports_failure(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "settings",
+        SimpleNamespace(
+            splunk_hec_url="https://splunk.example.com:8088",
+            splunk_hec_token="test-token",
+        ),
+    )
+
+    def failing_sender(event, **kwargs):
+        raise health_checks.SplunkHECError(
+            "Splunk HEC request failed."
+        )
+
+    results = health_checks.check_splunk_hec(
+        sender=failing_sender
+    )
+
+    assert results[0]["Status"] == "FAIL"
+    assert results[0]["Detail"] == (
+        "Splunk HEC request failed."
+    )
+
+
+def test_health_summary_includes_optional_splunk_check(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "check_configuration",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_required_modules",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_databases",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_storage",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_splunk_hec",
+        lambda: [
+            {
+                "Component": "Splunk HEC connectivity",
+                "Status": "PASS",
+                "Detail": "Connected",
+            }
+        ],
+    )
+
+    results = health_checks.run_health_checks(
+        include_aws=False,
+        include_splunk=True,
+    )
+
+    assert results["overall_status"] == "PASS"
+    assert results["pass_count"] == 1
+    assert results["checks"][0]["Component"] == (
+        "Splunk HEC connectivity"
+    )
