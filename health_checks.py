@@ -14,6 +14,10 @@ from botocore.config import Config
 
 from app_config import settings
 from app_logging import get_logger
+from axonius_connector import (
+    AxoniusConnectorError,
+    test_axonius_connection,
+)
 from splunk_hec import SplunkHECError, send_event
 
 
@@ -163,6 +167,22 @@ def check_configuration() -> list[dict[str, str]]:
                 "HEC URL and token configured"
                 if splunk_configured
                 else "HEC URL or token not configured"
+            ),
+        )
+    )
+
+    axonius_configured = bool(
+        summary.get("axonius_configured", False)
+    )
+
+    results.append(
+        _result(
+            "Axonius configuration",
+            "PASS" if axonius_configured else "WARN",
+            (
+                "Base URL and API credentials configured"
+                if axonius_configured
+                else "Axonius live connector is not configured"
             ),
         )
     )
@@ -424,9 +444,56 @@ def check_splunk_hec(
         ]
 
 
+def check_axonius_connectivity(
+    connector_test: Any = test_axonius_connection,
+) -> list[dict[str, str]]:
+    """Run a read-only Axonius API connectivity test."""
+
+    try:
+        result = connector_test()
+
+        if result.get("status") == "NOT_CONFIGURED":
+            return [
+                _result(
+                    "Axonius connectivity",
+                    "WARN",
+                    "Axonius is not configured",
+                )
+            ]
+
+        return [
+            _result(
+                "Axonius connectivity",
+                "PASS",
+                (
+                    "Axonius API connection succeeded; "
+                    f"{result.get('asset_count', 0)} asset(s) returned"
+                ),
+            )
+        ]
+
+    except AxoniusConnectorError as error:
+        logger.warning(
+            "Axonius connectivity health check failed",
+            extra={
+                "event": "axonius_health_failure",
+                "error_type": type(error).__name__,
+            },
+        )
+
+        return [
+            _result(
+                "Axonius connectivity",
+                "FAIL",
+                str(error),
+            )
+        ]
+
+
 def run_health_checks(
     include_aws: bool = False,
     include_splunk: bool = False,
+    include_axonius: bool = False,
 ) -> dict[str, Any]:
     checks = []
 
@@ -440,6 +507,9 @@ def run_health_checks(
 
     if include_splunk:
         checks.extend(check_splunk_hec())
+
+    if include_axonius:
+        checks.extend(check_axonius_connectivity())
 
     fail_count = sum(
         item["Status"] == "FAIL"
@@ -484,6 +554,7 @@ def run_health_checks(
             "fail_count": fail_count,
             "aws_check_included": include_aws,
             "splunk_check_included": include_splunk,
+            "axonius_check_included": include_axonius,
         },
     )
 

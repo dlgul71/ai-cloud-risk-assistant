@@ -31,8 +31,8 @@ class FakeResponse:
 def configured_settings():
     return SimpleNamespace(
         axonius_base_url="https://axonius.example.com",
-        axonius_api_key="test-api-key",
-        axonius_api_secret="test-api-secret",
+        axonius_api_key="test-api-key",  # pragma: allowlist secret
+        axonius_api_secret="test-api-secret",  # pragma: allowlist secret
         axonius_verify_ssl=True,
         axonius_timeout_seconds=15,
     )
@@ -72,8 +72,8 @@ def test_axonius_configured_rejects_placeholders(
         "settings",
         SimpleNamespace(
             axonius_base_url="https://your-axon-instance",
-            axonius_api_key="your-api-key",
-            axonius_api_secret="your-api-secret",
+            axonius_api_key="your-api-key",  # pragma: allowlist secret
+            axonius_api_secret="your-api-secret",  # pragma: allowlist secret
         ),
     )
 
@@ -267,3 +267,57 @@ def test_live_request_requires_positive_timeout(
         match="greater than zero",
     ):
         axonius_connector.get_axonius_assets()
+
+
+def test_connection_reports_not_configured(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        axonius_connector,
+        "settings",
+        SimpleNamespace(
+            axonius_base_url=None,
+            axonius_api_key=None,
+            axonius_api_secret=None,
+        ),
+    )
+
+    result = axonius_connector.test_axonius_connection()
+
+    assert result == {
+        "status": "NOT_CONFIGURED",
+        "mode": "Mock",
+        "asset_count": 0,
+        "message": "Axonius is not configured.",
+    }
+
+
+def test_connection_reports_live_asset_count(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        axonius_connector,
+        "settings",
+        configured_settings(),
+    )
+
+    def fake_get(*args, **kwargs):
+        return FakeResponse(
+            payload={
+                "data": [
+                    {"asset_id": "asset-001"},
+                    {"asset_id": "asset-002"},
+                ]
+            }
+        )
+
+    result = axonius_connector.test_axonius_connection(
+        http_get=fake_get
+    )
+
+    assert result == {
+        "status": "CONNECTED",
+        "mode": "Live",
+        "asset_count": 2,
+        "message": "Axonius API connection succeeded.",
+    }

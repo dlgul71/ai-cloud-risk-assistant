@@ -279,6 +279,34 @@ def _request_records(
     return _extract_records(payload, record_key)
 
 
+def test_axonius_connection(
+    *,
+    http_get: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    """Validate Axonius API connectivity with a read-only asset request."""
+
+    if not axonius_configured():
+        return {
+            "status": "NOT_CONFIGURED",
+            "mode": "Mock",
+            "asset_count": 0,
+            "message": "Axonius is not configured.",
+        }
+
+    assets = _request_records(
+        "/api/assets",
+        record_key="assets",
+        http_get=http_get,
+    )
+
+    return {
+        "status": "CONNECTED",
+        "mode": "Live",
+        "asset_count": len(assets),
+        "message": "Axonius API connection succeeded.",
+    }
+
+
 def get_axonius_assets(
     *,
     http_get: Callable[..., Any] | None = None,

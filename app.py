@@ -1711,8 +1711,8 @@ if page == "System Health":
 
     demo_caption(
         "Production readiness, configuration, storage, "
-        "database, dependency, AWS identity, and Splunk HEC "
-        "connectivity checks."
+        "database, dependency, AWS identity, Splunk HEC, "
+        "and Axonius connectivity checks."
     )
 
     include_aws_health_check = st.checkbox(
@@ -1733,6 +1733,15 @@ if page == "System Health":
         )
     )
 
+    include_axonius_health_check = st.checkbox(
+        "Include Axonius connectivity check",
+        value=False,
+        help=(
+            "Performs a read-only Axonius asset API request "
+            "using the configured connector credentials."
+        )
+    )
+
     if st.button(
         "Run Health Checks",
         type="primary"
@@ -1745,6 +1754,7 @@ if page == "System Health":
             ] = run_health_checks(
                 include_aws=include_aws_health_check,
                 include_splunk=include_splunk_health_check,
+                include_axonius=include_axonius_health_check,
             )
 
     health_results = st.session_state.get(
