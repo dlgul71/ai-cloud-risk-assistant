@@ -372,3 +372,111 @@ def test_health_summary_includes_optional_splunk_check(
     assert results["checks"][0]["Component"] == (
         "Splunk HEC connectivity"
     )
+
+
+def test_axonius_health_check_passes():
+    results = health_checks.check_axonius_connectivity(
+        connector_test=lambda: {
+            "status": "CONNECTED",
+            "mode": "Live",
+            "asset_count": 3,
+            "message": "Axonius API connection succeeded.",
+        }
+    )
+
+    assert results == [
+        {
+            "Component": "Axonius connectivity",
+            "Status": "PASS",
+            "Detail": (
+                "Axonius API connection succeeded; "
+                "3 asset(s) returned"
+            ),
+        }
+    ]
+
+
+def test_axonius_health_check_warns_when_unconfigured():
+    results = health_checks.check_axonius_connectivity(
+        connector_test=lambda: {
+            "status": "NOT_CONFIGURED",
+            "mode": "Mock",
+            "asset_count": 0,
+            "message": "Axonius is not configured.",
+        }
+    )
+
+    assert results == [
+        {
+            "Component": "Axonius connectivity",
+            "Status": "WARN",
+            "Detail": "Axonius is not configured",
+        }
+    ]
+
+
+def test_axonius_health_check_reports_failure():
+    def failing_connector():
+        raise health_checks.AxoniusConnectorError(
+            "Axonius request failed."
+        )
+
+    results = health_checks.check_axonius_connectivity(
+        connector_test=failing_connector
+    )
+
+    assert results == [
+        {
+            "Component": "Axonius connectivity",
+            "Status": "FAIL",
+            "Detail": "Axonius request failed.",
+        }
+    ]
+
+
+def test_health_summary_includes_optional_axonius_check(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        health_checks,
+        "check_configuration",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_required_modules",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_databases",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_storage",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        health_checks,
+        "check_axonius_connectivity",
+        lambda: [
+            {
+                "Component": "Axonius connectivity",
+                "Status": "PASS",
+                "Detail": "Connected",
+            }
+        ],
+    )
+
+    results = health_checks.run_health_checks(
+        include_aws=False,
+        include_splunk=False,
+        include_axonius=True,
+    )
+
+    assert results["overall_status"] == "PASS"
+    assert results["pass_count"] == 1
+    assert results["checks"][0]["Component"] == (
+        "Axonius connectivity"
+    )

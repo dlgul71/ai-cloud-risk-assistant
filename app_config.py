@@ -126,6 +126,22 @@ def get_csv(
     )
 
 
+PLACEHOLDER_VALUES = {
+    "https://your-axon-instance",
+    "your-api-key",
+    "your-api-secret",
+}
+
+
+def is_configured_value(value: Any) -> bool:
+    normalized = str(value or "").strip()
+
+    return bool(
+        normalized
+        and normalized not in PLACEHOLDER_VALUES
+    )
+
+
 @dataclass(frozen=True)
 class AppSettings:
     app_name: str = "DGS Sentinel AI"
@@ -210,6 +226,56 @@ class AppSettings:
                 "DGS_APP_ROLE",
                 "auth.role",
                 default="Administrator",
+            )
+        )
+    )
+    axonius_base_url: str | None = field(
+        default_factory=lambda: get_first_setting(
+            "AXONIUS_BASE_URL",
+            "axonius.url",
+        )
+    )
+    axonius_api_key: str | None = field(
+        default_factory=lambda: get_first_setting(
+            "AXONIUS_API_KEY",
+            "axonius.api_key",
+        ),
+        repr=False,
+    )
+    axonius_api_secret: str | None = field(
+        default_factory=lambda: get_first_setting(
+            "AXONIUS_API_SECRET",
+            "axonius.api_secret",
+        ),
+        repr=False,
+    )
+    axonius_verify_ssl: bool = field(
+        default_factory=lambda: get_bool(
+            "AXONIUS_VERIFY_SSL",
+            True,
+        )
+    )
+    axonius_timeout_seconds: int = field(
+        default_factory=lambda: get_int(
+            "AXONIUS_TIMEOUT_SECONDS",
+            30,
+        )
+    )
+    axonius_assets_path: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "AXONIUS_ASSETS_PATH",
+                "axonius.assets_path",
+                default="/api/assets",
+            )
+        )
+    )
+    axonius_identities_path: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "AXONIUS_IDENTITIES_PATH",
+                "axonius.identities_path",
+                default="/api/identities",
             )
         )
     )
@@ -307,6 +373,22 @@ class AppSettings:
                 and self.app_password
             ),
             "app_role": self.app_role,
+            "axonius_configured": all(
+                is_configured_value(value)
+                for value in (
+                    self.axonius_base_url,
+                    self.axonius_api_key,
+                    self.axonius_api_secret,
+                )
+            ),
+            "axonius_verify_ssl": self.axonius_verify_ssl,
+            "axonius_timeout_seconds": (
+                self.axonius_timeout_seconds
+            ),
+            "axonius_assets_path": self.axonius_assets_path,
+            "axonius_identities_path": (
+                self.axonius_identities_path
+            ),
             "splunk_hec_configured": bool(
                 self.splunk_hec_url
                 and self.splunk_hec_token

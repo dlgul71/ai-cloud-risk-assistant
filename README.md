@@ -745,6 +745,42 @@ Only users with remediation-execution permission can initiate the export.
 
 ---
 
+# 🔎 Axonius CAASM Integration
+
+DGS Sentinel AI supports secure mock and live Axonius connector modes for
+collecting asset and identity records.
+
+## Axonius Configuration
+
+~~~bash
+export AXONIUS_BASE_URL="https://your-tenant.example.com"
+export AXONIUS_API_KEY="replace-with-an-api-key"  # pragma: allowlist secret
+export AXONIUS_API_SECRET="replace-with-an-api-secret"  # pragma: allowlist secret
+export AXONIUS_ASSETS_PATH="/api/assets"
+export AXONIUS_IDENTITIES_PATH="/api/identities"
+export AXONIUS_VERIFY_SSL="true"
+export AXONIUS_TIMEOUT_SECONDS="30"
+~~~
+
+Set the asset and identity paths to the authorized routes supported by the
+Axonius tenant and API version.
+
+The connector:
+
+- Requires an HTTPS base URL
+- Rejects embedded URL credentials
+- Rejects absolute endpoint URLs
+- Keeps the API key and secret out of configuration summaries
+- Defaults to SSL certificate verification
+- Uses mock data when live credentials are unavailable
+- Provides an optional read-only connectivity check under **System Health**
+
+Do not commit Axonius credentials to Git, logs, screenshots, or documentation.
+
+See `docs/AXONIUS_CONNECTOR_VALIDATION.md` for the v1.5 validation record.
+
+---
+
 # 📄 Executive Reporting
 
 DGS Sentinel AI generates executive-level cyber risk assessment reports designed for leadership, compliance teams, and security stakeholders.
