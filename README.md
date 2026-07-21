@@ -754,8 +754,8 @@ collecting asset and identity records.
 
 ~~~bash
 export AXONIUS_BASE_URL="https://your-tenant.example.com"
-export AXONIUS_API_KEY="replace-with-an-api-key"
-export AXONIUS_API_SECRET="replace-with-an-api-secret"
+export AXONIUS_API_KEY="replace-with-an-api-key"  # pragma: allowlist secret
+export AXONIUS_API_SECRET="replace-with-an-api-secret"  # pragma: allowlist secret
 export AXONIUS_ASSETS_PATH="/api/assets"
 export AXONIUS_IDENTITIES_PATH="/api/identities"
 export AXONIUS_VERIFY_SSL="true"
