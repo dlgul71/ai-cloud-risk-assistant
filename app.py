@@ -4391,6 +4391,8 @@ if page == "Axonius CAASM Dashboard":
         generate_identity_governance_rows,
         calculate_coverage_gap_metrics,
         generate_coverage_gap_findings,
+        generate_correlated_exposure_rows,
+        calculate_correlation_metrics,
         generate_caasm_executive_recommendations
     )
     import pandas as pd
@@ -4442,6 +4444,16 @@ if page == "Axonius CAASM Dashboard":
 
         coverage_gap_findings = generate_coverage_gap_findings(
             coverage_sources=coverage_sources
+        )
+
+        correlation_rows = generate_correlated_exposure_rows(
+            assets=assets,
+            identities=identities,
+            coverage_sources=coverage_sources
+        )
+
+        correlation_metrics = calculate_correlation_metrics(
+            correlation_rows=correlation_rows
         )
 
         executive_recommendations = generate_caasm_executive_recommendations(
@@ -4524,6 +4536,89 @@ if page == "Axonius CAASM Dashboard":
 
         else:
             demo_info("No Axonius asset records are available.")
+
+        st.subheader("Correlated Exposure Analytics")
+
+        correlation_col1, correlation_col2, correlation_col3 = st.columns(3)
+
+        correlation_col1.metric(
+            "Critical Correlations",
+            correlation_metrics.get("Critical Correlations", 0)
+        )
+
+        correlation_col2.metric(
+            "High Correlations",
+            correlation_metrics.get("High Correlations", 0)
+        )
+
+        correlation_col3.metric(
+            "Average Correlated Risk",
+            correlation_metrics.get(
+                "Average Correlated Risk Score",
+                0
+            )
+        )
+
+        correlation_col4, correlation_col5, correlation_col6 = st.columns(3)
+
+        correlation_col4.metric(
+            "Unmatched Asset Owners",
+            correlation_metrics.get("Unmatched Asset Owners", 0)
+        )
+
+        correlation_col5.metric(
+            "Unmanaged Correlated Assets",
+            correlation_metrics.get(
+                "Unmanaged Correlated Assets",
+                0
+            )
+        )
+
+        correlation_col6.metric(
+            "Disconnected Sources",
+            correlation_metrics.get(
+                "Assets With Disconnected Sources",
+                0
+            )
+        )
+
+        if correlation_rows:
+            correlation_df = pd.DataFrame(
+                correlation_rows
+            )
+
+            demo_dataframe(
+                correlation_df,
+                width="stretch"
+            )
+
+            st.subheader("Correlated Risk by Asset")
+
+            st.bar_chart(
+                correlation_df.set_index("Hostname")[
+                    "Correlated Risk Score"
+                ]
+            )
+
+            correlation_csv = (
+                correlation_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            demo_download_button(
+                label="Download Correlated Exposure CSV",
+                data=correlation_csv,
+                file_name=(
+                    "dgs_sentinel_caasm_correlated_exposure.csv"
+                ),
+                mime="text/csv"
+            )
+
+        else:
+            demo_info(
+                "No asset-identity correlation records are available."
+            )
 
         st.subheader("Identity Risk Table")
 
