@@ -434,6 +434,14 @@ def test_axonius_settings_read_environment_values(
         "AXONIUS_TIMEOUT_SECONDS",
         "20",
     )
+    monkeypatch.setenv(
+        "AXONIUS_ASSETS_PATH",
+        "/api/v2/assets",
+    )
+    monkeypatch.setenv(
+        "AXONIUS_IDENTITIES_PATH",
+        "/api/v2/identities",
+    )
 
     settings = app_config.AppSettings()
 
@@ -448,6 +456,11 @@ def test_axonius_settings_read_environment_values(
     )
     assert settings.axonius_verify_ssl is False
     assert settings.axonius_timeout_seconds == 20
+    assert settings.axonius_assets_path == "/api/v2/assets"
+    assert (
+        settings.axonius_identities_path
+        == "/api/v2/identities"
+    )
 
 
 def test_axonius_placeholders_are_not_configured():
@@ -486,6 +499,8 @@ def test_axonius_settings_use_safe_defaults(
         "AXONIUS_API_SECRET",
         "AXONIUS_VERIFY_SSL",
         "AXONIUS_TIMEOUT_SECONDS",
+        "AXONIUS_ASSETS_PATH",
+        "AXONIUS_IDENTITIES_PATH",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -502,4 +517,6 @@ def test_axonius_settings_use_safe_defaults(
     assert settings.axonius_api_secret is None
     assert settings.axonius_verify_ssl is True
     assert settings.axonius_timeout_seconds == 30
+    assert settings.axonius_assets_path == "/api/assets"
+    assert settings.axonius_identities_path == "/api/identities"
     assert settings.safe_summary()["axonius_configured"] is False

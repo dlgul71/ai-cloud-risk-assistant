@@ -261,6 +261,24 @@ class AppSettings:
             30,
         )
     )
+    axonius_assets_path: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "AXONIUS_ASSETS_PATH",
+                "axonius.assets_path",
+                default="/api/assets",
+            )
+        )
+    )
+    axonius_identities_path: str = field(
+        default_factory=lambda: str(
+            get_first_setting(
+                "AXONIUS_IDENTITIES_PATH",
+                "axonius.identities_path",
+                default="/api/identities",
+            )
+        )
+    )
     splunk_hec_url: str | None = field(
         default_factory=lambda: get_first_setting(
             "SPLUNK_HEC_URL",
@@ -366,6 +384,10 @@ class AppSettings:
             "axonius_verify_ssl": self.axonius_verify_ssl,
             "axonius_timeout_seconds": (
                 self.axonius_timeout_seconds
+            ),
+            "axonius_assets_path": self.axonius_assets_path,
+            "axonius_identities_path": (
+                self.axonius_identities_path
             ),
             "splunk_hec_configured": bool(
                 self.splunk_hec_url

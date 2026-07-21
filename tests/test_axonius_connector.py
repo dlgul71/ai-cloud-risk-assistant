@@ -321,3 +321,46 @@ def test_connection_reports_live_asset_count(
         "asset_count": 2,
         "message": "Axonius API connection succeeded.",
     }
+
+
+def test_normalize_axonius_path_accepts_relative_path():
+    assert axonius_connector.normalize_axonius_path(
+        "/api/v2/assets"
+    ) == "/api/v2/assets"
+
+
+def test_normalize_axonius_path_rejects_absolute_url():
+    with pytest.raises(
+        axonius_connector.AxoniusConnectorError,
+        match="relative API path",
+    ):
+        axonius_connector.normalize_axonius_path(
+            "https://attacker.example.com/assets"
+        )
+
+
+def test_live_request_uses_configured_asset_path(
+    monkeypatch,
+):
+    settings = configured_settings()
+    settings.axonius_assets_path = "/api/v2/assets"
+
+    monkeypatch.setattr(
+        axonius_connector,
+        "settings",
+        settings,
+    )
+
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured["url"] = url
+        return FakeResponse(payload={"data": []})
+
+    axonius_connector.get_axonius_assets(
+        http_get=fake_get
+    )
+
+    assert captured["url"] == (
+        "https://axonius.example.com/api/v2/assets"
+    )

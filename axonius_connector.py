@@ -14,6 +14,10 @@ class AxoniusConnectorError(RuntimeError):
     """Raised when Axonius configuration or API delivery fails."""
 
 
+DEFAULT_AXONIUS_ASSETS_PATH = "/api/assets"
+DEFAULT_AXONIUS_IDENTITIES_PATH = "/api/identities"
+
+
 def normalize_axonius_url(url: str) -> str:
     """Validate and normalize the Axonius base URL."""
 
@@ -34,6 +38,27 @@ def normalize_axonius_url(url: str) -> str:
     if parsed.username or parsed.password:
         raise AxoniusConnectorError(
             "Axonius base URL must not contain embedded credentials."
+        )
+
+    return normalized
+
+
+def normalize_axonius_path(path: str) -> str:
+    """Validate an Axonius API path without allowing another host."""
+
+    normalized = str(path or "").strip()
+    parsed = urlparse(normalized)
+
+    if (
+        not normalized
+        or not normalized.startswith("/")
+        or normalized.startswith("//")
+        or parsed.scheme
+        or parsed.netloc
+    ):
+        raise AxoniusConnectorError(
+            "Axonius endpoint must be a relative API path "
+            "beginning with '/'."
         )
 
     return normalized
@@ -242,6 +267,7 @@ def _request_records(
     base_url = normalize_axonius_url(
         settings.axonius_base_url or ""
     )
+    endpoint_path = normalize_axonius_path(endpoint)
     timeout = int(settings.axonius_timeout_seconds)
 
     if timeout <= 0:
@@ -253,7 +279,7 @@ def _request_records(
 
     try:
         response = get(
-            f"{base_url}{endpoint}",
+            f"{base_url}{endpoint_path}",
             headers=get_headers(),
             timeout=timeout,
             verify=settings.axonius_verify_ssl,
@@ -294,7 +320,11 @@ def test_axonius_connection(
         }
 
     assets = _request_records(
-        "/api/assets",
+        getattr(
+            settings,
+            "axonius_assets_path",
+            DEFAULT_AXONIUS_ASSETS_PATH,
+        ),
         record_key="assets",
         http_get=http_get,
     )
@@ -320,7 +350,11 @@ def get_axonius_assets(
     return {
         "mode": "Live",
         "assets": _request_records(
-            "/api/assets",
+            getattr(
+                settings,
+                "axonius_assets_path",
+                DEFAULT_AXONIUS_ASSETS_PATH,
+            ),
             record_key="assets",
             http_get=http_get,
         ),
@@ -340,7 +374,11 @@ def get_axonius_identities(
     return {
         "mode": "Live",
         "identities": _request_records(
-            "/api/identities",
+            getattr(
+                settings,
+                "axonius_identities_path",
+                DEFAULT_AXONIUS_IDENTITIES_PATH,
+            ),
             record_key="identities",
             http_get=http_get,
         ),
