@@ -775,6 +775,28 @@ The connector:
 - Uses mock data when live credentials are unavailable
 - Provides an optional read-only connectivity check under **System Health**
 
+## Correlated Exposure Analytics
+
+DGS Sentinel AI v1.6 correlates Axonius asset, identity, and connector-coverage
+records to identify combined exposure conditions that may not be visible when
+the datasets are reviewed separately.
+
+Correlation capabilities include:
+
+- Asset-owner and identity matching
+- Privileged-access and MFA analysis
+- Orphaned-identity detection
+- Unmanaged-asset detection
+- Connector availability and coverage analysis
+- Per-asset correlated exposure scoring
+- Critical, high, moderate, and standard prioritization
+- Correlation dashboard metrics and charts
+- Correlated exposure CSV export
+- Snapshot persistence, trend analysis, and delta reporting
+- Correlation-aware executive recommendations
+
+See `docs/AXONIUS_CORRELATION_VALIDATION.md` for the v1.6 validation record.
+
 Do not commit Axonius credentials to Git, logs, screenshots, or documentation.
 
 See `docs/AXONIUS_CONNECTOR_VALIDATION.md` for the v1.5 validation record.
