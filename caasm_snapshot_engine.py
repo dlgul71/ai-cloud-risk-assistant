@@ -17,6 +17,8 @@ def save_caasm_snapshot(
     coverage_gap_metrics,
     policy_findings=None,
     coverage_gap_findings=None,
+    correlation_metrics=None,
+    correlation_rows=None,
     retain_count=50
 ):
     CAASM_SNAPSHOT_DIR.mkdir(exist_ok=True)
@@ -30,7 +32,9 @@ def save_caasm_snapshot(
         "identity_governance_metrics": identity_governance_metrics,
         "coverage_gap_metrics": coverage_gap_metrics,
         "policy_findings": policy_findings or [],
-        "coverage_gap_findings": coverage_gap_findings or []
+        "coverage_gap_findings": coverage_gap_findings or [],
+        "correlation_metrics": correlation_metrics or {},
+        "correlation_rows": correlation_rows or []
     }
 
     file_path = CAASM_SNAPSHOT_DIR / (
