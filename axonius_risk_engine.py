@@ -541,9 +541,14 @@ def generate_caasm_executive_recommendations(
     identity_governance_metrics,
     coverage_gap_metrics,
     policy_findings,
-    coverage_gap_findings
+    coverage_gap_findings,
+    correlation_metrics=None,
+    correlation_rows=None
 ):
     recommendations = []
+
+    correlation_metrics = correlation_metrics or {}
+    correlation_rows = correlation_rows or []
 
     orphaned_accounts = identity_governance_metrics.get(
         "Orphaned Accounts",
@@ -569,6 +574,82 @@ def generate_caasm_executive_recommendations(
         "CAASM Score",
         0
     )
+
+    critical_correlations = correlation_metrics.get(
+        "Critical Correlations",
+        0
+    )
+
+    high_correlations = correlation_metrics.get(
+        "High Correlations",
+        0
+    )
+
+    unmatched_asset_owners = correlation_metrics.get(
+        "Unmatched Asset Owners",
+        0
+    )
+
+    average_correlated_risk = correlation_metrics.get(
+        "Average Correlated Risk Score",
+        0
+    )
+
+    if critical_correlations > 0:
+        critical_assets = [
+            row.get("Hostname", "Unknown Asset")
+            for row in correlation_rows
+            if row.get("Priority") == "CRITICAL"
+        ]
+
+        asset_summary = ", ".join(
+            critical_assets[:3]
+        )
+
+        recommendations.append({
+            "Priority": "CRITICAL",
+            "Category": "Correlated Exposure",
+            "Recommendation": (
+                f"Immediately investigate {critical_correlations} "
+                "critical asset-identity correlation(s)."
+                + (
+                    f" Highest-risk assets include: {asset_summary}."
+                    if asset_summary
+                    else ""
+                )
+            )
+        })
+
+    if high_correlations > 0:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Correlated Exposure",
+            "Recommendation": (
+                f"Review and reduce {high_correlations} high-risk "
+                "asset-identity correlation(s)."
+            )
+        })
+
+    if unmatched_asset_owners > 0:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Asset Ownership",
+            "Recommendation": (
+                f"Reconcile {unmatched_asset_owners} asset owner(s) "
+                "that could not be matched to an identity record."
+            )
+        })
+
+    if average_correlated_risk >= 70:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Executive Correlation Risk",
+            "Recommendation": (
+                "The average correlated exposure score is "
+                f"{average_correlated_risk}. Establish a prioritized "
+                "asset, identity, and connector remediation plan."
+            )
+        })
 
     if orphaned_accounts > 0:
         recommendations.append({

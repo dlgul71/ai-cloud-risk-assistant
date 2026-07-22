@@ -171,3 +171,71 @@ def test_empty_correlation_metrics_are_safe():
 
     assert metrics["Total Correlated Assets"] == 0
     assert metrics["Average Correlated Risk Score"] == 0
+
+
+def test_executive_recommendations_include_correlated_exposure():
+    recommendations = (
+        axonius_risk_engine
+        .generate_caasm_executive_recommendations(
+            metrics={"CAASM Score": 80},
+            identity_governance_metrics={},
+            coverage_gap_metrics={},
+            policy_findings=[],
+            coverage_gap_findings=[],
+            correlation_metrics={
+                "Critical Correlations": 1,
+                "High Correlations": 2,
+                "Unmatched Asset Owners": 1,
+                "Average Correlated Risk Score": 78.5,
+            },
+            correlation_rows=[
+                {
+                    "Hostname": "legacy-server",
+                    "Priority": "CRITICAL",
+                }
+            ],
+        )
+    )
+
+    categories = [
+        item["Category"]
+        for item in recommendations
+    ]
+
+    assert "Correlated Exposure" in categories
+    assert "Asset Ownership" in categories
+    assert "Executive Correlation Risk" in categories
+
+    critical = next(
+        item for item in recommendations
+        if (
+            item["Category"] == "Correlated Exposure"
+            and item["Priority"] == "CRITICAL"
+        )
+    )
+
+    assert "legacy-server" in critical["Recommendation"]
+
+
+def test_executive_recommendations_remain_backward_compatible():
+    recommendations = (
+        axonius_risk_engine
+        .generate_caasm_executive_recommendations(
+            metrics={"CAASM Score": 90},
+            identity_governance_metrics={},
+            coverage_gap_metrics={},
+            policy_findings=[],
+            coverage_gap_findings=[],
+        )
+    )
+
+    assert recommendations == [
+        {
+            "Priority": "STANDARD",
+            "Category": "Monitoring",
+            "Recommendation": (
+                "Maintain recurring CAASM assessments and "
+                "validate connector health regularly."
+            ),
+        }
+    ]

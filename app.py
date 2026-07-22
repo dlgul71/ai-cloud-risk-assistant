@@ -4461,7 +4461,9 @@ if page == "Axonius CAASM Dashboard":
             identity_governance_metrics=identity_governance_metrics,
             coverage_gap_metrics=coverage_gap_metrics,
             policy_findings=policy_findings,
-            coverage_gap_findings=coverage_gap_findings
+            coverage_gap_findings=coverage_gap_findings,
+            correlation_metrics=correlation_metrics,
+            correlation_rows=correlation_rows
         )
 
         st.subheader("Executive CAASM Scorecard")
