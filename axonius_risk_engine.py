@@ -317,14 +317,238 @@ def generate_coverage_gap_findings(coverage_sources):
     )
 
 
+def generate_correlated_exposure_rows(
+    assets,
+    identities,
+    coverage_sources,
+):
+    """Correlate assets, identities, and connector coverage into risk rows."""
+
+    identity_by_username = {
+        str(identity.get("username", "")).strip().lower(): identity
+        for identity in identities
+        if str(identity.get("username", "")).strip()
+    }
+
+    coverage_by_source = {
+        str(source.get("source", "")).strip().lower(): source
+        for source in coverage_sources
+        if str(source.get("source", "")).strip()
+    }
+
+    rows = []
+
+    for asset in assets:
+        asset_id = asset.get("asset_id", "Unknown Asset")
+        hostname = asset.get("hostname", asset_id)
+        source_name = str(
+            asset.get("source", "Unknown")
+        ).strip()
+
+        owner_username = str(
+            asset.get("owner_username")
+            or asset.get("owner")
+            or asset.get("assigned_user")
+            or ""
+        ).strip()
+
+        identity = identity_by_username.get(
+            owner_username.lower()
+        )
+
+        coverage = coverage_by_source.get(
+            source_name.lower(),
+            {},
+        )
+
+        asset_risk = int(asset.get("risk_score", 0) or 0)
+        identity_risk = int(
+            identity.get("risk_score", 0) or 0
+        ) if identity else 0
+
+        managed = bool(asset.get("managed", False))
+        privileged = bool(
+            identity.get("privileged", False)
+        ) if identity else False
+        mfa_enabled = bool(
+            identity.get("mfa_enabled", False)
+        ) if identity else False
+        orphaned = bool(
+            identity.get("orphaned", False)
+        ) if identity else False
+
+        connected = bool(
+            coverage.get("connected", False)
+        )
+        coverage_percent = int(
+            coverage.get("coverage_percent", 0) or 0
+        )
+
+        risk_reasons = []
+        correlation_score = max(
+            asset_risk,
+            identity_risk,
+        )
+
+        if not managed:
+            correlation_score += 20
+            risk_reasons.append("Unmanaged asset")
+
+        if owner_username and not identity:
+            correlation_score += 15
+            risk_reasons.append("Asset owner not found")
+
+        if privileged:
+            correlation_score += 10
+            risk_reasons.append("Privileged identity")
+
+        if identity and not mfa_enabled:
+            correlation_score += 20
+            risk_reasons.append("Identity without MFA")
+
+        if orphaned:
+            correlation_score += 25
+            risk_reasons.append("Orphaned identity")
+
+        if not connected:
+            correlation_score += 15
+            risk_reasons.append("Disconnected source")
+
+        elif coverage_percent < 75:
+            correlation_score += 10
+            risk_reasons.append("Low connector coverage")
+
+        correlation_score = min(
+            100,
+            correlation_score,
+        )
+
+        if correlation_score >= 85:
+            priority = "CRITICAL"
+        elif correlation_score >= 65:
+            priority = "HIGH"
+        elif correlation_score >= 40:
+            priority = "MODERATE"
+        else:
+            priority = "STANDARD"
+
+        rows.append({
+            "Asset ID": asset_id,
+            "Hostname": hostname,
+            "Asset Type": asset.get(
+                "asset_type",
+                "Unknown",
+            ),
+            "Source": source_name,
+            "Managed": managed,
+            "Owner": owner_username or "Unassigned",
+            "Identity Matched": bool(identity),
+            "Privileged": privileged,
+            "MFA Enabled": (
+                mfa_enabled
+                if identity
+                else None
+            ),
+            "Orphaned Identity": orphaned,
+            "Connector Connected": connected,
+            "Coverage %": coverage_percent,
+            "Asset Risk Score": asset_risk,
+            "Identity Risk Score": identity_risk,
+            "Correlated Risk Score": correlation_score,
+            "Priority": priority,
+            "Risk Drivers": (
+                ", ".join(risk_reasons)
+                if risk_reasons
+                else "No elevated correlation factors"
+            ),
+        })
+
+    priority_rank = {
+        "CRITICAL": 0,
+        "HIGH": 1,
+        "MODERATE": 2,
+        "STANDARD": 3,
+    }
+
+    return sorted(
+        rows,
+        key=lambda item: (
+            priority_rank.get(
+                item.get("Priority", "STANDARD"),
+                99,
+            ),
+            -item.get("Correlated Risk Score", 0),
+        ),
+    )
+
+
+def calculate_correlation_metrics(
+    correlation_rows,
+):
+    """Summarize asset-identity exposure correlation results."""
+
+    total = len(correlation_rows)
+
+    critical = len([
+        row for row in correlation_rows
+        if row.get("Priority") == "CRITICAL"
+    ])
+
+    high = len([
+        row for row in correlation_rows
+        if row.get("Priority") == "HIGH"
+    ])
+
+    unmatched = len([
+        row for row in correlation_rows
+        if (
+            row.get("Owner") != "Unassigned"
+            and not row.get("Identity Matched", False)
+        )
+    ])
+
+    unmanaged = len([
+        row for row in correlation_rows
+        if not row.get("Managed", False)
+    ])
+
+    disconnected = len([
+        row for row in correlation_rows
+        if not row.get("Connector Connected", False)
+    ])
+
+    average_score = round(
+        sum(
+            row.get("Correlated Risk Score", 0)
+            for row in correlation_rows
+        ) / total,
+        2,
+    ) if total else 0
+
+    return {
+        "Total Correlated Assets": total,
+        "Critical Correlations": critical,
+        "High Correlations": high,
+        "Unmatched Asset Owners": unmatched,
+        "Unmanaged Correlated Assets": unmanaged,
+        "Assets With Disconnected Sources": disconnected,
+        "Average Correlated Risk Score": average_score,
+    }
+
+
 def generate_caasm_executive_recommendations(
     metrics,
     identity_governance_metrics,
     coverage_gap_metrics,
     policy_findings,
-    coverage_gap_findings
+    coverage_gap_findings,
+    correlation_metrics=None,
+    correlation_rows=None
 ):
     recommendations = []
+
+    correlation_metrics = correlation_metrics or {}
+    correlation_rows = correlation_rows or []
 
     orphaned_accounts = identity_governance_metrics.get(
         "Orphaned Accounts",
@@ -350,6 +574,82 @@ def generate_caasm_executive_recommendations(
         "CAASM Score",
         0
     )
+
+    critical_correlations = correlation_metrics.get(
+        "Critical Correlations",
+        0
+    )
+
+    high_correlations = correlation_metrics.get(
+        "High Correlations",
+        0
+    )
+
+    unmatched_asset_owners = correlation_metrics.get(
+        "Unmatched Asset Owners",
+        0
+    )
+
+    average_correlated_risk = correlation_metrics.get(
+        "Average Correlated Risk Score",
+        0
+    )
+
+    if critical_correlations > 0:
+        critical_assets = [
+            row.get("Hostname", "Unknown Asset")
+            for row in correlation_rows
+            if row.get("Priority") == "CRITICAL"
+        ]
+
+        asset_summary = ", ".join(
+            critical_assets[:3]
+        )
+
+        recommendations.append({
+            "Priority": "CRITICAL",
+            "Category": "Correlated Exposure",
+            "Recommendation": (
+                f"Immediately investigate {critical_correlations} "
+                "critical asset-identity correlation(s)."
+                + (
+                    f" Highest-risk assets include: {asset_summary}."
+                    if asset_summary
+                    else ""
+                )
+            )
+        })
+
+    if high_correlations > 0:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Correlated Exposure",
+            "Recommendation": (
+                f"Review and reduce {high_correlations} high-risk "
+                "asset-identity correlation(s)."
+            )
+        })
+
+    if unmatched_asset_owners > 0:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Asset Ownership",
+            "Recommendation": (
+                f"Reconcile {unmatched_asset_owners} asset owner(s) "
+                "that could not be matched to an identity record."
+            )
+        })
+
+    if average_correlated_risk >= 70:
+        recommendations.append({
+            "Priority": "HIGH",
+            "Category": "Executive Correlation Risk",
+            "Recommendation": (
+                "The average correlated exposure score is "
+                f"{average_correlated_risk}. Establish a prioritized "
+                "asset, identity, and connector remediation plan."
+            )
+        })
 
     if orphaned_accounts > 0:
         recommendations.append({

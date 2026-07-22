@@ -4391,6 +4391,8 @@ if page == "Axonius CAASM Dashboard":
         generate_identity_governance_rows,
         calculate_coverage_gap_metrics,
         generate_coverage_gap_findings,
+        generate_correlated_exposure_rows,
+        calculate_correlation_metrics,
         generate_caasm_executive_recommendations
     )
     import pandas as pd
@@ -4444,12 +4446,24 @@ if page == "Axonius CAASM Dashboard":
             coverage_sources=coverage_sources
         )
 
+        correlation_rows = generate_correlated_exposure_rows(
+            assets=assets,
+            identities=identities,
+            coverage_sources=coverage_sources
+        )
+
+        correlation_metrics = calculate_correlation_metrics(
+            correlation_rows=correlation_rows
+        )
+
         executive_recommendations = generate_caasm_executive_recommendations(
             metrics=metrics,
             identity_governance_metrics=identity_governance_metrics,
             coverage_gap_metrics=coverage_gap_metrics,
             policy_findings=policy_findings,
-            coverage_gap_findings=coverage_gap_findings
+            coverage_gap_findings=coverage_gap_findings,
+            correlation_metrics=correlation_metrics,
+            correlation_rows=correlation_rows
         )
 
         st.subheader("Executive CAASM Scorecard")
@@ -4524,6 +4538,89 @@ if page == "Axonius CAASM Dashboard":
 
         else:
             demo_info("No Axonius asset records are available.")
+
+        st.subheader("Correlated Exposure Analytics")
+
+        correlation_col1, correlation_col2, correlation_col3 = st.columns(3)
+
+        correlation_col1.metric(
+            "Critical Correlations",
+            correlation_metrics.get("Critical Correlations", 0)
+        )
+
+        correlation_col2.metric(
+            "High Correlations",
+            correlation_metrics.get("High Correlations", 0)
+        )
+
+        correlation_col3.metric(
+            "Average Correlated Risk",
+            correlation_metrics.get(
+                "Average Correlated Risk Score",
+                0
+            )
+        )
+
+        correlation_col4, correlation_col5, correlation_col6 = st.columns(3)
+
+        correlation_col4.metric(
+            "Unmatched Asset Owners",
+            correlation_metrics.get("Unmatched Asset Owners", 0)
+        )
+
+        correlation_col5.metric(
+            "Unmanaged Correlated Assets",
+            correlation_metrics.get(
+                "Unmanaged Correlated Assets",
+                0
+            )
+        )
+
+        correlation_col6.metric(
+            "Disconnected Sources",
+            correlation_metrics.get(
+                "Assets With Disconnected Sources",
+                0
+            )
+        )
+
+        if correlation_rows:
+            correlation_df = pd.DataFrame(
+                correlation_rows
+            )
+
+            demo_dataframe(
+                correlation_df,
+                width="stretch"
+            )
+
+            st.subheader("Correlated Risk by Asset")
+
+            st.bar_chart(
+                correlation_df.set_index("Hostname")[
+                    "Correlated Risk Score"
+                ]
+            )
+
+            correlation_csv = (
+                correlation_df
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+
+            demo_download_button(
+                label="Download Correlated Exposure CSV",
+                data=correlation_csv,
+                file_name=(
+                    "dgs_sentinel_caasm_correlated_exposure.csv"
+                ),
+                mime="text/csv"
+            )
+
+        else:
+            demo_info(
+                "No asset-identity correlation records are available."
+            )
 
         st.subheader("Identity Risk Table")
 
@@ -4792,7 +4889,9 @@ if page == "Axonius CAASM Dashboard":
                     identity_governance_metrics=identity_governance_metrics,
                     coverage_gap_metrics=coverage_gap_metrics,
                     policy_findings=policy_findings,
-                    coverage_gap_findings=coverage_gap_findings
+                    coverage_gap_findings=coverage_gap_findings,
+                    correlation_metrics=correlation_metrics,
+                    correlation_rows=correlation_rows
                 )
 
                 demo_success(f"CAASM snapshot saved: {snapshot_path}")
@@ -4812,6 +4911,10 @@ if page == "Axonius CAASM Dashboard":
                     "coverage_gap_metrics",
                     {}
                 )
+                snapshot_correlation_metrics = snapshot.get(
+                    "correlation_metrics",
+                    {}
+                )
 
                 caasm_trend_rows.append({
                     "Scan Time": snapshot.get("scan_time"),
@@ -4822,6 +4925,22 @@ if page == "Axonius CAASM Dashboard":
                     "Orphaned Accounts": identity_metrics.get("Orphaned Accounts", 0),
                     "Privileged Without MFA": identity_metrics.get("Privileged Without MFA", 0),
                     "Critical Coverage Gaps": coverage_metrics.get("Critical Coverage Gaps", 0),
+                    "Critical Correlations": snapshot_correlation_metrics.get(
+                        "Critical Correlations",
+                        0
+                    ),
+                    "High Correlations": snapshot_correlation_metrics.get(
+                        "High Correlations",
+                        0
+                    ),
+                    "Average Correlated Risk Score": snapshot_correlation_metrics.get(
+                        "Average Correlated Risk Score",
+                        0
+                    ),
+                    "Unmatched Asset Owners": snapshot_correlation_metrics.get(
+                        "Unmatched Asset Owners",
+                        0
+                    ),
                     "Snapshot File": snapshot.get("snapshot_file")
                 })
 
@@ -4876,6 +4995,22 @@ if page == "Axonius CAASM Dashboard":
                     - previous_caasm["Critical Coverage Gaps"]
                 )
 
+                critical_correlation_delta = int(
+                    latest_caasm["Critical Correlations"]
+                    - previous_caasm["Critical Correlations"]
+                )
+
+                average_correlation_risk_delta = round(
+                    latest_caasm["Average Correlated Risk Score"]
+                    - previous_caasm["Average Correlated Risk Score"],
+                    2
+                )
+
+                unmatched_owner_delta = int(
+                    latest_caasm["Unmatched Asset Owners"]
+                    - previous_caasm["Unmatched Asset Owners"]
+                )
+
                 delta_col1, delta_col2, delta_col3 = st.columns(3)
 
                 delta_col1.metric(
@@ -4910,10 +5045,30 @@ if page == "Axonius CAASM Dashboard":
                     critical_gap_delta
                 )
 
+                correlation_delta_col1, correlation_delta_col2, correlation_delta_col3 = (
+                    st.columns(3)
+                )
+
+                correlation_delta_col1.metric(
+                    "Critical Correlations Change",
+                    critical_correlation_delta
+                )
+
+                correlation_delta_col2.metric(
+                    "Average Correlated Risk Change",
+                    average_correlation_risk_delta
+                )
+
+                correlation_delta_col3.metric(
+                    "Unmatched Owners Change",
+                    unmatched_owner_delta
+                )
+
                 demo_caption(
                     "Positive CAASM, asset-coverage, and MFA-coverage changes "
                     "represent improvement. Negative unmanaged-asset, orphaned-account, "
-                    "and critical-gap changes represent improvement."
+                    "coverage-gap, correlation-risk, and unmatched-owner changes "
+                    "represent improvement."
                 )
 
             else:
@@ -4942,6 +5097,19 @@ if page == "Axonius CAASM Dashboard":
                         "Orphaned Accounts",
                         "Privileged Without MFA",
                         "Critical Coverage Gaps"
+                    ]
+                ]
+            )
+
+            st.subheader("Correlated Exposure Trend")
+
+            st.line_chart(
+                caasm_trend_df.set_index("Scan Time")[
+                    [
+                        "Critical Correlations",
+                        "High Correlations",
+                        "Average Correlated Risk Score",
+                        "Unmatched Asset Owners"
                     ]
                 ]
             )
@@ -5044,6 +5212,55 @@ if page == "Axonius CAASM Dashboard":
                         "Change": int(
                             latest_comparison["Critical Coverage Gaps"]
                             - previous_comparison["Critical Coverage Gaps"]
+                        )
+                    },
+                    {
+                        "Metric": "Critical Correlations",
+                        "Previous": previous_comparison["Critical Correlations"],
+                        "Latest": latest_comparison["Critical Correlations"],
+                        "Change": int(
+                            latest_comparison["Critical Correlations"]
+                            - previous_comparison["Critical Correlations"]
+                        )
+                    },
+                    {
+                        "Metric": "High Correlations",
+                        "Previous": previous_comparison["High Correlations"],
+                        "Latest": latest_comparison["High Correlations"],
+                        "Change": int(
+                            latest_comparison["High Correlations"]
+                            - previous_comparison["High Correlations"]
+                        )
+                    },
+                    {
+                        "Metric": "Average Correlated Risk Score",
+                        "Previous": previous_comparison[
+                            "Average Correlated Risk Score"
+                        ],
+                        "Latest": latest_comparison[
+                            "Average Correlated Risk Score"
+                        ],
+                        "Change": round(
+                            latest_comparison[
+                                "Average Correlated Risk Score"
+                            ]
+                            - previous_comparison[
+                                "Average Correlated Risk Score"
+                            ],
+                            2
+                        )
+                    },
+                    {
+                        "Metric": "Unmatched Asset Owners",
+                        "Previous": previous_comparison[
+                            "Unmatched Asset Owners"
+                        ],
+                        "Latest": latest_comparison[
+                            "Unmatched Asset Owners"
+                        ],
+                        "Change": int(
+                            latest_comparison["Unmatched Asset Owners"]
+                            - previous_comparison["Unmatched Asset Owners"]
                         )
                     }
                 ]
