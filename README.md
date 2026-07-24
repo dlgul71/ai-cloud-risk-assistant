@@ -797,7 +797,34 @@ Correlation capabilities include:
 
 See `docs/AXONIUS_CORRELATION_VALIDATION.md` for the v1.6 validation record.
 
-Do not commit Axonius credentials to Git, logs, screenshots, or documentation.
+## Correlated Exposure Alerting
+
+DGS Sentinel AI v1.7 converts critical and high correlated-exposure results
+into persistent operational alerts.
+
+Alerting capabilities include:
+
+- Stable alert fingerprints
+- Asset-and-source alert deduplication
+- Recurring-alert occurrence tracking
+- Open, acknowledged, and resolved lifecycle states
+- Configurable notification cooldowns
+- Successful-delivery tracking
+- Automatic reopening of recurring resolved exposures
+- Optional Splunk HEC delivery
+- Partial-delivery failure reporting
+- RBAC-controlled alert processing and lifecycle actions
+- Dashboard alert metrics, acknowledgment, and resolution controls
+
+Alert processing requires scan permission. Alert acknowledgment and resolution
+require remediation-execution permission.
+
+Splunk delivery requires `SPLUNK_HEC_URL` and `SPLUNK_HEC_TOKEN`.
+
+See `docs/AXONIUS_ALERTING_VALIDATION.md` for the v1.7 validation record.
+
+Do not commit Axonius or Splunk credentials to Git, logs, screenshots, or
+documentation.
 
 See `docs/AXONIUS_CONNECTOR_VALIDATION.md` for the v1.5 validation record.
 
