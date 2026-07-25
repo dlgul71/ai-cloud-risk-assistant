@@ -4395,6 +4395,12 @@ if page == "Axonius CAASM Dashboard":
         calculate_correlation_metrics,
         generate_caasm_executive_recommendations
     )
+    from caasm_alert_service import process_correlation_alerts
+    from caasm_alert_db import (
+        acknowledge_alert,
+        get_alerts,
+        resolve_alert,
+    )
     import pandas as pd
 
     st.title("Axonius CAASM Dashboard")
@@ -4620,6 +4626,259 @@ if page == "Axonius CAASM Dashboard":
         else:
             demo_info(
                 "No asset-identity correlation records are available."
+            )
+
+        st.subheader("Correlated Exposure Alerting")
+
+        current_caasm_role = st.session_state.get(
+            "user_role"
+        )
+
+        can_process_caasm_alerts = has_permission(
+            current_caasm_role,
+            PERMISSION_RUN_SCANS,
+        )
+
+        can_manage_caasm_alerts = has_permission(
+            current_caasm_role,
+            PERMISSION_EXECUTE_REMEDIATION,
+        )
+
+        splunk_alerting_configured = bool(
+            settings.splunk_hec_url
+            and settings.splunk_hec_token
+        )
+
+        alert_control_col1, alert_control_col2 = st.columns(2)
+
+        with alert_control_col1:
+            alert_cooldown_minutes = st.number_input(
+                "Alert notification cooldown (minutes)",
+                min_value=0,
+                max_value=10080,
+                value=60,
+                step=15,
+                key="caasm_alert_cooldown_minutes",
+            )
+
+        with alert_control_col2:
+            export_caasm_alerts_to_splunk = st.checkbox(
+                "Send due alerts to Splunk HEC",
+                value=False,
+                disabled=not splunk_alerting_configured,
+                key="export_caasm_alerts_to_splunk",
+            )
+
+        if splunk_alerting_configured:
+            demo_info(
+                "Splunk HEC alert delivery is available. "
+                f"Index: {settings.splunk_index}; "
+                f"Source: {settings.splunk_source}; "
+                f"Sourcetype: {settings.splunk_sourcetype}"
+            )
+        else:
+            demo_info(
+                "Configure SPLUNK_HEC_URL and SPLUNK_HEC_TOKEN "
+                "to enable correlated-exposure alert delivery."
+            )
+
+        if st.button(
+            "Process Correlated Exposure Alerts",
+            disabled=not can_process_caasm_alerts,
+            key="process_caasm_correlation_alerts",
+        ):
+            alert_result = process_correlation_alerts(
+                correlation_rows,
+                cooldown_minutes=int(
+                    alert_cooldown_minutes
+                ),
+                export_to_splunk=(
+                    export_caasm_alerts_to_splunk
+                ),
+            )
+
+            demo_success(
+                "Alert processing completed: "
+                f"{alert_result['created']} created, "
+                f"{alert_result['updated']} updated, "
+                f"{alert_result['reopened']} reopened."
+            )
+
+            if export_caasm_alerts_to_splunk:
+                delivery = alert_result["delivery"]
+
+                if delivery["failed"]:
+                    demo_warning(
+                        "Splunk delivery completed with "
+                        f"{delivery['sent']} sent and "
+                        f"{delivery['failed']} failed."
+                    )
+                else:
+                    demo_success(
+                        "Splunk delivery completed: "
+                        f"{delivery['sent']} alerts sent."
+                    )
+
+        stored_caasm_alerts = get_alerts()
+
+        alert_metric_col1, alert_metric_col2, alert_metric_col3 = st.columns(3)
+
+        open_caasm_alerts = [
+            alert
+            for alert in stored_caasm_alerts
+            if alert.get("status") == "OPEN"
+        ]
+
+        acknowledged_caasm_alerts = [
+            alert
+            for alert in stored_caasm_alerts
+            if alert.get("status") == "ACKNOWLEDGED"
+        ]
+
+        resolved_caasm_alerts = [
+            alert
+            for alert in stored_caasm_alerts
+            if alert.get("status") == "RESOLVED"
+        ]
+
+        alert_metric_col1.metric(
+            "Open Alerts",
+            len(open_caasm_alerts),
+        )
+
+        alert_metric_col2.metric(
+            "Acknowledged Alerts",
+            len(acknowledged_caasm_alerts),
+        )
+
+        alert_metric_col3.metric(
+            "Resolved Alerts",
+            len(resolved_caasm_alerts),
+        )
+
+        if stored_caasm_alerts:
+            caasm_alert_df = pd.DataFrame(
+                stored_caasm_alerts
+            )
+
+            alert_display_columns = [
+                "id",
+                "priority",
+                "status",
+                "hostname",
+                "source",
+                "owner",
+                "risk_score",
+                "occurrence_count",
+                "notification_count",
+                "last_seen_at",
+                "last_notified_at",
+                "risk_drivers",
+            ]
+
+            demo_dataframe(
+                caasm_alert_df[
+                    [
+                        column
+                        for column in alert_display_columns
+                        if column in caasm_alert_df.columns
+                    ]
+                ],
+                width="stretch",
+            )
+
+            manageable_caasm_alerts = [
+                alert
+                for alert in stored_caasm_alerts
+                if alert.get("status") in {
+                    "OPEN",
+                    "ACKNOWLEDGED",
+                }
+            ]
+
+            if manageable_caasm_alerts:
+                alert_label_map = {
+                    (
+                        f"{alert['id']} | "
+                        f"{alert['priority']} | "
+                        f"{alert.get('hostname') or 'Unknown'} | "
+                        f"{alert['status']}"
+                    ): alert
+                    for alert in manageable_caasm_alerts
+                }
+
+                selected_alert_label = st.selectbox(
+                    "Select alert for lifecycle action",
+                    list(alert_label_map),
+                    key="selected_caasm_alert_action",
+                )
+
+                selected_caasm_alert = alert_label_map[
+                    selected_alert_label
+                ]
+
+                resolution_note = st.text_input(
+                    "Resolution note",
+                    key="caasm_alert_resolution_note",
+                )
+
+                alert_action_col1, alert_action_col2 = st.columns(2)
+
+                alert_actor = (
+                    settings.app_username
+                    or current_caasm_role
+                    or "Authenticated User"
+                )
+
+                if alert_action_col1.button(
+                    "Acknowledge Selected Alert",
+                    disabled=(
+                        not can_manage_caasm_alerts
+                        or selected_caasm_alert["status"]
+                        != "OPEN"
+                    ),
+                    key="acknowledge_selected_caasm_alert",
+                ):
+                    changed = acknowledge_alert(
+                        int(selected_caasm_alert["id"]),
+                        actor=str(alert_actor),
+                    )
+
+                    if changed:
+                        demo_success(
+                            "The selected alert was acknowledged."
+                        )
+                        st.rerun()
+                    else:
+                        demo_warning(
+                            "The selected alert could not be acknowledged."
+                        )
+
+                if alert_action_col2.button(
+                    "Resolve Selected Alert",
+                    disabled=not can_manage_caasm_alerts,
+                    key="resolve_selected_caasm_alert",
+                ):
+                    changed = resolve_alert(
+                        int(selected_caasm_alert["id"]),
+                        actor=str(alert_actor),
+                        resolution_note=resolution_note,
+                    )
+
+                    if changed:
+                        demo_success(
+                            "The selected alert was resolved."
+                        )
+                        st.rerun()
+                    else:
+                        demo_warning(
+                            "The selected alert could not be resolved."
+                        )
+
+        else:
+            demo_info(
+                "No persistent correlated-exposure alerts "
+                "have been created."
             )
 
         st.subheader("Identity Risk Table")
