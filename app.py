@@ -6374,9 +6374,34 @@ if selected_client_data is not None:
                         "azure_security_posture_client"
                     ] = selected_client_data[1]
 
-                    st.sidebar.success(
-                        "Azure security posture discovery completed."
+                    posture_status = str(
+                        posture_result.get(
+                            "discovery_status",
+                            "COMPLETE",
+                        )
+                    ).strip().upper()
+
+                    posture_errors = posture_result.get(
+                        "errors",
+                        [],
                     )
+
+                    if posture_status == "PARTIAL":
+                        st.sidebar.warning(
+                            "Azure security posture completed with "
+                            f"{len(posture_errors)} partial "
+                            "failure(s). Available Defender results "
+                            "were preserved."
+                        )
+                    elif posture_status == "FAILED":
+                        st.sidebar.error(
+                            "Azure security posture discovery failed "
+                            "for all Defender components."
+                        )
+                    else:
+                        st.sidebar.success(
+                            "Azure security posture discovery completed."
+                        )
 
                 except Exception as exc:
                     logger.exception(
@@ -7356,93 +7381,231 @@ if azure_posture:
         f"Latest Azure security posture for {azure_posture_client}"
     )
 
-    posture_summary = azure_posture.get("summary", {})
+    posture_status = str(
+        azure_posture.get(
+            "discovery_status",
+            "COMPLETE",
+        )
+    ).strip().upper()
 
-    posture_col1, posture_col2, posture_col3, posture_col4 = (
-        st.columns(4)
+    posture_errors = azure_posture.get(
+        "errors",
+        [],
     )
 
-    posture_col1.metric(
+    if posture_status == "PARTIAL":
+        demo_warning(
+            "Defender discovery completed with partial failures. "
+            "Available results are displayed below."
+        )
+    elif posture_status == "FAILED":
+        st.error(
+            "Defender discovery failed for all requested components."
+        )
+    else:
+        demo_success(
+            "Defender for Cloud discovery completed successfully."
+        )
+
+    if posture_errors:
+        with st.expander(
+            "Defender Discovery Errors",
+            expanded=False,
+        ):
+            demo_dataframe(
+                pd.DataFrame(posture_errors),
+                width="stretch",
+            )
+
+    posture_summary = azure_posture.get(
+        "summary",
+        {},
+    )
+
+    metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = (
+        st.columns(5)
+    )
+
+    metric_col1.metric(
         "Secure Scores",
         posture_summary.get("secure_scores", 0),
     )
-    posture_col2.metric(
+    metric_col2.metric(
         "Assessments",
         posture_summary.get("assessments", 0),
     )
-    posture_col3.metric(
-        "Healthy",
-        posture_summary.get("healthy", 0),
-    )
-    posture_col4.metric(
+    metric_col3.metric(
         "Unhealthy",
         posture_summary.get("unhealthy", 0),
+    )
+    metric_col4.metric(
+        "Critical Recommendations",
+        posture_summary.get(
+            "critical_assessments",
+            0,
+        ),
+    )
+    metric_col5.metric(
+        "Security Alerts",
+        posture_summary.get("alerts", 0),
+    )
+
+    detail_col1, detail_col2, detail_col3, detail_col4 = (
+        st.columns(4)
+    )
+
+    detail_col1.metric(
+        "Score Controls",
+        posture_summary.get(
+            "secure_score_controls",
+            0,
+        ),
+    )
+    detail_col2.metric(
+        "Critical Alerts",
+        posture_summary.get(
+            "critical_alerts",
+            0,
+        ),
+    )
+    detail_col3.metric(
+        "High Alerts",
+        posture_summary.get(
+            "high_alerts",
+            0,
+        ),
+    )
+    detail_col4.metric(
+        "Standard Defender Plans",
+        posture_summary.get(
+            "standard_pricing_plans",
+            0,
+        ),
     )
 
     secure_scores = azure_posture.get(
         "secure_scores",
         [],
     )
+    secure_score_controls = azure_posture.get(
+        "secure_score_controls",
+        [],
+    )
     assessments = azure_posture.get(
         "assessments",
         [],
     )
+    alerts = azure_posture.get(
+        "alerts",
+        [],
+    )
+    pricing_plans = azure_posture.get(
+        "pricing_plans",
+        [],
+    )
 
-    unhealthy_assessments = [
+    priority_assessments = [
         assessment
         for assessment in assessments
         if str(
-            assessment.get("status_code", "")
-        ).lower() == "unhealthy"
+            assessment.get(
+                "priority",
+                "",
+            )
+        ).upper()
+        in {
+            "CRITICAL",
+            "HIGH",
+        }
     ]
 
-    score_tab, unhealthy_tab, all_assessments_tab = st.tabs(
+    (
+        score_tab,
+        controls_tab,
+        priority_tab,
+        assessments_tab,
+        alerts_tab,
+        plans_tab,
+    ) = st.tabs(
         [
             "Secure Scores",
-            "Unhealthy Assessments",
+            "Score Controls",
+            "Priority Assessments",
             "All Assessments",
+            "Security Alerts",
+            "Defender Plans",
         ]
     )
 
     with score_tab:
         if secure_scores:
-            secure_scores_df = pd.DataFrame(secure_scores)
-
             demo_dataframe(
-                secure_scores_df,
+                pd.DataFrame(secure_scores),
                 width="stretch",
             )
         else:
             demo_info(
-                "No Defender for Cloud secure scores were returned."
+                "No Defender secure scores were returned."
             )
 
-    with unhealthy_tab:
-        if unhealthy_assessments:
-            unhealthy_df = pd.DataFrame(
-                unhealthy_assessments
-            )
-
+    with controls_tab:
+        if secure_score_controls:
             demo_dataframe(
-                unhealthy_df,
+                pd.DataFrame(
+                    secure_score_controls
+                ),
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Defender secure-score controls were returned."
+            )
+
+    with priority_tab:
+        if priority_assessments:
+            demo_dataframe(
+                pd.DataFrame(
+                    priority_assessments
+                ),
                 width="stretch",
             )
         else:
             demo_success(
-                "No unhealthy Defender assessments were returned."
+                "No critical or high Defender recommendations "
+                "were returned."
             )
 
-    with all_assessments_tab:
+    with assessments_tab:
         if assessments:
-            assessments_df = pd.DataFrame(assessments)
-
             demo_dataframe(
-                assessments_df,
+                pd.DataFrame(assessments),
                 width="stretch",
             )
         else:
             demo_info(
-                "No Defender for Cloud assessments were returned."
+                "No Defender assessments were returned."
+            )
+
+    with alerts_tab:
+        if alerts:
+            demo_dataframe(
+                pd.DataFrame(alerts),
+                width="stretch",
+            )
+        else:
+            demo_success(
+                "No Defender security alerts were returned."
+            )
+
+    with plans_tab:
+        if pricing_plans:
+            demo_dataframe(
+                pd.DataFrame(pricing_plans),
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No Defender pricing plans were returned."
             )
 
     st.divider()
