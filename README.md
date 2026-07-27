@@ -828,6 +828,40 @@ documentation.
 
 See `docs/AXONIUS_CONNECTOR_VALIDATION.md` for the v1.5 validation record.
 
+## Microsoft Defender for Cloud Intelligence
+
+DGS Sentinel AI v1.8 expands the existing Azure security-posture integration
+into a resilient, read-only Microsoft Defender for Cloud intelligence layer.
+
+Defender capabilities include:
+
+- Secure-score discovery and percentage normalization
+- Secure-score control analysis
+- Healthy, unhealthy, and not-applicable resource counts
+- Assessment metadata enrichment
+- Recommendation severity and operational prioritization
+- Actual affected Azure resource-ID extraction
+- Remediation guidance, categories, threats, tactics, and techniques
+- Defender security-alert discovery
+- Alert severity, status, compromised entity, and MITRE technique context
+- Defender pricing and protection-plan visibility
+- Complete, partial, and failed component-discovery status
+- Partial-failure preservation of available results
+- Dashboard metrics and dedicated Defender analysis tabs
+
+The v1.8 integration is read-only. It does not modify Defender plans, update
+alert states, create assessments, or execute remediation actions.
+
+Validation used controlled Azure SDK objects and automated tests. Production
+tenant validation requires authorized Microsoft Entra credentials and
+appropriate Defender for Cloud read permissions.
+
+See `docs/AZURE_DEFENDER_CLOUD_VALIDATION.md` for the v1.8 validation record.
+
+Do not commit Azure tenant IDs, client secrets, access tokens, alert evidence,
+or other sensitive cloud information to Git, logs, screenshots, or
+documentation.
+
 ---
 
 # 📄 Executive Reporting
