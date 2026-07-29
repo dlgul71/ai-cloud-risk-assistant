@@ -1898,14 +1898,14 @@ if page == "System Health":
             0,
         ),
     )
+    pass_rate_percent = health_history_summary.get(
+        "pass_rate_percent",
+        0.0,
+    )
+
     history_column2.metric(
         "Pass Rate",
-        (
-            f"{health_history_summary.get(
-                'pass_rate_percent',
-                0.0,
-            )}%"
-        ),
+        f"{pass_rate_percent}%",
     )
     history_column3.metric(
         "Warning Runs",
