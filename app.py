@@ -19,6 +19,12 @@ from access_control import (
 )
 from app_logging import configure_logging, get_logger
 from health_checks import run_health_checks
+from operational_monitoring import (
+    evaluate_health_alert,
+    get_recent_health_runs,
+    record_health_run,
+    summarize_health_history,
+)
 from demo_mode import (
     demo_mode_enabled,
     sanitize_dataframe,
@@ -1749,13 +1755,29 @@ if page == "System Health":
         with st.spinner(
             "Running production health checks..."
         ):
-            st.session_state[
-                "system_health_results"
-            ] = run_health_checks(
+            health_payload = run_health_checks(
                 include_aws=include_aws_health_check,
                 include_splunk=include_splunk_health_check,
                 include_axonius=include_axonius_health_check,
             )
+
+            monitoring_record = record_health_run(
+                health_payload,
+                source="streamlit-system-health",
+            )
+
+            health_payload["monitoring_record"] = (
+                monitoring_record
+            )
+            health_payload["operational_alert"] = (
+                evaluate_health_alert(
+                    health_payload
+                )
+            )
+
+            st.session_state[
+                "system_health_results"
+            ] = health_payload
 
     health_results = st.session_state.get(
         "system_health_results"
@@ -1813,6 +1835,98 @@ if page == "System Health":
     else:
         st.error(
             "One or more production health checks failed."
+        )
+
+    operational_alert = health_results.get(
+        "operational_alert"
+    ) or evaluate_health_alert(
+        health_results
+    )
+
+    alert_level = operational_alert.get(
+        "level",
+        "UNKNOWN",
+    )
+    alert_message = operational_alert.get(
+        "message",
+        "Operational alert status unavailable.",
+    )
+
+    if alert_level == "CRITICAL":
+        st.error(
+            f"Operational Alert: {alert_message}"
+        )
+    elif alert_level == "WARNING":
+        demo_warning(
+            f"Operational Alert: {alert_message}"
+        )
+    else:
+        demo_success(
+            f"Operational Status: {alert_message}"
+        )
+
+    monitoring_record = health_results.get(
+        "monitoring_record",
+        {},
+    )
+
+    if monitoring_record:
+        demo_caption(
+            "Monitoring record ID: "
+            f"{monitoring_record.get('run_id', 'Unknown')}"
+        )
+
+    health_history_summary = (
+        summarize_health_history(
+            limit=100
+        )
+    )
+    recent_health_runs = get_recent_health_runs(
+        limit=10
+    )
+
+    st.subheader("Operational Monitoring History")
+
+    history_column1, history_column2, history_column3, (
+        history_column4
+    ) = st.columns(4)
+
+    history_column1.metric(
+        "Recorded Runs",
+        health_history_summary.get(
+            "total_runs",
+            0,
+        ),
+    )
+    history_column2.metric(
+        "Pass Rate",
+        (
+            f"{health_history_summary.get(
+                'pass_rate_percent',
+                0.0,
+            )}%"
+        ),
+    )
+    history_column3.metric(
+        "Warning Runs",
+        health_history_summary.get(
+            "warning_runs",
+            0,
+        ),
+    )
+    history_column4.metric(
+        "Failed Runs",
+        health_history_summary.get(
+            "failed_runs",
+            0,
+        ),
+    )
+
+    if recent_health_runs:
+        demo_dataframe(
+            recent_health_runs,
+            width="stretch",
+            hide_index=True,
         )
 
     demo_caption(
