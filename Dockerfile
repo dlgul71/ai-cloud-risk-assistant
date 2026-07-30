@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     STREAMLIT_SERVER_HEADLESS=true \
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
     STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
-    STREAMLIT_SERVER_PORT=8501
+    STREAMLIT_SERVER_PORT=8501 \
+    DGS_DATA_DIR=/data \
+    HOME=/home/dgs
 
 WORKDIR /app
 
@@ -29,9 +31,22 @@ RUN python -m pip install --upgrade pip \
 COPY --chown=dgs:dgs . .
 
 RUN mkdir -p \
+        /data/scan_snapshots \
+        /data/client_scan_results \
+        /data/backups \
+        /data/restored_backups \
+    && rm -rf \
         /app/scan_snapshots \
         /app/client_scan_results \
-    && chown -R dgs:dgs /app
+        /app/backups \
+        /app/restored_backups \
+    && ln -s /data/scan_snapshots /app/scan_snapshots \
+    && ln -s /data/client_scan_results /app/client_scan_results \
+    && ln -s /data/backups /app/backups \
+    && ln -s /data/restored_backups /app/restored_backups \
+    && chown -R dgs:dgs /app /data /home/dgs
+
+VOLUME ["/data"]
 
 USER dgs
 
