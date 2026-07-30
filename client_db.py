@@ -1,4 +1,5 @@
 import sqlite3
+from uuid import uuid4
 
 from storage_paths import database_path
 
@@ -14,58 +15,142 @@ def _database_path():
     )
 
 
+def _new_client_key():
+    return str(uuid4())
+
+
 def init_client_db():
     connection = sqlite3.connect(_database_path())
-    cursor = connection.cursor()
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS clients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_name TEXT,
-            aws_account_id TEXT,
-            role_arn TEXT,
-            environment TEXT,
-            cloud_provider TEXT DEFAULT 'AWS',
-            azure_subscription_id TEXT,
-            azure_tenant_id TEXT,
-            azure_client_id TEXT
-        )
-        """
-    )
+    try:
+        cursor = connection.cursor()
 
-    existing_columns = {
-        row[1]
-        for row in cursor.execute("PRAGMA table_info(clients)")
-    }
-
-    migrations = {
-        "cloud_provider": "TEXT DEFAULT 'AWS'",
-        "azure_subscription_id": "TEXT",
-        "azure_tenant_id": "TEXT",
-        "azure_client_id": "TEXT",
-    }
-
-    for column_name, column_definition in migrations.items():
-        if column_name not in existing_columns:
-            cursor.execute(
-                f"""
-                ALTER TABLE clients
-                ADD COLUMN {column_name} {column_definition}
-                """
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS clients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_name TEXT,
+                aws_account_id TEXT,
+                role_arn TEXT,
+                environment TEXT,
+                cloud_provider TEXT DEFAULT 'AWS',
+                azure_subscription_id TEXT,
+                azure_tenant_id TEXT,
+                azure_client_id TEXT,
+                client_key TEXT
             )
+            """
+        )
 
-    cursor.execute(
-        """
-        UPDATE clients
-        SET cloud_provider = 'AWS'
-        WHERE cloud_provider IS NULL
-           OR TRIM(cloud_provider) = ''
-        """
-    )
+        existing_columns = {
+            row[1]
+            for row in cursor.execute(
+                "PRAGMA table_info(clients)"
+            )
+        }
 
-    connection.commit()
-    connection.close()
+        migrations = {
+            "cloud_provider": "TEXT DEFAULT 'AWS'",
+            "azure_subscription_id": "TEXT",
+            "azure_tenant_id": "TEXT",
+            "azure_client_id": "TEXT",
+            "client_key": "TEXT",
+        }
+
+        for column_name, column_definition in migrations.items():
+            if column_name not in existing_columns:
+                cursor.execute(
+                    f"""
+                    ALTER TABLE clients
+                    ADD COLUMN {column_name} {column_definition}
+                    """
+                )
+
+        cursor.execute(
+            """
+            UPDATE clients
+            SET cloud_provider = 'AWS'
+            WHERE cloud_provider IS NULL
+               OR TRIM(cloud_provider) = ''
+            """
+        )
+
+        existing_clients = cursor.execute(
+            """
+            SELECT id, client_key
+            FROM clients
+            ORDER BY id
+            """
+        ).fetchall()
+
+        observed_keys = set()
+
+        for client_id, client_key in existing_clients:
+            normalized_key = str(client_key or "").strip()
+
+            if not normalized_key or normalized_key in observed_keys:
+                normalized_key = _new_client_key()
+
+                while normalized_key in observed_keys:
+                    normalized_key = _new_client_key()
+
+                cursor.execute(
+                    """
+                    UPDATE clients
+                    SET client_key = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        normalized_key,
+                        client_id,
+                    ),
+                )
+
+            observed_keys.add(normalized_key)
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_clients_client_key
+            ON clients(client_key)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS
+            clients_require_client_key_insert
+            BEFORE INSERT ON clients
+            WHEN NEW.client_key IS NULL
+              OR TRIM(NEW.client_key) = ''
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'client_key is required'
+                );
+            END
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS
+            clients_require_client_key_update
+            BEFORE UPDATE OF client_key ON clients
+            WHEN NEW.client_key IS NULL
+              OR TRIM(NEW.client_key) = ''
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'client_key is required'
+                );
+            END
+            """
+        )
+
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def add_client(
@@ -77,69 +162,112 @@ def add_client(
     azure_subscription_id=None,
     azure_tenant_id=None,
     azure_client_id=None,
+    client_key=None,
 ):
     init_client_db()
 
-    connection = sqlite3.connect(_database_path())
-    cursor = connection.cursor()
-
-    normalized_provider = str(cloud_provider or "AWS").strip() or "AWS"
-
-    cursor.execute(
-        """
-        INSERT INTO clients (
-            client_name,
-            aws_account_id,
-            role_arn,
-            environment,
-            cloud_provider,
-            azure_subscription_id,
-            azure_tenant_id,
-            azure_client_id
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            client_name,
-            aws_account_id,
-            role_arn,
-            environment,
-            normalized_provider,
-            azure_subscription_id,
-            azure_tenant_id,
-            azure_client_id,
-        ),
+    normalized_provider = (
+        str(cloud_provider or "AWS").strip()
+        or "AWS"
     )
+    normalized_client_key = str(
+        client_key or _new_client_key()
+    ).strip()
 
-    connection.commit()
-    connection.close()
+    if not normalized_client_key:
+        normalized_client_key = _new_client_key()
+
+    connection = sqlite3.connect(_database_path())
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO clients (
+                client_name,
+                aws_account_id,
+                role_arn,
+                environment,
+                cloud_provider,
+                azure_subscription_id,
+                azure_tenant_id,
+                azure_client_id,
+                client_key
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                client_name,
+                aws_account_id,
+                role_arn,
+                environment,
+                normalized_provider,
+                azure_subscription_id,
+                azure_tenant_id,
+                azure_client_id,
+                normalized_client_key,
+            ),
+        )
+
+        connection.commit()
+    finally:
+        connection.close()
+
+    return normalized_client_key
 
 
-def get_clients():
+def get_clients(*, include_client_key=False):
+    init_client_db()
+
+    selected_columns = """
+        id,
+        client_name,
+        aws_account_id,
+        role_arn,
+        environment,
+        cloud_provider,
+        azure_subscription_id,
+        azure_tenant_id,
+        azure_client_id
+    """
+
+    if include_client_key:
+        selected_columns += ", client_key"
+
+    connection = sqlite3.connect(_database_path())
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            f"""
+            SELECT {selected_columns}
+            FROM clients
+            ORDER BY id
+            """
+        )
+
+        return cursor.fetchall()
+    finally:
+        connection.close()
+
+
+def get_client_key(client_id):
     init_client_db()
 
     connection = sqlite3.connect(_database_path())
-    cursor = connection.cursor()
 
-    cursor.execute(
-        """
-        SELECT
-            id,
-            client_name,
-            aws_account_id,
-            role_arn,
-            environment,
-            cloud_provider,
-            azure_subscription_id,
-            azure_tenant_id,
-            azure_client_id
-        FROM clients
-        ORDER BY id
-        """
-    )
+    try:
+        row = connection.execute(
+            """
+            SELECT client_key
+            FROM clients
+            WHERE id = ?
+            """,
+            (client_id,),
+        ).fetchone()
+    finally:
+        connection.close()
 
-    results = cursor.fetchall()
-
-    connection.close()
-
-    return results
+    return row[0] if row else None
