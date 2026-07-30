@@ -1,11 +1,22 @@
 import sqlite3
 from datetime import datetime, UTC
 
-DB_NAME = "assets.db"
+from storage_paths import database_path
+
+
+DB_NAME = None
+
+
+def _database_path():
+    return (
+        DB_NAME
+        if DB_NAME is not None
+        else database_path("assets.db")
+    )
 
 
 def init_asset_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -28,7 +39,7 @@ def init_asset_db():
 
 
 def save_asset(asset):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -63,7 +74,7 @@ def save_asset(asset):
 
 
 def get_assets():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM assets")

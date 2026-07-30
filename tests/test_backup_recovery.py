@@ -227,3 +227,34 @@ def test_restore_backup_rejects_failed_verification(
             backup_directory=backup_directory,
             restore_root=tmp_path / "restored",
         )
+
+
+def test_default_backup_root_uses_data_directory(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "DGS_DATA_DIR",
+        str(tmp_path),
+    )
+
+    assert backup_recovery.get_backup_root() == (
+        tmp_path / "backups"
+    )
+
+
+def test_default_database_files_use_data_directory(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "DGS_DATA_DIR",
+        str(tmp_path),
+    )
+
+    assert backup_recovery.get_database_files() == (
+        tmp_path / "assets.db",
+        tmp_path / "clients.db",
+        tmp_path / "remediation.db",
+        tmp_path / "operational_monitoring.db",
+    )

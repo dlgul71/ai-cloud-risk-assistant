@@ -11,14 +11,31 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
 
-
-DEFAULT_DATABASE_FILES = (
-    Path("assets.db"),
-    Path("clients.db"),
-    Path("remediation.db"),
+from storage_paths import (
+    database_path,
+    get_data_directory,
 )
 
-DEFAULT_BACKUP_ROOT = Path("backups")
+
+DEFAULT_DATABASE_FILES = None
+DEFAULT_BACKUP_ROOT = None
+
+
+def get_database_files() -> tuple[Path, ...]:
+    """Return databases included in the default backup package."""
+
+    return (
+        database_path("assets.db"),
+        database_path("clients.db"),
+        database_path("remediation.db"),
+        database_path("operational_monitoring.db"),
+    )
+
+
+def get_backup_root() -> Path:
+    """Return the configured backup package directory."""
+
+    return get_data_directory() / "backups"
 
 
 class BackupVerificationError(RuntimeError):
@@ -96,11 +113,22 @@ def _check_sqlite_integrity(
 
 
 def create_backup(
-    database_files: Iterable[Path] = DEFAULT_DATABASE_FILES,
-    backup_root: Path = DEFAULT_BACKUP_ROOT,
+    database_files: Iterable[Path] | None = None,
+    backup_root: Path | None = None,
     created_at: datetime | None = None,
 ) -> dict[str, object]:
     """Back up configured SQLite databases and create a manifest."""
+
+    resolved_database_files = (
+        tuple(database_files)
+        if database_files is not None
+        else get_database_files()
+    )
+    resolved_backup_root = (
+        Path(backup_root)
+        if backup_root is not None
+        else get_backup_root()
+    )
 
     timestamp = created_at or datetime.now(UTC)
 
@@ -112,7 +140,7 @@ def create_backup(
         "%Y%m%dT%H%M%SZ"
     )
 
-    backup_root = Path(backup_root)
+    backup_root = resolved_backup_root
     backup_directory = backup_root / backup_id
 
     backup_directory.mkdir(
@@ -123,7 +151,7 @@ def create_backup(
     files = []
     missing_databases = []
 
-    for database_file in database_files:
+    for database_file in resolved_database_files:
         source_path = Path(database_file)
 
         if not source_path.exists():

@@ -19,21 +19,53 @@ from axonius_connector import (
     test_axonius_connection,
 )
 from splunk_hec import SplunkHECError, send_event
+from storage_paths import (
+    database_path,
+    get_data_directory,
+)
 
 
 logger = get_logger("dgs_sentinel.health")
 
-DATABASE_FILES = [
-    Path("assets.db"),
-    Path("clients.db"),
-    Path("remediation.db"),
-]
+DATABASE_FILES = None
 
-STORAGE_DIRECTORIES = [
-    Path("."),
-    Path("scan_snapshots"),
-    Path("client_scan_results"),
-]
+STORAGE_DIRECTORIES = None
+
+
+def get_database_files() -> list[Path]:
+    """Return configured database paths for health validation."""
+
+    if DATABASE_FILES is not None:
+        return [
+            Path(database_file)
+            for database_file in DATABASE_FILES
+        ]
+
+    return [
+        database_path("assets.db"),
+        database_path("clients.db"),
+        database_path("remediation.db"),
+        database_path("operational_monitoring.db"),
+    ]
+
+
+def get_storage_directories() -> list[Path]:
+    """Return writable runtime directories for health validation."""
+
+    if STORAGE_DIRECTORIES is not None:
+        return [
+            Path(directory)
+            for directory in STORAGE_DIRECTORIES
+        ]
+
+    data_directory = get_data_directory()
+
+    return [
+        data_directory,
+        data_directory / "scan_snapshots",
+        data_directory / "client_scan_results",
+        data_directory / "backups",
+    ]
 
 REQUIRED_MODULES = [
     "streamlit",
@@ -217,7 +249,7 @@ def check_required_modules() -> list[dict[str, str]]:
 def check_databases() -> list[dict[str, str]]:
     results = []
 
-    for database_path in DATABASE_FILES:
+    for database_path in get_database_files():
         if not database_path.exists():
             results.append(
                 _result(
@@ -288,7 +320,7 @@ def check_databases() -> list[dict[str, str]]:
 def check_storage() -> list[dict[str, str]]:
     results = []
 
-    for directory in STORAGE_DIRECTORIES:
+    for directory in get_storage_directories():
         try:
             directory.mkdir(
                 parents=True,

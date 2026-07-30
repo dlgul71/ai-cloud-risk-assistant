@@ -1,11 +1,21 @@
 import sqlite3
 
+from storage_paths import database_path
 
-DB_NAME = "clients.db"
+
+DB_NAME = None
+
+
+def _database_path():
+    return (
+        DB_NAME
+        if DB_NAME is not None
+        else database_path("clients.db")
+    )
 
 
 def init_client_db():
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(
@@ -70,7 +80,7 @@ def add_client(
 ):
     init_client_db()
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     normalized_provider = str(cloud_provider or "AWS").strip() or "AWS"
@@ -108,7 +118,7 @@ def add_client(
 def get_clients():
     init_client_db()
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(

@@ -59,7 +59,11 @@ jobs:
             app.py \
             app_config.py \
             app_logging.py \
+            storage_paths.py \
+            backup_recovery.py \
+            operational_monitoring.py \
             health_checks.py \
+            scripts/backup_recovery_cli.py \
             scan_engine_phase3_assumerole.py \
             client_detection_store.py \
             remediation_engine.py \
@@ -217,8 +221,16 @@ jobs:
 
       - name: Test Streamlit health endpoint
         run: |
+          docker volume create dgs-sentinel-ci-data
+
           docker run -d \
             --name dgs-sentinel-ci \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --tmpfs /home/dgs:rw,noexec,nosuid,size=16m \
+            --mount source=dgs-sentinel-ci-data,target=/data \
             -p 8502:8501 \
             -e APP_ENV=production \
             -e APP_USERNAME=ci-test-user \
@@ -259,6 +271,8 @@ jobs:
         if: always()
         run: docker logs dgs-sentinel-ci 2>/dev/null || true
 
-      - name: Remove test container
+      - name: Remove test container and volume
         if: always()
-        run: docker rm -f dgs-sentinel-ci 2>/dev/null || true
+        run: |
+          docker rm -f dgs-sentinel-ci 2>/dev/null || true
+          docker volume rm dgs-sentinel-ci-data 2>/dev/null || true

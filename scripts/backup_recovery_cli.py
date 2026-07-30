@@ -7,10 +7,10 @@ import sys
 from pathlib import Path
 
 from backup_recovery import (
-    DEFAULT_BACKUP_ROOT,
-    DEFAULT_DATABASE_FILES,
     BackupVerificationError,
     create_backup,
+    get_backup_root,
+    get_database_files,
     restore_backup,
     verify_backup,
 )
@@ -36,7 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument(
         "--backup-root",
         type=Path,
-        default=DEFAULT_BACKUP_ROOT,
+        default=None,
         help="Directory where backup packages are stored.",
     )
     create_parser.add_argument(
@@ -86,12 +86,17 @@ def _run_create(arguments: argparse.Namespace) -> int:
     database_files = (
         arguments.databases
         if arguments.databases
-        else list(DEFAULT_DATABASE_FILES)
+        else list(get_database_files())
+    )
+    backup_root = (
+        arguments.backup_root
+        if arguments.backup_root is not None
+        else get_backup_root()
     )
 
     result = create_backup(
         database_files=database_files,
-        backup_root=arguments.backup_root,
+        backup_root=backup_root,
     )
 
     print(

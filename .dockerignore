@@ -45,3 +45,22 @@ app_phase*
 # Docker development files
 docker-compose*.yml
 docker-compose*.yaml
+
+# Generated operational data and recovery artifacts
+backups/
+restored_backups/
+caasm_snapshots/
+operational_monitoring.db
+
+# Test, documentation, and local report artifacts
+tests/
+docs/
+screenshots/
+*.pdf
+.coverage
+coverage.xml
+htmlcov/
+security-reports/
+bandit-report.json
+pip-audit-report.json
+trivy-report.sarif

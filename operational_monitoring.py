@@ -8,8 +8,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from storage_paths import database_path
 
-DEFAULT_MONITORING_DB = Path("operational_monitoring.db")
+
+DEFAULT_MONITORING_DB = None
+
+
+def _monitoring_db_path(
+    db_path: Path | None = None,
+) -> Path:
+    return (
+        Path(db_path)
+        if db_path is not None
+        else database_path(
+            "operational_monitoring.db"
+        )
+    )
 
 
 def _normalize_timestamp(
@@ -33,11 +47,11 @@ def _normalize_timestamp(
 
 
 def init_monitoring_db(
-    db_path: Path = DEFAULT_MONITORING_DB,
+    db_path: Path | None = None,
 ) -> None:
     """Create health-run and component-result tables."""
 
-    database_path = Path(db_path)
+    database_path = _monitoring_db_path(db_path)
     database_path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -116,7 +130,7 @@ def init_monitoring_db(
 def record_health_run(
     health_payload: dict[str, Any],
     *,
-    db_path: Path = DEFAULT_MONITORING_DB,
+    db_path: Path | None = None,
     source: str = "system-health",
 ) -> dict[str, Any]:
     """Persist one health-check execution and its component results."""
@@ -142,7 +156,7 @@ def record_health_run(
             "Health payload checks must be a list."
         )
 
-    database_path = Path(db_path)
+    database_path = _monitoring_db_path(db_path)
 
     with closing(
         sqlite3.connect(database_path)
@@ -262,7 +276,7 @@ def record_health_run(
 
 def get_recent_health_runs(
     *,
-    db_path: Path = DEFAULT_MONITORING_DB,
+    db_path: Path | None = None,
     limit: int = 25,
 ) -> list[dict[str, Any]]:
     """Return recent health executions, newest first."""
@@ -272,7 +286,7 @@ def get_recent_health_runs(
     safe_limit = max(1, int(limit))
 
     with closing(
-        sqlite3.connect(Path(db_path))
+        sqlite3.connect(_monitoring_db_path(db_path))
     ) as connection:
         connection.row_factory = sqlite3.Row
 
@@ -304,7 +318,7 @@ def get_recent_health_runs(
 def get_component_history(
     component: str,
     *,
-    db_path: Path = DEFAULT_MONITORING_DB,
+    db_path: Path | None = None,
     limit: int = 25,
 ) -> list[dict[str, Any]]:
     """Return recent results for one monitored component."""
@@ -314,7 +328,7 @@ def get_component_history(
     safe_limit = max(1, int(limit))
 
     with closing(
-        sqlite3.connect(Path(db_path))
+        sqlite3.connect(_monitoring_db_path(db_path))
     ) as connection:
         connection.row_factory = sqlite3.Row
 
@@ -353,7 +367,7 @@ def get_component_history(
 
 def summarize_health_history(
     *,
-    db_path: Path = DEFAULT_MONITORING_DB,
+    db_path: Path | None = None,
     limit: int = 100,
 ) -> dict[str, Any]:
     """Summarize operational reliability across recent runs."""

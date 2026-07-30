@@ -235,3 +235,42 @@ def test_evaluate_health_alert_reports_healthy():
         "should_notify": False,
         "message": "All monitored health checks passed.",
     }
+
+
+def test_default_monitoring_database_uses_data_directory(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "DGS_DATA_DIR",
+        str(tmp_path),
+    )
+
+    monkeypatch.setattr(
+        operational_monitoring,
+        "DEFAULT_MONITORING_DB",
+        None,
+    )
+
+    operational_monitoring.record_health_run(
+        {
+            "checked_at": (
+                "2026-07-29T23:30:00+00:00"
+            ),
+            "overall_status": "PASS",
+            "pass_count": 1,
+            "warning_count": 0,
+            "fail_count": 0,
+            "checks": [
+                {
+                    "Component": "Storage",
+                    "Status": "PASS",
+                    "Detail": "Available",
+                }
+            ],
+        }
+    )
+
+    assert (
+        tmp_path / "operational_monitoring.db"
+    ).exists()

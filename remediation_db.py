@@ -1,7 +1,18 @@
 import sqlite3
 from datetime import datetime, UTC
 
-DB_NAME = "remediation.db"
+from storage_paths import database_path
+
+
+DB_NAME = None
+
+
+def _database_path():
+    return (
+        DB_NAME
+        if DB_NAME is not None
+        else database_path("remediation.db")
+    )
 
 
 def utc_now():
@@ -9,7 +20,7 @@ def utc_now():
 
 
 def init_remediation_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -85,7 +96,7 @@ def save_remediation_items(
     """
     init_remediation_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     for item in items:
@@ -190,7 +201,7 @@ def get_remediation_items():
     """
     init_remediation_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -223,7 +234,7 @@ def get_remediation_items_with_client_context():
     """
     init_remediation_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -255,7 +266,7 @@ def get_remediation_items_with_client_context():
 def update_remediation_status(item_id, status):
     init_remediation_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -277,7 +288,7 @@ def deduplicate_open_remediation_items():
     """
     init_remediation_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""

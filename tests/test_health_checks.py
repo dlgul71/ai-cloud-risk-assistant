@@ -480,3 +480,57 @@ def test_health_summary_includes_optional_axonius_check(
     assert results["checks"][0]["Component"] == (
         "Axonius connectivity"
     )
+
+
+def test_default_database_files_use_data_directory(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "DGS_DATA_DIR",
+        str(tmp_path),
+    )
+
+    monkeypatch.setattr(
+        health_checks,
+        "DATABASE_FILES",
+        None,
+    )
+
+    database_files = (
+        health_checks.get_database_files()
+    )
+
+    assert database_files == [
+        tmp_path / "assets.db",
+        tmp_path / "clients.db",
+        tmp_path / "remediation.db",
+        tmp_path / "operational_monitoring.db",
+    ]
+
+
+def test_default_storage_directories_use_data_directory(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "DGS_DATA_DIR",
+        str(tmp_path),
+    )
+
+    monkeypatch.setattr(
+        health_checks,
+        "STORAGE_DIRECTORIES",
+        None,
+    )
+
+    storage_directories = (
+        health_checks.get_storage_directories()
+    )
+
+    assert storage_directories == [
+        tmp_path,
+        tmp_path / "scan_snapshots",
+        tmp_path / "client_scan_results",
+        tmp_path / "backups",
+    ]

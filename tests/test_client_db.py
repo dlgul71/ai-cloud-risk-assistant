@@ -121,3 +121,38 @@ def test_add_azure_client(client_database):
     assert client[6] == "11111111-2222-3333-4444-555555555555"
     assert client[7] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     assert client[8] == "99999999-8888-7777-6666-555555555555"
+
+
+def test_default_client_database_uses_data_directory(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "DGS_DATA_DIR",
+        str(tmp_path),
+    )
+
+    monkeypatch.setattr(
+        client_db,
+        "DB_NAME",
+        None,
+    )
+
+    client_db.init_client_db()
+
+    database_path = tmp_path / "clients.db"
+
+    assert database_path.exists()
+
+    connection = sqlite3.connect(database_path)
+    table = connection.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table'
+          AND name = 'clients'
+        """
+    ).fetchone()
+    connection.close()
+
+    assert table == ("clients",)
