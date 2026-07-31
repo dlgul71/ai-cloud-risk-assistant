@@ -76,11 +76,17 @@ except Exception:
     get_organization_accounts = None
 
 try:
-    from client_db import init_client_db, add_client, get_clients
+    from client_db import (
+        init_client_db,
+        add_client,
+        get_clients,
+        get_client_key,
+    )
 except Exception:
     init_client_db = None
     add_client = None
     get_clients = None
+    get_client_key = None
 
 try:
     from azure_client_accounts import (
@@ -1158,14 +1164,14 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 
 if page == "SOC Dashboard":
 
-    from asset_db import get_assets
+    from asset_db import get_all_assets_admin
     from remediation_db import get_remediation_items
     import pandas as pd
 
     st.title("SOC Dashboard")
     demo_caption("Executive security operations overview")
 
-    assets = get_assets()
+    assets = get_all_assets_admin()
     remediation_items = get_remediation_items()
 
     asset_count = len(assets)
@@ -1610,14 +1616,14 @@ if page == "Risk Trends":
 if page == "Executive Dashboard":
 
     from client_db import get_clients
-    from asset_db import get_assets
+    from asset_db import get_all_assets_admin
     import pandas as pd
 
     st.title("Executive Dashboard")
     demo_caption("Multi-client executive risk overview")
 
     clients = get_clients()
-    assets = get_assets()
+    assets = get_all_assets_admin()
 
     total_clients = len(clients)
     total_assets = len(assets)
@@ -1958,7 +1964,7 @@ if page == "Client Security Dashboard":
     )
 
     clients = get_clients() if get_clients is not None else []
-    assets = get_assets()
+    assets = []
 
     if not clients:
         demo_info(
@@ -1990,6 +1996,20 @@ if page == "Client Security Dashboard":
         selected_client = client_options[selected_client_label]
 
         client_id = selected_client[0]
+
+        if get_client_key is None:
+            raise RuntimeError(
+                "Client tenant-key lookup is unavailable."
+            )
+
+        client_key = get_client_key(client_id)
+
+        if not client_key:
+            raise RuntimeError(
+                "The selected client does not have a tenant key."
+            )
+
+        assets = get_assets(client_key)
         client_name = selected_client[1]
         aws_account_id = selected_client[2]
         role_arn = selected_client[3]
@@ -2933,13 +2953,13 @@ if page == "Client Security Dashboard":
 
 if page == "Asset Dashboard":
 
-    from asset_db import get_assets
+    from asset_db import get_all_assets_admin
     import pandas as pd
 
     st.title("Asset Dashboard")
     demo_caption("CAASM-style asset inventory for client AWS assets")
 
-    assets = get_assets()
+    assets = get_all_assets_admin()
 
     columns = [
         "Asset ID",
@@ -7905,9 +7925,25 @@ if st.button(
 
                 role_arn = selected_client_data[3]
 
+                if get_client_key is None:
+                    raise RuntimeError(
+                        "Client tenant-key lookup is unavailable."
+                    )
+
+                client_key = get_client_key(
+                    selected_client_data[0]
+                )
+
+                if not client_key:
+                    raise RuntimeError(
+                        "The selected client does not have a "
+                        "tenant key."
+                    )
+
                 results = run_client_scan(
                     role_arn,
-                    client_name=selected_client_data[1]
+                    client_name=selected_client_data[1],
+                    client_key=client_key,
                 )
 
                 if results.get("identity", {}).get("status") != "SUCCESS":
@@ -8000,9 +8036,9 @@ if st.button(
             snapshot_assets = []
 
             try:
-                from asset_db import get_assets
+                from asset_db import get_all_assets_admin
 
-                raw_assets = get_assets()
+                raw_assets = get_all_assets_admin()
 
                 for asset in raw_assets:
                     snapshot_assets.append({
@@ -8446,10 +8482,10 @@ asset_summary = {}
 
 try:
     from client_db import get_clients
-    from asset_db import get_assets
+    from asset_db import get_all_assets_admin
 
     pdf_clients = get_clients()
-    pdf_assets = get_assets()
+    pdf_assets = get_all_assets_admin()
 
     if pdf_assets:
         pdf_asset_df = pd.DataFrame(

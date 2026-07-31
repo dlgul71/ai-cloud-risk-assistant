@@ -1,7 +1,7 @@
 from pathlib import Path
 from demo_mode import sanitize_text
 
-from asset_db import get_assets
+from asset_db import get_all_assets_admin
 from remediation_db import (
     get_remediation_items,
     get_remediation_items_with_client_context
@@ -11,7 +11,7 @@ from caasm_snapshot_engine import load_caasm_snapshots
 
 
 def build_security_context():
-    assets = get_assets()
+    assets = get_all_assets_admin()
     remediation_items = get_remediation_items()
     remediation_items_with_context = (
         get_remediation_items_with_client_context()
