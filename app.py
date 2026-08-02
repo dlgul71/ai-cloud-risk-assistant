@@ -20,6 +20,7 @@ from access_control import (
 from app_logging import configure_logging, get_logger
 from health_checks import run_health_checks
 from operational_monitoring import (
+    SYSTEM_CLIENT_KEY,
     evaluate_health_alert,
     get_recent_health_runs,
     record_health_run,
@@ -1773,6 +1774,7 @@ if page == "System Health":
 
             monitoring_record = record_health_run(
                 health_payload,
+                client_key=SYSTEM_CLIENT_KEY,
                 source="streamlit-system-health",
             )
 
@@ -1888,11 +1890,13 @@ if page == "System Health":
 
     health_history_summary = (
         summarize_health_history(
-            limit=100
+            client_key=SYSTEM_CLIENT_KEY,
+            limit=100,
         )
     )
     recent_health_runs = get_recent_health_runs(
-        limit=10
+        client_key=SYSTEM_CLIENT_KEY,
+        limit=10,
     )
 
     st.subheader("Operational Monitoring History")

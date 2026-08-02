@@ -12,18 +12,32 @@ from storage_paths import database_path
 
 
 DEFAULT_MONITORING_DB = None
+SYSTEM_CLIENT_KEY = "__dgs_system__"
 
 
 def _monitoring_db_path(
     db_path: Path | None = None,
 ) -> Path:
-    return (
-        Path(db_path)
-        if db_path is not None
-        else database_path(
-            "operational_monitoring.db"
-        )
+    if db_path is not None:
+        return Path(db_path)
+
+    if DEFAULT_MONITORING_DB is not None:
+        return Path(DEFAULT_MONITORING_DB)
+
+    return database_path(
+        "operational_monitoring.db"
     )
+
+
+def _normalize_client_key(
+    client_key: str | None,
+) -> str:
+    normalized = str(client_key or "").strip()
+
+    if not normalized:
+        raise ValueError("client_key is required")
+
+    return normalized
 
 
 def _normalize_timestamp(
@@ -49,21 +63,26 @@ def _normalize_timestamp(
 def init_monitoring_db(
     db_path: Path | None = None,
 ) -> None:
-    """Create health-run and component-result tables."""
+    """Create and migrate operational monitoring tables."""
 
-    database_path = _monitoring_db_path(db_path)
-    database_path.parent.mkdir(
+    monitoring_path = _monitoring_db_path(db_path)
+    monitoring_path.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
     with closing(
-        sqlite3.connect(database_path)
+        sqlite3.connect(monitoring_path)
     ) as connection:
+        connection.execute(
+            "PRAGMA foreign_keys = ON"
+        )
+
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS health_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_key TEXT NOT NULL,
                 checked_at TEXT NOT NULL,
                 recorded_at TEXT NOT NULL,
                 source TEXT NOT NULL,
@@ -76,9 +95,35 @@ def init_monitoring_db(
             """
         )
 
+        existing_columns = {
+            row[1]
+            for row in connection.execute(
+                "PRAGMA table_info(health_runs)"
+            )
+        }
+
+        if "client_key" not in existing_columns:
+            connection.execute(
+                """
+                ALTER TABLE health_runs
+                ADD COLUMN client_key TEXT
+                """
+            )
+
         connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS health_check_results (
+            UPDATE health_runs
+            SET client_key = ?
+            WHERE client_key IS NULL
+               OR TRIM(client_key) = ''
+            """,
+            (SYSTEM_CLIENT_KEY,),
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS
+            health_check_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id INTEGER NOT NULL,
                 checked_at TEXT NOT NULL,
@@ -95,16 +140,23 @@ def init_monitoring_db(
         connection.execute(
             """
             CREATE INDEX IF NOT EXISTS
-            idx_health_runs_checked_at
-            ON health_runs(checked_at DESC)
+            idx_health_runs_client_checked_at
+            ON health_runs(
+                client_key,
+                checked_at DESC
+            )
             """
         )
 
         connection.execute(
             """
             CREATE INDEX IF NOT EXISTS
-            idx_health_runs_status
-            ON health_runs(overall_status, checked_at DESC)
+            idx_health_runs_client_status
+            ON health_runs(
+                client_key,
+                overall_status,
+                checked_at DESC
+            )
             """
         )
 
@@ -112,7 +164,10 @@ def init_monitoring_db(
             """
             CREATE INDEX IF NOT EXISTS
             idx_health_results_component
-            ON health_check_results(component, checked_at DESC)
+            ON health_check_results(
+                component,
+                checked_at DESC
+            )
             """
         )
 
@@ -124,16 +179,61 @@ def init_monitoring_db(
             """
         )
 
+        connection.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS
+            health_runs_require_client_key_insert
+            BEFORE INSERT ON health_runs
+            WHEN NEW.client_key IS NULL
+              OR TRIM(NEW.client_key) = ''
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'client_key is required'
+                );
+            END
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS
+            health_runs_require_client_key_update
+            BEFORE UPDATE OF client_key
+            ON health_runs
+            WHEN NEW.client_key IS NULL
+              OR TRIM(NEW.client_key) = ''
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'client_key is required'
+                );
+            END
+            """
+        )
+
         connection.commit()
 
 
 def record_health_run(
     health_payload: dict[str, Any],
     *,
+    client_key: str,
     db_path: Path | None = None,
     source: str = "system-health",
 ) -> dict[str, Any]:
-    """Persist one health-check execution and its component results."""
+    """Persist one tenant-scoped health-check execution."""
+
+    normalized_client_key = _normalize_client_key(
+        client_key
+    )
+
+    checks = health_payload.get("checks", [])
+
+    if not isinstance(checks, list):
+        raise ValueError(
+            "Health payload checks must be a list."
+        )
 
     init_monitoring_db(db_path)
 
@@ -149,23 +249,21 @@ def record_health_run(
         )
     ).upper()
 
-    checks = health_payload.get("checks", [])
-
-    if not isinstance(checks, list):
-        raise ValueError(
-            "Health payload checks must be a list."
-        )
-
-    database_path = _monitoring_db_path(db_path)
+    monitoring_path = _monitoring_db_path(db_path)
 
     with closing(
-        sqlite3.connect(database_path)
+        sqlite3.connect(monitoring_path)
     ) as connection:
+        connection.execute(
+            "PRAGMA foreign_keys = ON"
+        )
+
         cursor = connection.cursor()
 
         cursor.execute(
             """
             INSERT INTO health_runs (
+                client_key,
                 checked_at,
                 recorded_at,
                 source,
@@ -175,9 +273,10 @@ def record_health_run(
                 fail_count,
                 check_count
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                normalized_client_key,
                 checked_at,
                 recorded_at,
                 str(source),
@@ -224,6 +323,7 @@ def record_health_run(
                     ),
                 )
             )
+
             status = str(
                 check.get(
                     "Status",
@@ -233,6 +333,7 @@ def record_health_run(
                     ),
                 )
             ).upper()
+
             detail = str(
                 check.get(
                     "Detail",
@@ -268,6 +369,7 @@ def record_health_run(
     return {
         "status": "RECORDED",
         "run_id": run_id,
+        "client_key": normalized_client_key,
         "checked_at": checked_at,
         "overall_status": overall_status,
         "check_count": len(checks),
@@ -276,17 +378,24 @@ def record_health_run(
 
 def get_recent_health_runs(
     *,
+    client_key: str,
     db_path: Path | None = None,
     limit: int = 25,
 ) -> list[dict[str, Any]]:
-    """Return recent health executions, newest first."""
+    """Return recent health runs for one tenant boundary."""
+
+    normalized_client_key = _normalize_client_key(
+        client_key
+    )
 
     init_monitoring_db(db_path)
 
     safe_limit = max(1, int(limit))
 
     with closing(
-        sqlite3.connect(_monitoring_db_path(db_path))
+        sqlite3.connect(
+            _monitoring_db_path(db_path)
+        )
     ) as connection:
         connection.row_factory = sqlite3.Row
 
@@ -303,10 +412,14 @@ def get_recent_health_runs(
                 fail_count,
                 check_count
             FROM health_runs
+            WHERE client_key = ?
             ORDER BY checked_at DESC, id DESC
             LIMIT ?
             """,
-            (safe_limit,),
+            (
+                normalized_client_key,
+                safe_limit,
+            ),
         ).fetchall()
 
     return [
@@ -318,17 +431,24 @@ def get_recent_health_runs(
 def get_component_history(
     component: str,
     *,
+    client_key: str,
     db_path: Path | None = None,
     limit: int = 25,
 ) -> list[dict[str, Any]]:
-    """Return recent results for one monitored component."""
+    """Return component history for one tenant boundary."""
+
+    normalized_client_key = _normalize_client_key(
+        client_key
+    )
 
     init_monitoring_db(db_path)
 
     safe_limit = max(1, int(limit))
 
     with closing(
-        sqlite3.connect(_monitoring_db_path(db_path))
+        sqlite3.connect(
+            _monitoring_db_path(db_path)
+        )
     ) as connection:
         connection.row_factory = sqlite3.Row
 
@@ -347,13 +467,15 @@ def get_component_history(
             INNER JOIN health_runs
                 ON health_runs.id =
                     health_check_results.run_id
-            WHERE health_check_results.component = ?
+            WHERE health_runs.client_key = ?
+              AND health_check_results.component = ?
             ORDER BY
                 health_check_results.checked_at DESC,
                 health_check_results.id DESC
             LIMIT ?
             """,
             (
+                normalized_client_key,
                 str(component),
                 safe_limit,
             ),
@@ -367,17 +489,20 @@ def get_component_history(
 
 def summarize_health_history(
     *,
+    client_key: str,
     db_path: Path | None = None,
     limit: int = 100,
 ) -> dict[str, Any]:
-    """Summarize operational reliability across recent runs."""
+    """Summarize reliability for one tenant boundary."""
 
     runs = get_recent_health_runs(
+        client_key=client_key,
         db_path=db_path,
         limit=limit,
     )
 
     total_runs = len(runs)
+
     pass_runs = sum(
         run["overall_status"] == "PASS"
         for run in runs
@@ -422,7 +547,7 @@ def summarize_health_history(
 def evaluate_health_alert(
     health_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Convert a health summary into an operational alert decision."""
+    """Convert a health summary into an alert decision."""
 
     overall_status = str(
         health_payload.get(
@@ -438,6 +563,7 @@ def evaluate_health_alert(
         )
         or 0
     )
+
     fail_count = int(
         health_payload.get(
             "fail_count",
