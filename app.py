@@ -1165,14 +1165,18 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 if page == "SOC Dashboard":
 
     from asset_db import get_all_assets_admin
-    from remediation_db import get_remediation_items
+    from remediation_db import (
+        get_all_remediation_items_admin,
+    )
     import pandas as pd
 
     st.title("SOC Dashboard")
     demo_caption("Executive security operations overview")
 
     assets = get_all_assets_admin()
-    remediation_items = get_remediation_items()
+    remediation_items = (
+        get_all_remediation_items_admin()
+    )
 
     asset_count = len(assets)
     remediation_count = len(remediation_items)
@@ -2352,7 +2356,9 @@ if page == "Client Security Dashboard":
         st.subheader("Client Remediation Queue")
 
         remediation_rows = (
-            get_remediation_items_with_client_context()
+            get_remediation_items_with_client_context(
+                client_key
+            )
         )
 
         remediation_columns = [
@@ -3087,7 +3093,10 @@ if page == "Asset Dashboard":
 
 if page == "Remediation Center":
 
-    from remediation_db import get_remediation_items, update_remediation_status
+    from remediation_db import (
+        get_all_remediation_items_admin,
+        update_remediation_status_admin,
+    )
     import pandas as pd
 
     can_update_remediation = has_permission(
@@ -3098,7 +3107,9 @@ if page == "Remediation Center":
     st.title("Remediation Center")
     demo_caption("Autonomous remediation recommendations generated from AWS findings")
 
-    remediation_items = get_remediation_items()
+    remediation_items = (
+        get_all_remediation_items_admin()
+    )
 
     columns = [
         "ID",
@@ -3405,7 +3416,7 @@ if page == "Remediation Center":
                     "Your role is not authorized to update remediation status."
                 )
             else:
-                update_remediation_status(
+                update_remediation_status_admin(
                     int(selected_item_id),
                     new_status
                 )

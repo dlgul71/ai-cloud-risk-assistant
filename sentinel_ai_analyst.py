@@ -3,8 +3,8 @@ from demo_mode import sanitize_text
 
 from asset_db import get_all_assets_admin
 from remediation_db import (
-    get_remediation_items,
-    get_remediation_items_with_client_context
+    get_all_remediation_items_admin,
+    get_all_remediation_items_with_context_admin,
 )
 from remediation_execution import get_execution_actions
 from caasm_snapshot_engine import load_caasm_snapshots
@@ -12,9 +12,11 @@ from caasm_snapshot_engine import load_caasm_snapshots
 
 def build_security_context():
     assets = get_all_assets_admin()
-    remediation_items = get_remediation_items()
+    remediation_items = (
+        get_all_remediation_items_admin()
+    )
     remediation_items_with_context = (
-        get_remediation_items_with_client_context()
+        get_all_remediation_items_with_context_admin()
     )
     execution_actions = get_execution_actions()
     caasm_snapshots = load_caasm_snapshots()

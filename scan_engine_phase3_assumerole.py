@@ -1344,6 +1344,7 @@ def run_client_scan(
 
         save_remediation_items(
             remediation_plan,
+            client_key=normalized_client_key,
             aws_account_id=account_id,
             client_name=bound_client_name,
         )

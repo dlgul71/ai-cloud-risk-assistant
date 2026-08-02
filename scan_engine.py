@@ -156,8 +156,9 @@ def run_scan():
 
     save_remediation_items(
         remediation_plan,
+        client_key="__dgs_internal_aws__",
         aws_account_id=current_aws_account_id,
-        client_name="DGS Internal AWS"
+        client_name="DGS Internal AWS",
     )
 
     execution_actions = create_actions_from_remediation_plan(
