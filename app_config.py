@@ -199,6 +199,18 @@ class AppSettings:
             30,
         )
     )
+    max_login_attempts: int = field(
+        default_factory=lambda: get_int(
+            "MAX_LOGIN_ATTEMPTS",
+            5,
+        )
+    )
+    account_lockout_minutes: int = field(
+        default_factory=lambda: get_int(
+            "ACCOUNT_LOCKOUT_MINUTES",
+            15,
+        )
+    )
 
     openai_api_key: str | None = field(
         default_factory=lambda: get_setting(
@@ -217,6 +229,13 @@ class AppSettings:
         default_factory=lambda: get_first_setting(
             "APP_PASSWORD",
             "auth.password",
+        ),
+        repr=False,
+    )
+    app_password_hash: str | None = field(
+        default_factory=lambda: get_first_setting(
+            "APP_PASSWORD_HASH",
+            "auth.password_hash",
         ),
         repr=False,
     )
@@ -365,12 +384,24 @@ class AppSettings:
             "session_timeout_minutes": (
                 self.session_timeout_minutes
             ),
+            "max_login_attempts": (
+                self.max_login_attempts
+            ),
+            "account_lockout_minutes": (
+                self.account_lockout_minutes
+            ),
             "openai_configured": bool(
                 self.openai_api_key
             ),
             "app_credentials_configured": bool(
                 self.app_username
-                and self.app_password
+                and (
+                    self.app_password_hash
+                    or self.app_password
+                )
+            ),
+            "app_password_hash_configured": bool(
+                self.app_password_hash
             ),
             "app_role": self.app_role,
             "axonius_configured": all(

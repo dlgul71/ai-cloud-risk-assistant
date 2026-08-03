@@ -520,3 +520,75 @@ def test_axonius_settings_use_safe_defaults(
     assert settings.axonius_assets_path == "/api/assets"
     assert settings.axonius_identities_path == "/api/identities"
     assert settings.safe_summary()["axonius_configured"] is False
+
+
+def test_password_hash_configuration_is_not_exposed():
+    password_hash = (
+        "pbkdf2_sha256$600000$"
+        "30313233343536373839616263646566$"
+        "0123456789abcdef0123456789abcdef"
+        "0123456789abcdef0123456789abcdef"
+    )
+
+    settings = app_config.AppSettings(
+        app_username="secure-user",
+        app_password=None,
+        app_password_hash=password_hash,
+        max_login_attempts=4,
+        account_lockout_minutes=20,
+    )
+
+    summary = settings.safe_summary()
+    rendered_summary = str(summary)
+
+    assert password_hash not in rendered_summary
+    assert "secure-user" not in rendered_summary
+    assert summary["app_credentials_configured"] is True
+    assert (
+        summary["app_password_hash_configured"]
+        is True
+    )
+    assert summary["max_login_attempts"] == 4
+    assert summary["account_lockout_minutes"] == 20
+
+
+def test_login_security_settings_read_environment(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "MAX_LOGIN_ATTEMPTS",
+        "7",
+    )
+    monkeypatch.setenv(
+        "ACCOUNT_LOCKOUT_MINUTES",
+        "25",
+    )
+    monkeypatch.setenv(
+        "APP_PASSWORD_HASH",
+        "test-password-hash",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert settings.max_login_attempts == 7
+    assert settings.account_lockout_minutes == 25
+    assert (
+        settings.app_password_hash
+        == "test-password-hash"
+    )
+
+
+def test_plaintext_password_remains_compatible():
+    settings = app_config.AppSettings(
+        app_username="legacy-user",
+        app_password="legacy-password",  # pragma: allowlist secret
+        app_password_hash=None,
+    )
+
+    summary = settings.safe_summary()
+
+    assert summary["app_credentials_configured"] is True
+    assert (
+        summary["app_password_hash_configured"]
+        is False
+    )

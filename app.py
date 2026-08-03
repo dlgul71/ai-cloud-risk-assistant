@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from io import BytesIO
-import hmac
 
 import boto3
 import pandas as pd
@@ -8,6 +7,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from app_config import settings
+from authentication import (
+    authenticate_credentials,
+    clear_authentication_session,
+    is_account_locked,
+    is_session_expired,
+    register_failed_attempt,
+    remaining_lockout_seconds,
+    start_authenticated_session,
+)
 from access_control import (
     PERMISSION_APPROVE_REMEDIATION,
     PERMISSION_EXECUTE_REMEDIATION,
@@ -288,60 +296,168 @@ APP_NAME = "DGS Sentinel AI"
 # ============================================================
 
 def check_password():
-    """Simple password authentication for DGS Sentinel AI."""
+    """Authenticate the current Streamlit session securely."""
 
-    session_timeout_minutes = settings.session_timeout_minutes
+    session_timeout_minutes = max(
+        1,
+        int(settings.session_timeout_minutes),
+    )
+    max_login_attempts = max(
+        1,
+        int(settings.max_login_attempts),
+    )
+    account_lockout_minutes = max(
+        1,
+        int(settings.account_lockout_minutes),
+    )
 
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
+    st.session_state.setdefault(
+        "authenticated",
+        False,
+    )
 
-    if "login_time" not in st.session_state:
-        st.session_state["login_time"] = None
-
-    if (
-        st.session_state["authenticated"]
-        and st.session_state["login_time"] is not None
-    ):
-        session_age = datetime.now() - st.session_state["login_time"]
-
-        if session_age > timedelta(minutes=session_timeout_minutes):
-            st.session_state["authenticated"] = False
-            st.session_state["login_time"] = None
-            demo_warning("Session expired. Please login again.")
+    if st.session_state.get("authenticated"):
+        if is_session_expired(
+            st.session_state.get("login_time"),
+            timeout_minutes=session_timeout_minutes,
+        ):
+            clear_authentication_session(
+                st.session_state
+            )
+            st.session_state[
+                "authentication_notice"
+            ] = (
+                "Session expired. Please log in again."
+            )
             st.rerun()
 
-    if st.session_state["authenticated"]:
-        st.session_state["user_role"] = normalize_role(
-            settings.app_role
+        st.session_state["user_role"] = (
+            normalize_role(settings.app_role)
         )
         return True
 
     st.title("🛡️ DGS Sentinel AI Login")
-    demo_caption("Protected Cloud Security Analytics Platform")
+    demo_caption(
+        "Protected Cloud Security Analytics Platform"
+    )
+
+    authentication_notice = (
+        st.session_state.pop(
+            "authentication_notice",
+            None,
+        )
+    )
+
+    if authentication_notice:
+        demo_warning(authentication_notice)
+
+    if is_account_locked(st.session_state):
+        remaining_seconds = (
+            remaining_lockout_seconds(
+                st.session_state
+            )
+        )
+        remaining_minutes = max(
+            1,
+            (
+                remaining_seconds + 59
+            ) // 60,
+        )
+
+        st.error(
+            "Too many failed login attempts. "
+            f"Try again in approximately "
+            f"{remaining_minutes} minute(s)."
+        )
+        return False
 
     username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    password = st.text_input(
+        "Password",
+        type="password",
+    )
 
     if st.button("Login", type="primary"):
         try:
-            correct_username = settings.app_username or ""
-            correct_password = settings.app_password or ""
+            expected_username = (
+                settings.app_username or ""
+            )
+            password_hash = (
+                settings.app_password_hash or ""
+            )
+            legacy_password = (
+                settings.app_password or ""
+            )
         except Exception:
-            st.error("Authentication is not configured. Check .streamlit/secrets.toml.")
+            st.error(
+                "Authentication configuration could "
+                "not be loaded."
+            )
             return False
 
-        if (
-            hmac.compare_digest(username, correct_username)
-            and hmac.compare_digest(password, correct_password)
-        ):
-            st.session_state["authenticated"] = True
-            st.session_state["login_time"] = datetime.now()
-            st.session_state["user_role"] = normalize_role(
-                settings.app_role
+        credentials_configured = bool(
+            expected_username
+            and (
+                password_hash
+                or legacy_password
+            )
+        )
+
+        if not credentials_configured:
+            st.error(
+                "Authentication is not configured. "
+                "Set APP_USERNAME and "
+                "APP_PASSWORD_HASH."
+            )
+            return False
+
+        authenticated = authenticate_credentials(
+            username,
+            password,
+            expected_username=expected_username,
+            password_hash=password_hash,
+            legacy_password=legacy_password,
+        )
+
+        if authenticated:
+            start_authenticated_session(
+                st.session_state,
+                role=normalize_role(
+                    settings.app_role
+                ),
             )
             st.rerun()
+
+        failure = register_failed_attempt(
+            st.session_state,
+            max_attempts=max_login_attempts,
+            lockout_minutes=(
+                account_lockout_minutes
+            ),
+        )
+
+        if failure["locked"]:
+            st.error(
+                "Invalid username or password. "
+                "Login has been temporarily locked."
+            )
         else:
-            st.error("Invalid username or password")
+            remaining_attempts = max(
+                0,
+                max_login_attempts
+                - failure["attempts"],
+            )
+
+            st.error(
+                "Invalid username or password."
+            )
+
+            if remaining_attempts:
+                demo_warning(
+                    f"{remaining_attempts} login "
+                    "attempt(s) remain before "
+                    "temporary lockout."
+                )
 
     return False
 
@@ -1071,9 +1187,9 @@ if demo_mode_enabled():
 with st.sidebar:
 
     if st.button("Logout"):
-        st.session_state["authenticated"] = False
-        st.session_state["login_time"] = None
-        st.session_state.pop("user_role", None)
+        clear_authentication_session(
+            st.session_state
+        )
         st.rerun()
 
     st.caption(
