@@ -592,3 +592,42 @@ def test_plaintext_password_remains_compatible():
         summary["app_password_hash_configured"]
         is False
     )
+
+
+def test_legacy_auth_fallback_defaults_to_disabled(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "DGS_ALLOW_LEGACY_AUTH_FALLBACK",
+        raising=False,
+    )
+
+    settings = app_config.AppSettings()
+
+    assert (
+        settings.allow_legacy_auth_fallback
+        is False
+    )
+
+
+def test_legacy_auth_fallback_reads_environment(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "DGS_ALLOW_LEGACY_AUTH_FALLBACK",
+        "true",
+    )
+
+    settings = app_config.AppSettings()
+
+    assert (
+        settings.allow_legacy_auth_fallback
+        is True
+    )
+
+    assert (
+        settings.safe_summary()[
+            "allow_legacy_auth_fallback"
+        ]
+        is True
+    )

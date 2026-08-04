@@ -370,6 +370,11 @@ def start_authenticated_session(
     state: MutableMapping[str, Any],
     *,
     role: str,
+    user_id: str | None = None,
+    username: str | None = None,
+    is_global_admin: bool = False,
+    client_keys: list[str] | tuple[str, ...] | None = None,
+    authentication_source: str = "persistent_user",
     now: datetime | None = None,
 ) -> None:
     """Initialize a successful authenticated session."""
@@ -381,6 +386,21 @@ def start_authenticated_session(
         now
     ).isoformat()
     state[USER_ROLE_KEY] = role
+    state["authenticated_user_id"] = user_id
+    state["authenticated_username"] = (
+        str(username).strip()
+        if username
+        else None
+    )
+    state["authenticated_is_global_admin"] = bool(
+        is_global_admin
+    )
+    state["authenticated_client_keys"] = list(
+        client_keys or []
+    )
+    state["authentication_source"] = str(
+        authentication_source
+    ).strip()
 
 
 def is_session_expired(

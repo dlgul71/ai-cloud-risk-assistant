@@ -16,6 +16,12 @@ from authentication import (
     remaining_lockout_seconds,
     start_authenticated_session,
 )
+from user_authentication import (
+    STATUS_LOCKED,
+    authenticate_persistent_user,
+    persistent_users_exist,
+)
+from user_db import record_authentication_event
 from access_control import (
     PERMISSION_APPROVE_REMEDIATION,
     PERMISSION_EXECUTE_REMEDIATION,
@@ -295,8 +301,208 @@ APP_NAME = "DGS Sentinel AI"
 # AUTHENTICATION
 # ============================================================
 
+def _record_session_audit_event(
+    event_type,
+    *,
+    success=True,
+    details=None,
+):
+    """Record an authentication session event safely."""
+
+    username = st.session_state.get(
+        "authenticated_username"
+    )
+    user_id = st.session_state.get(
+        "authenticated_user_id"
+    )
+
+    if not username and not user_id:
+        return
+
+    event_details = {
+        "source": st.session_state.get(
+            "authentication_source",
+            "unknown",
+        ),
+        "role": st.session_state.get(
+            "user_role"
+        ),
+    }
+    event_details.update(details or {})
+
+    try:
+        record_authentication_event(
+            event_type=event_type,
+            success=success,
+            username=username,
+            user_id=user_id,
+            details=event_details,
+        )
+    except Exception:
+        logger.exception(
+            "Unable to record authentication "
+            "session event: %s",
+            event_type,
+        )
+
+
+def _start_persistent_user_session(user):
+    """Start a session using identity data from users.db."""
+
+    start_authenticated_session(
+        st.session_state,
+        role=normalize_role(
+            user["role"]
+        ),
+        user_id=user["user_id"],
+        username=user["username"],
+        is_global_admin=user[
+            "is_global_admin"
+        ],
+        client_keys=user.get(
+            "client_keys",
+            [],
+        ),
+        authentication_source=(
+            "persistent_user"
+        ),
+    )
+
+
+def _authenticate_legacy_environment_user(
+    username,
+    password,
+    *,
+    max_login_attempts,
+    account_lockout_minutes,
+):
+    """Use explicitly enabled emergency authentication."""
+
+    if is_account_locked(
+        st.session_state
+    ):
+        remaining_seconds = (
+            remaining_lockout_seconds(
+                st.session_state
+            )
+        )
+        remaining_minutes = max(
+            1,
+            (
+                remaining_seconds + 59
+            ) // 60,
+        )
+
+        st.error(
+            "Emergency authentication is "
+            "temporarily locked. "
+            f"Try again in approximately "
+            f"{remaining_minutes} minute(s)."
+        )
+        return False
+
+    expected_username = (
+        settings.app_username or ""
+    )
+    password_hash = (
+        settings.app_password_hash or ""
+    )
+    legacy_password = (
+        settings.app_password or ""
+    )
+
+    credentials_configured = bool(
+        expected_username
+        and (
+            password_hash
+            or legacy_password
+        )
+    )
+
+    if not credentials_configured:
+        st.error(
+            "Emergency authentication is not "
+            "configured."
+        )
+        return False
+
+    authenticated = authenticate_credentials(
+        username,
+        password,
+        expected_username=expected_username,
+        password_hash=password_hash,
+        legacy_password=legacy_password,
+    )
+
+    if authenticated:
+        role = normalize_role(
+            settings.app_role
+        )
+
+        start_authenticated_session(
+            st.session_state,
+            role=role,
+            username=expected_username,
+            is_global_admin=(
+                role == "Administrator"
+            ),
+            authentication_source=(
+                "legacy_environment"
+            ),
+        )
+
+        _record_session_audit_event(
+            "legacy_login_success"
+        )
+        st.rerun()
+
+    failure = register_failed_attempt(
+        st.session_state,
+        max_attempts=max_login_attempts,
+        lockout_minutes=(
+            account_lockout_minutes
+        ),
+    )
+
+    try:
+        record_authentication_event(
+            event_type=(
+                "legacy_login_lockout"
+                if failure["locked"]
+                else "legacy_login_failure"
+            ),
+            success=False,
+            username=username or None,
+            details={
+                "source": (
+                    "legacy_environment"
+                ),
+                "failed_login_attempts": (
+                    failure["attempts"]
+                ),
+            },
+        )
+    except Exception:
+        logger.exception(
+            "Unable to record legacy login failure."
+        )
+
+    if failure["locked"]:
+        st.error(
+            "Invalid username or password. "
+            "Emergency authentication has been "
+            "temporarily locked."
+        )
+    else:
+        st.error(
+            "Invalid username or password."
+        )
+
+    return False
+
+
 def check_password():
-    """Authenticate the current Streamlit session securely."""
+    """Authenticate the current Streamlit session."""
 
     session_timeout_minutes = max(
         1,
@@ -321,6 +527,10 @@ def check_password():
             st.session_state.get("login_time"),
             timeout_minutes=session_timeout_minutes,
         ):
+            _record_session_audit_event(
+                "session_expired"
+            )
+
             clear_authentication_session(
                 st.session_state
             )
@@ -332,7 +542,11 @@ def check_password():
             st.rerun()
 
         st.session_state["user_role"] = (
-            normalize_role(settings.app_role)
+            normalize_role(
+                st.session_state.get(
+                    "user_role"
+                )
+            )
         )
         return True
 
@@ -351,25 +565,45 @@ def check_password():
     if authentication_notice:
         demo_warning(authentication_notice)
 
-    if is_account_locked(st.session_state):
-        remaining_seconds = (
-            remaining_lockout_seconds(
-                st.session_state
-            )
+    try:
+        has_persistent_users = (
+            persistent_users_exist()
         )
-        remaining_minutes = max(
-            1,
-            (
-                remaining_seconds + 59
-            ) // 60,
+    except Exception:
+        logger.exception(
+            "Persistent authentication store "
+            "could not be initialized."
         )
-
         st.error(
-            "Too many failed login attempts. "
-            f"Try again in approximately "
-            f"{remaining_minutes} minute(s)."
+            "Persistent authentication is "
+            "temporarily unavailable."
         )
         return False
+
+    legacy_fallback_enabled = bool(
+        settings.allow_legacy_auth_fallback
+    )
+
+    if (
+        not has_persistent_users
+        and not legacy_fallback_enabled
+    ):
+        st.error(
+            "No persistent users are configured. "
+            "Run the administrator bootstrap "
+            "command before logging in."
+        )
+        st.code(
+            "python scripts/bootstrap_admin_user.py",
+            language="bash",
+        )
+        return False
+
+    if legacy_fallback_enabled:
+        demo_warning(
+            "Emergency legacy authentication "
+            "fallback is enabled."
+        )
 
     username = st.text_input("Username")
     password = st.text_input(
@@ -377,87 +611,82 @@ def check_password():
         type="password",
     )
 
-    if st.button("Login", type="primary"):
+    if not st.button(
+        "Login",
+        type="primary",
+    ):
+        return False
+
+    persistent_result = None
+
+    if has_persistent_users:
         try:
-            expected_username = (
-                settings.app_username or ""
-            )
-            password_hash = (
-                settings.app_password_hash or ""
-            )
-            legacy_password = (
-                settings.app_password or ""
+            persistent_result = (
+                authenticate_persistent_user(
+                    username,
+                    password,
+                    max_attempts=(
+                        max_login_attempts
+                    ),
+                    lockout_minutes=(
+                        account_lockout_minutes
+                    ),
+                )
             )
         except Exception:
+            logger.exception(
+                "Persistent authentication failed "
+                "unexpectedly."
+            )
             st.error(
-                "Authentication configuration could "
-                "not be loaded."
+                "Authentication could not be "
+                "completed."
             )
             return False
 
-        credentials_configured = bool(
-            expected_username
-            and (
-                password_hash
-                or legacy_password
-            )
-        )
-
-        if not credentials_configured:
-            st.error(
-                "Authentication is not configured. "
-                "Set APP_USERNAME and "
-                "APP_PASSWORD_HASH."
-            )
-            return False
-
-        authenticated = authenticate_credentials(
-            username,
-            password,
-            expected_username=expected_username,
-            password_hash=password_hash,
-            legacy_password=legacy_password,
-        )
-
-        if authenticated:
-            start_authenticated_session(
-                st.session_state,
-                role=normalize_role(
-                    settings.app_role
-                ),
+        if (
+            persistent_result.success
+            and persistent_result.user
+        ):
+            _start_persistent_user_session(
+                persistent_result.user
             )
             st.rerun()
 
-        failure = register_failed_attempt(
-            st.session_state,
-            max_attempts=max_login_attempts,
-            lockout_minutes=(
-                account_lockout_minutes
-            ),
+    if legacy_fallback_enabled:
+        return (
+            _authenticate_legacy_environment_user(
+                username,
+                password,
+                max_login_attempts=(
+                    max_login_attempts
+                ),
+                account_lockout_minutes=(
+                    account_lockout_minutes
+                ),
+            )
         )
 
-        if failure["locked"]:
-            st.error(
-                "Invalid username or password. "
-                "Login has been temporarily locked."
-            )
-        else:
-            remaining_attempts = max(
-                0,
-                max_login_attempts
-                - failure["attempts"],
-            )
+    if persistent_result is not None:
+        st.error(
+            persistent_result.message
+        )
 
-            st.error(
-                "Invalid username or password."
+        if (
+            persistent_result.status
+            != STATUS_LOCKED
+            and persistent_result
+            .remaining_attempts
+            is not None
+            and persistent_result
+            .remaining_attempts
+            > 0
+        ):
+            demo_warning(
+                f"{persistent_result.remaining_attempts} "
+                "login attempt(s) remain before "
+                "temporary lockout."
             )
-
-            if remaining_attempts:
-                demo_warning(
-                    f"{remaining_attempts} login "
-                    "attempt(s) remain before "
-                    "temporary lockout."
-                )
 
     return False
 
@@ -1187,6 +1416,9 @@ if demo_mode_enabled():
 with st.sidebar:
 
     if st.button("Logout"):
+        _record_session_audit_event(
+            "logout"
+        )
         clear_authentication_session(
             st.session_state
         )

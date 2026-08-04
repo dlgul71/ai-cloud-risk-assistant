@@ -269,3 +269,49 @@ def test_clear_authentication_session_removes_all_state():
     )
 
     assert state == {}
+
+
+def test_authenticated_session_stores_user_identity():
+    state = {}
+
+    authentication.start_authenticated_session(
+        state,
+        role="Analyst",
+        user_id="user-123",
+        username="analyst@example.com",
+        is_global_admin=False,
+        client_keys=[
+            "client-a",
+            "client-b",
+        ],
+        authentication_source=(
+            "persistent_user"
+        ),
+    )
+
+    assert state["authenticated"] is True
+    assert state["user_role"] == "Analyst"
+    assert (
+        state["authenticated_user_id"]
+        == "user-123"
+    )
+    assert (
+        state["authenticated_username"]
+        == "analyst@example.com"
+    )
+    assert (
+        state[
+            "authenticated_is_global_admin"
+        ]
+        is False
+    )
+    assert state[
+        "authenticated_client_keys"
+    ] == [
+        "client-a",
+        "client-b",
+    ]
+    assert (
+        state["authentication_source"]
+        == "persistent_user"
+    )

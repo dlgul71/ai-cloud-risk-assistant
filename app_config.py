@@ -211,6 +211,12 @@ class AppSettings:
             15,
         )
     )
+    allow_legacy_auth_fallback: bool = field(
+        default_factory=lambda: get_bool(
+            "DGS_ALLOW_LEGACY_AUTH_FALLBACK",
+            False,
+        )
+    )
 
     openai_api_key: str | None = field(
         default_factory=lambda: get_setting(
@@ -389,6 +395,9 @@ class AppSettings:
             ),
             "account_lockout_minutes": (
                 self.account_lockout_minutes
+            ),
+            "allow_legacy_auth_fallback": (
+                self.allow_legacy_auth_fallback
             ),
             "openai_configured": bool(
                 self.openai_api_key
