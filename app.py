@@ -22,6 +22,12 @@ from user_authentication import (
     persistent_users_exist,
 )
 from user_db import record_authentication_event
+from tenant_authorization import (
+    authenticated_client_keys,
+    authenticated_is_global_admin,
+    filter_navigation_pages,
+    require_global_admin,
+)
 from access_control import (
     PERMISSION_APPROVE_REMEDIATION,
     PERMISSION_EXECUTE_REMEDIATION,
@@ -96,12 +102,14 @@ try:
         add_client,
         get_clients,
         get_client_key,
+        get_clients_for_access,
     )
 except Exception:
     init_client_db = None
     add_client = None
     get_clients = None
     get_client_key = None
+    get_clients_for_access = None
 
 try:
     from azure_client_accounts import (
@@ -693,6 +701,38 @@ def check_password():
 
 if not check_password():
     st.stop()
+
+
+def _current_user_is_global_admin():
+    return authenticated_is_global_admin(
+        st.session_state
+    )
+
+
+def _current_user_client_keys():
+    return authenticated_client_keys(
+        st.session_state
+    )
+
+
+def _get_visible_clients(
+    *,
+    include_client_key=False,
+):
+    if get_clients_for_access is None:
+        return []
+
+    return get_clients_for_access(
+        client_keys=(
+            _current_user_client_keys()
+        ),
+        is_global_admin=(
+            _current_user_is_global_admin()
+        ),
+        include_client_key=(
+            include_client_key
+        ),
+    )
 
 
 # ============================================================
@@ -1428,7 +1468,7 @@ with st.sidebar:
         f"Role: {st.session_state.get('user_role', 'Viewer')}"
     )
 
-    navigation_pages = accessible_pages(
+    role_authorized_pages = accessible_pages(
         st.session_state.get("user_role"),
         [
             "Dashboard",
@@ -1444,6 +1484,11 @@ with st.sidebar:
             "Asset Dashboard",
             "System Health",
         ],
+    )
+
+    navigation_pages = filter_navigation_pages(
+        st.session_state,
+        role_authorized_pages,
     )
 
     page = st.radio(
@@ -2319,13 +2364,13 @@ if page == "Client Security Dashboard":
         "risk prioritization, and service coverage."
     )
 
-    clients = get_clients() if get_clients is not None else []
+    clients = _get_visible_clients()
     assets = []
 
     if not clients:
         demo_info(
-            "No saved client accounts were found. "
-            "Add a client from the Client Accounts page first."
+            "No authorized client accounts were found. "
+            "Ask a global administrator to assign client access."
         )
 
     else:
@@ -6444,14 +6489,22 @@ if page == "Ask Sentinel AI":
 
 if page == "Client Accounts":
 
-    can_manage_clients = has_permission(
-        st.session_state.get("user_role"),
-        PERMISSION_MANAGE_CLIENTS,
+    can_manage_clients = (
+        has_permission(
+            st.session_state.get(
+                "user_role"
+            ),
+            PERMISSION_MANAGE_CLIENTS,
+        )
+        and require_global_admin(
+            st.session_state
+        )
     )
 
     if not can_manage_clients:
         st.error(
-            "Your role is not authorized to manage client accounts."
+            "Global administrator access is "
+            "required to manage client accounts."
         )
         st.stop()
 
@@ -6576,61 +6629,74 @@ if page == "Client Accounts":
 selected_client = None
 selected_client_data = None
 
-if get_clients is not None:
+if get_clients_for_access is not None:
 
-    saved_clients = get_clients()
+    saved_clients = _get_visible_clients()
+    include_internal_default = (
+        _current_user_is_global_admin()
+    )
 
-    if saved_clients:
+    if saved_clients or include_internal_default:
 
-        client_options = [
-            "DGS Internal / Default AWS Account"
-        ] + [
-            (
-                f"{client[1]} | "
-                f"{client[6] if str(client[5] or 'AWS').upper() == 'AZURE' else client[2]} "
-                f"| {client[4]}"
+        client_options = []
+
+        if include_internal_default:
+            client_options.append(
+                "DGS Internal / Default AWS Account"
             )
-            for client in saved_clients
-        ]
+
+        client_options.extend(
+            [
+                (
+                    f"{client[1]} | "
+                    f"{client[6] if str(client[5] or 'AWS').upper() == 'AZURE' else client[2]} "
+                    f"| {client[4]}"
+                )
+                for client in saved_clients
+            ]
+        )
 
         selected_client = st.sidebar.selectbox(
             "Active Client Account",
             client_options,
-            key="active_client_selector"
+            key="active_client_selector",
         )
 
-        if selected_client != "DGS Internal / Default AWS Account":
+        internal_selected = (
+            include_internal_default
+            and selected_client
+            == "DGS Internal / Default AWS Account"
+        )
 
+        if not internal_selected:
             selected_index = (
-                client_options.index(selected_client) - 1
+                client_options.index(
+                    selected_client
+                )
+                - (
+                    1
+                    if include_internal_default
+                    else 0
+                )
             )
 
-            selected_client_data = saved_clients[selected_index]
+            selected_client_data = (
+                saved_clients[
+                    selected_index
+                ]
+            )
 
             st.sidebar.success(
-                f"Client Selected: {selected_client_data[1]}"
+                "Client Selected: "
+                f"{selected_client_data[1]}"
             )
 
-            
-
-        else:
-            st.sidebar.info(
-                "Using default DGS AWS account."
-            )
-
-    else:
+    elif not include_internal_default:
         st.sidebar.info(
-            "No client accounts saved yet."
+            "No client accounts are assigned "
+            "to this user."
         )
 
-else:
-    st.sidebar.warning(
-        "Client database unavailable."
-    )
-
-# ============================================================
-# TEST CLIENT CLOUD CONNECTION
-# ============================================================
 
 if selected_client_data is not None:
 

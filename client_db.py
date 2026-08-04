@@ -271,3 +271,115 @@ def get_client_key(client_id):
         connection.close()
 
     return row[0] if row else None
+
+
+def _normalize_client_keys(client_keys):
+    return sorted(
+        {
+            str(client_key or "").strip()
+            for client_key in (
+                client_keys or []
+            )
+            if str(
+                client_key or ""
+            ).strip()
+        }
+    )
+
+
+def get_clients_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+    include_client_key=False,
+):
+    """
+    Return clients visible to one authenticated user.
+
+    Global administrators receive all clients. Other users receive
+    only clients whose stable client_key is explicitly assigned.
+    """
+
+    if bool(is_global_admin):
+        return get_clients(
+            include_client_key=(
+                include_client_key
+            )
+        )
+
+    normalized_keys = _normalize_client_keys(
+        client_keys
+    )
+
+    if not normalized_keys:
+        return []
+
+    init_client_db()
+
+    selected_columns = """
+        id,
+        client_name,
+        aws_account_id,
+        role_arn,
+        environment,
+        cloud_provider,
+        azure_subscription_id,
+        azure_tenant_id,
+        azure_client_id
+    """
+
+    if include_client_key:
+        selected_columns += ", client_key"
+
+    placeholders = ", ".join(
+        "?"
+        for _ in normalized_keys
+    )
+
+    connection = sqlite3.connect(
+        _database_path()
+    )
+
+    try:
+        return connection.execute(
+            f"""
+            SELECT {selected_columns}
+            FROM clients
+            WHERE client_key IN ({placeholders})
+            ORDER BY id
+            """,
+            tuple(normalized_keys),
+        ).fetchall()
+    finally:
+        connection.close()
+
+
+def get_client_for_access(
+    client_id,
+    *,
+    client_keys=None,
+    is_global_admin=False,
+    include_client_key=False,
+):
+    """Return one client only when the user is authorized."""
+
+    try:
+        normalized_client_id = int(
+            client_id
+        )
+    except (TypeError, ValueError):
+        return None
+
+    visible_clients = get_clients_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+        include_client_key=(
+            include_client_key
+        ),
+    )
+
+    for client in visible_clients:
+        if client[0] == normalized_client_id:
+            return client
+
+    return None

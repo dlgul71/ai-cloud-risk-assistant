@@ -291,3 +291,165 @@ def test_default_client_database_uses_data_directory(
     connection.close()
 
     assert table == ("clients",)
+
+
+def test_get_clients_for_access_filters_by_assigned_keys(
+    client_database,
+):
+    client_a_key = client_db.add_client(
+        "Client A",
+        "111111111111",
+        "role-a",
+        "Production",
+    )
+    client_db.add_client(
+        "Client B",
+        "222222222222",
+        "role-b",
+        "Testing",
+    )
+
+    clients = client_db.get_clients_for_access(
+        client_keys=[client_a_key],
+        is_global_admin=False,
+        include_client_key=True,
+    )
+
+    assert len(clients) == 1
+    assert clients[0][1] == "Client A"
+    assert clients[0][9] == client_a_key
+
+
+def test_get_clients_for_access_rejects_unassigned_tenants(
+    client_database,
+):
+    client_db.add_client(
+        "Client A",
+        "111111111111",
+        "role-a",
+        "Production",
+    )
+
+    clients = client_db.get_clients_for_access(
+        client_keys=[
+            "unassigned-client-key"
+        ],
+        is_global_admin=False,
+    )
+
+    assert clients == []
+
+
+def test_get_clients_for_access_returns_empty_without_assignments(
+    client_database,
+):
+    client_db.add_client(
+        "Client A",
+        "111111111111",
+        "role-a",
+        "Production",
+    )
+
+    assert client_db.get_clients_for_access(
+        client_keys=[],
+        is_global_admin=False,
+    ) == []
+
+    assert client_db.get_clients_for_access(
+        client_keys=None,
+        is_global_admin=False,
+    ) == []
+
+
+def test_get_clients_for_access_global_admin_returns_all(
+    client_database,
+):
+    client_db.add_client(
+        "Client A",
+        "111111111111",
+        "role-a",
+        "Production",
+    )
+    client_db.add_client(
+        "Client B",
+        "222222222222",
+        "role-b",
+        "Testing",
+    )
+
+    clients = client_db.get_clients_for_access(
+        client_keys=[],
+        is_global_admin=True,
+        include_client_key=True,
+    )
+
+    assert len(clients) == 2
+    assert {
+        client[1]
+        for client in clients
+    } == {
+        "Client A",
+        "Client B",
+    }
+
+
+def test_get_clients_for_access_normalizes_duplicate_keys(
+    client_database,
+):
+    client_key = client_db.add_client(
+        "Client A",
+        "111111111111",
+        "role-a",
+        "Production",
+    )
+
+    clients = client_db.get_clients_for_access(
+        client_keys=[
+            client_key,
+            f"  {client_key}  ",
+            "",
+            None,
+        ],
+        is_global_admin=False,
+    )
+
+    assert len(clients) == 1
+    assert clients[0][1] == "Client A"
+
+
+def test_get_client_for_access_enforces_assignment(
+    client_database,
+):
+    client_a_key = client_db.add_client(
+        "Client A",
+        "111111111111",
+        "role-a",
+        "Production",
+    )
+    client_db.add_client(
+        "Client B",
+        "222222222222",
+        "role-b",
+        "Testing",
+    )
+
+    clients = client_db.get_clients(
+        include_client_key=True
+    )
+    client_a_id = clients[0][0]
+    client_b_id = clients[1][0]
+
+    allowed = client_db.get_client_for_access(
+        client_a_id,
+        client_keys=[client_a_key],
+        include_client_key=True,
+    )
+    denied = client_db.get_client_for_access(
+        client_b_id,
+        client_keys=[client_a_key],
+        include_client_key=True,
+    )
+
+    assert allowed is not None
+    assert allowed[1] == "Client A"
+    assert denied is None
