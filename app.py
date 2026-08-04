@@ -28,10 +28,22 @@ from tenant_authorization import (
     filter_navigation_pages,
     require_global_admin,
 )
+from user_administration import (
+    MANAGED_ROLES,
+    create_managed_user,
+    grant_managed_user_client,
+    list_authentication_audit_events,
+    list_user_summaries,
+    reset_managed_user_password,
+    revoke_managed_user_client,
+    set_managed_user_active,
+    unlock_managed_user,
+)
 from access_control import (
     PERMISSION_APPROVE_REMEDIATION,
     PERMISSION_EXECUTE_REMEDIATION,
     PERMISSION_MANAGE_CLIENTS,
+    PERMISSION_MANAGE_USERS,
     PERMISSION_RUN_SCANS,
     accessible_pages,
     has_permission,
@@ -1480,6 +1492,7 @@ with st.sidebar:
             "Axonius CAASM Dashboard",
             "Ask Sentinel AI",
             "Client Accounts",
+            "User Administration",
             "Client Security Dashboard",
             "Asset Dashboard",
             "System Health",
@@ -6485,6 +6498,599 @@ if page == "Ask Sentinel AI":
         - What security-tool coverage gaps should leadership address?
         """
     )
+
+
+if page == "User Administration":
+
+    can_manage_users = (
+        has_permission(
+            st.session_state.get(
+                "user_role"
+            ),
+            PERMISSION_MANAGE_USERS,
+        )
+        and require_global_admin(
+            st.session_state
+        )
+    )
+
+    if not can_manage_users:
+        st.error(
+            "Global administrator access is "
+            "required to manage users."
+        )
+        st.stop()
+
+    actor_username = (
+        st.session_state.get(
+            "authenticated_username"
+        )
+        or "administrator"
+    )
+    actor_user_id = (
+        st.session_state.get(
+            "authenticated_user_id"
+        )
+    )
+
+    st.title("User Administration")
+    demo_caption(
+        "Manage persistent users, tenant access, "
+        "passwords, lockouts, and audit history."
+    )
+
+    try:
+        user_summaries = list_user_summaries()
+    except Exception as exc:
+        logger.exception(
+            "Unable to load user summaries."
+        )
+        st.error(
+            f"Unable to load users: {exc}"
+        )
+        st.stop()
+
+    st.subheader("Persistent Users")
+
+    if user_summaries:
+        user_rows = []
+
+        for user in user_summaries:
+            user_rows.append(
+                {
+                    "Username": user["username"],
+                    "Role": user["role"],
+                    "Active": user["is_active"],
+                    "Global Administrator": (
+                        user["is_global_admin"]
+                    ),
+                    "Failed Attempts": user[
+                        "failed_login_attempts"
+                    ],
+                    "Locked Until": (
+                        user["locked_until"]
+                        or ""
+                    ),
+                    "Last Login": (
+                        user["last_login_at"]
+                        or ""
+                    ),
+                    "Assigned Clients": len(
+                        user.get(
+                            "client_keys",
+                            [],
+                        )
+                    ),
+                }
+            )
+
+        user_dataframe = pd.DataFrame(
+            user_rows
+        )
+
+        demo_dataframe(
+            user_dataframe,
+            width="stretch",
+        )
+    else:
+        demo_info(
+            "No persistent users were found."
+        )
+
+    st.divider()
+    st.subheader("Create Tenant User")
+
+    with st.form(
+        "create_managed_user_form"
+    ):
+        new_username = st.text_input(
+            "Username",
+            key="managed_user_username",
+        )
+        new_role = st.selectbox(
+            "Role",
+            list(MANAGED_ROLES),
+            key="managed_user_role",
+        )
+        new_password = st.text_input(
+            "Temporary Password",
+            type="password",
+            key="managed_user_password",
+        )
+        confirm_password = st.text_input(
+            "Confirm Temporary Password",
+            type="password",
+            key="managed_user_password_confirm",
+        )
+
+        create_submitted = st.form_submit_button(
+            "Create User",
+            type="primary",
+        )
+
+    if create_submitted:
+        if new_password != confirm_password:
+            st.error(
+                "The passwords do not match."
+            )
+        else:
+            try:
+                created_user_id = (
+                    create_managed_user(
+                        username=new_username,
+                        password=new_password,
+                        role=new_role,
+                        actor_username=(
+                            actor_username
+                        ),
+                        actor_user_id=(
+                            actor_user_id
+                        ),
+                    )
+                )
+
+                demo_success(
+                    "User created successfully. "
+                    f"User ID: {created_user_id}"
+                )
+                st.rerun()
+            except Exception as exc:
+                logger.exception(
+                    "Unable to create managed user."
+                )
+                st.error(
+                    f"Unable to create user: {exc}"
+                )
+
+    managed_users = [
+        user
+        for user in user_summaries
+        if not user["is_global_admin"]
+    ]
+
+    if not managed_users:
+        demo_info(
+            "Create an Analyst or Viewer account "
+            "to enable account-management actions."
+        )
+        st.stop()
+
+    st.divider()
+    st.subheader("Manage Existing User")
+
+    managed_user_options = {
+        (
+            f"{user['username']} | "
+            f"{user['role']} | "
+            f"{'Active' if user['is_active'] else 'Inactive'}"
+        ): user
+        for user in managed_users
+    }
+
+    selected_user_label = st.selectbox(
+        "Select User",
+        list(managed_user_options.keys()),
+        key="managed_user_selector",
+    )
+
+    selected_user = managed_user_options[
+        selected_user_label
+    ]
+
+    st.write(
+        "Selected User:",
+        selected_user["username"],
+    )
+    st.write(
+        "Role:",
+        selected_user["role"],
+    )
+    st.write(
+        "Assigned Client Keys:",
+        selected_user.get(
+            "client_keys",
+            [],
+        )
+        or "None",
+    )
+
+    account_col1, account_col2 = st.columns(2)
+
+    with account_col1:
+        active_action_label = (
+            "Deactivate User"
+            if selected_user["is_active"]
+            else "Activate User"
+        )
+
+        if st.button(
+            active_action_label,
+            key=(
+                "managed_user_active_"
+                + selected_user["user_id"]
+            ),
+        ):
+            try:
+                set_managed_user_active(
+                    selected_user["user_id"],
+                    not selected_user[
+                        "is_active"
+                    ],
+                    actor_username=(
+                        actor_username
+                    ),
+                    actor_user_id=(
+                        actor_user_id
+                    ),
+                )
+                demo_success(
+                    "Account status updated."
+                )
+                st.rerun()
+            except Exception as exc:
+                logger.exception(
+                    "Unable to update user status."
+                )
+                st.error(
+                    f"Unable to update account: {exc}"
+                )
+
+    with account_col2:
+        if st.button(
+            "Unlock User",
+            key=(
+                "managed_user_unlock_"
+                + selected_user["user_id"]
+            ),
+        ):
+            try:
+                unlock_managed_user(
+                    selected_user["user_id"],
+                    actor_username=(
+                        actor_username
+                    ),
+                    actor_user_id=(
+                        actor_user_id
+                    ),
+                )
+                demo_success(
+                    "Account lockout cleared."
+                )
+                st.rerun()
+            except Exception as exc:
+                logger.exception(
+                    "Unable to unlock user."
+                )
+                st.error(
+                    f"Unable to unlock account: {exc}"
+                )
+
+    st.markdown("#### Reset Password")
+
+    with st.form(
+        "reset_password_form_"
+        + selected_user["user_id"]
+    ):
+        replacement_password = st.text_input(
+            "New Password",
+            type="password",
+            key=(
+                "replacement_password_"
+                + selected_user["user_id"]
+            ),
+        )
+        replacement_confirmation = st.text_input(
+            "Confirm New Password",
+            type="password",
+            key=(
+                "replacement_confirmation_"
+                + selected_user["user_id"]
+            ),
+        )
+
+        reset_submitted = (
+            st.form_submit_button(
+                "Reset Password"
+            )
+        )
+
+    if reset_submitted:
+        if (
+            replacement_password
+            != replacement_confirmation
+        ):
+            st.error(
+                "The passwords do not match."
+            )
+        else:
+            try:
+                reset_managed_user_password(
+                    selected_user["user_id"],
+                    replacement_password,
+                    actor_username=(
+                        actor_username
+                    ),
+                    actor_user_id=(
+                        actor_user_id
+                    ),
+                )
+                demo_success(
+                    "Password reset successfully."
+                )
+                st.rerun()
+            except Exception as exc:
+                logger.exception(
+                    "Unable to reset user password."
+                )
+                st.error(
+                    f"Unable to reset password: {exc}"
+                )
+
+    st.markdown("#### Tenant Access")
+
+    available_clients = (
+        _get_visible_clients(
+            include_client_key=True
+        )
+    )
+
+    if not available_clients:
+        demo_info(
+            "No saved client accounts are available."
+        )
+    else:
+        assigned_keys = set(
+            selected_user.get(
+                "client_keys",
+                [],
+            )
+        )
+
+        client_by_key = {
+            client[9]: client
+            for client in available_clients
+        }
+
+        unassigned_clients = [
+            client
+            for client in available_clients
+            if client[9] not in assigned_keys
+        ]
+
+        assigned_clients = [
+            client_by_key[client_key]
+            for client_key in assigned_keys
+            if client_key in client_by_key
+        ]
+
+        tenant_col1, tenant_col2 = (
+            st.columns(2)
+        )
+
+        with tenant_col1:
+            st.markdown("##### Grant Access")
+
+            if unassigned_clients:
+                grant_options = {
+                    (
+                        f"{client[1]} | "
+                        f"{client[5]} | "
+                        f"{client[9]}"
+                    ): client
+                    for client in (
+                        unassigned_clients
+                    )
+                }
+
+                grant_label = st.selectbox(
+                    "Client to Grant",
+                    list(
+                        grant_options.keys()
+                    ),
+                    key=(
+                        "grant_client_"
+                        + selected_user["user_id"]
+                    ),
+                )
+
+                if st.button(
+                    "Grant Client Access",
+                    key=(
+                        "grant_client_button_"
+                        + selected_user["user_id"]
+                    ),
+                ):
+                    try:
+                        grant_client = (
+                            grant_options[
+                                grant_label
+                            ]
+                        )
+
+                        grant_managed_user_client(
+                            selected_user[
+                                "user_id"
+                            ],
+                            grant_client[9],
+                            actor_username=(
+                                actor_username
+                            ),
+                            actor_user_id=(
+                                actor_user_id
+                            ),
+                        )
+                        demo_success(
+                            "Client access granted."
+                        )
+                        st.rerun()
+                    except Exception as exc:
+                        logger.exception(
+                            "Unable to grant client access."
+                        )
+                        st.error(
+                            "Unable to grant access: "
+                            f"{exc}"
+                        )
+            else:
+                demo_info(
+                    "All available clients are "
+                    "already assigned."
+                )
+
+        with tenant_col2:
+            st.markdown("##### Revoke Access")
+
+            if assigned_clients:
+                revoke_options = {
+                    (
+                        f"{client[1]} | "
+                        f"{client[5]} | "
+                        f"{client[9]}"
+                    ): client
+                    for client in (
+                        assigned_clients
+                    )
+                }
+
+                revoke_label = st.selectbox(
+                    "Client to Revoke",
+                    list(
+                        revoke_options.keys()
+                    ),
+                    key=(
+                        "revoke_client_"
+                        + selected_user["user_id"]
+                    ),
+                )
+
+                if st.button(
+                    "Revoke Client Access",
+                    key=(
+                        "revoke_client_button_"
+                        + selected_user["user_id"]
+                    ),
+                ):
+                    try:
+                        revoke_client = (
+                            revoke_options[
+                                revoke_label
+                            ]
+                        )
+
+                        revoke_managed_user_client(
+                            selected_user[
+                                "user_id"
+                            ],
+                            revoke_client[9],
+                            actor_username=(
+                                actor_username
+                            ),
+                            actor_user_id=(
+                                actor_user_id
+                            ),
+                        )
+                        demo_success(
+                            "Client access revoked."
+                        )
+                        st.rerun()
+                    except Exception as exc:
+                        logger.exception(
+                            "Unable to revoke client access."
+                        )
+                        st.error(
+                            "Unable to revoke access: "
+                            f"{exc}"
+                        )
+            else:
+                demo_info(
+                    "No client assignments exist "
+                    "for this user."
+                )
+
+    st.divider()
+    st.subheader("Authentication Audit History")
+
+    try:
+        audit_events = (
+            list_authentication_audit_events(
+                limit=100
+            )
+        )
+
+        if audit_events:
+            audit_rows = []
+
+            for event in audit_events:
+                audit_rows.append(
+                    {
+                        "Occurred At": event[
+                            "occurred_at"
+                        ],
+                        "Event": event[
+                            "event_type"
+                        ],
+                        "Success": event[
+                            "success"
+                        ],
+                        "Username": (
+                            event["username"]
+                            or ""
+                        ),
+                        "Client Key": (
+                            event["client_key"]
+                            or ""
+                        ),
+                        "Details": str(
+                            event.get(
+                                "details",
+                                {},
+                            )
+                        ),
+                    }
+                )
+
+            audit_dataframe = pd.DataFrame(
+                audit_rows
+            )
+
+            demo_dataframe(
+                audit_dataframe,
+                width="stretch",
+            )
+        else:
+            demo_info(
+                "No authentication audit events "
+                "were found."
+            )
+    except Exception as exc:
+        logger.exception(
+            "Unable to load authentication audit events."
+        )
+        st.error(
+            f"Unable to load audit history: {exc}"
+        )
+
+    st.stop()
 
 
 if page == "Client Accounts":
