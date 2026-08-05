@@ -345,3 +345,40 @@ def get_all_assets_admin():
         connection.close()
 
     return rows
+
+
+def get_assets_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Return assets visible to the authenticated identity.
+
+    Global administrators receive the complete inventory.
+    Tenant-scoped users receive assets only from assigned clients.
+    """
+
+    if is_global_admin:
+        return get_all_assets_admin()
+
+    normalized_client_keys = sorted(
+        {
+            str(client_key or "").strip()
+            for client_key in (
+                client_keys or []
+            )
+            if str(
+                client_key or ""
+            ).strip()
+        }
+    )
+
+    visible_assets = []
+
+    for client_key in normalized_client_keys:
+        visible_assets.extend(
+            get_assets(client_key)
+        )
+
+    return visible_assets

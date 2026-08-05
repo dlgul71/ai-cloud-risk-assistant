@@ -141,6 +141,7 @@ def test_tenant_user_receives_only_tenant_safe_pages():
             pages,
         )
         == [
-            "Client Security Dashboard"
+            "Executive Dashboard",
+            "Client Security Dashboard",
         ]
     )

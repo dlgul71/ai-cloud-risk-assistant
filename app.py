@@ -2026,15 +2026,21 @@ if page == "Risk Trends":
 
 if page == "Executive Dashboard":
 
-    from client_db import get_clients
-    from asset_db import get_all_assets_admin
+    from asset_db import get_assets_for_access
     import pandas as pd
 
     st.title("Executive Dashboard")
     demo_caption("Multi-client executive risk overview")
 
-    clients = get_clients()
-    assets = get_all_assets_admin()
+    clients = _get_visible_clients()
+    assets = get_assets_for_access(
+        client_keys=(
+            _current_user_client_keys()
+        ),
+        is_global_admin=(
+            _current_user_is_global_admin()
+        ),
+    )
 
     total_clients = len(clients)
     total_assets = len(assets)

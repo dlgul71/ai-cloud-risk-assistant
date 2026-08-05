@@ -84,6 +84,7 @@ def require_global_admin(
 TENANT_SCOPED_PAGES = frozenset(
     {
         "Client Security Dashboard",
+        "Executive Dashboard",
     }
 )
 
