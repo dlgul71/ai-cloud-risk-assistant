@@ -3389,13 +3389,20 @@ if page == "Client Security Dashboard":
 
 if page == "Asset Dashboard":
 
-    from asset_db import get_all_assets_admin
+    from asset_db import get_assets_for_access
     import pandas as pd
 
     st.title("Asset Dashboard")
     demo_caption("CAASM-style asset inventory for client AWS assets")
 
-    assets = get_all_assets_admin()
+    assets = get_assets_for_access(
+        client_keys=(
+            _current_user_client_keys()
+        ),
+        is_global_admin=(
+            _current_user_is_global_admin()
+        ),
+    )
 
     columns = [
         "Asset ID",

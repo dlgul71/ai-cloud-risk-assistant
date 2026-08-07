@@ -131,6 +131,7 @@ def test_tenant_user_receives_only_tenant_safe_pages():
         "Executive Dashboard",
         "Client Security Dashboard",
         "SOC Dashboard",
+        "Asset Dashboard",
         "Client Accounts",
         "System Health",
     ]
@@ -145,5 +146,6 @@ def test_tenant_user_receives_only_tenant_safe_pages():
             "Executive Dashboard",
             "Client Security Dashboard",
             "SOC Dashboard",
+            "Asset Dashboard",
         ]
     )
