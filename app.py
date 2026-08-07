@@ -1571,18 +1571,32 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 
 if page == "SOC Dashboard":
 
-    from asset_db import get_all_assets_admin
+    from asset_db import get_assets_for_access
     from remediation_db import (
-        get_all_remediation_items_admin,
+        get_remediation_items_for_access,
     )
     import pandas as pd
 
     st.title("SOC Dashboard")
     demo_caption("Executive security operations overview")
 
-    assets = get_all_assets_admin()
+    assets = get_assets_for_access(
+        client_keys=(
+            _current_user_client_keys()
+        ),
+        is_global_admin=(
+            _current_user_is_global_admin()
+        ),
+    )
     remediation_items = (
-        get_all_remediation_items_admin()
+        get_remediation_items_for_access(
+            client_keys=(
+                _current_user_client_keys()
+            ),
+            is_global_admin=(
+                _current_user_is_global_admin()
+            ),
+        )
     )
 
     asset_count = len(assets)

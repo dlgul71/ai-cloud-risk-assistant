@@ -644,3 +644,42 @@ def deduplicate_open_remediation_items(
         }
     finally:
         connection.close()
+
+
+def get_remediation_items_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Return remediation items visible to the authenticated user.
+
+    Global administrators receive all remediation records.
+    Tenant users receive records only for assigned client keys.
+    """
+
+    if is_global_admin:
+        return get_all_remediation_items_admin()
+
+    normalized_client_keys = sorted(
+        {
+            str(client_key or "").strip()
+            for client_key in (
+                client_keys or []
+            )
+            if str(
+                client_key or ""
+            ).strip()
+        }
+    )
+
+    visible_items = []
+
+    for client_key in normalized_client_keys:
+        visible_items.extend(
+            get_remediation_items(
+                client_key
+            )
+        )
+
+    return visible_items

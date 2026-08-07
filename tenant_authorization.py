@@ -85,6 +85,7 @@ TENANT_SCOPED_PAGES = frozenset(
     {
         "Client Security Dashboard",
         "Executive Dashboard",
+        "SOC Dashboard",
     }
 )
 
