@@ -1,10 +1,15 @@
 from pathlib import Path
 from demo_mode import sanitize_text
 
-from asset_db import get_all_assets_admin
+from asset_db import (
+    get_all_assets_admin,
+    get_assets_for_access,
+)
 from remediation_db import (
     get_all_remediation_items_admin,
     get_all_remediation_items_with_context_admin,
+    get_remediation_items_for_access,
+    get_remediation_items_with_client_context,
 )
 from remediation_execution import get_execution_actions
 from caasm_snapshot_engine import load_caasm_snapshots
@@ -122,6 +127,129 @@ def build_security_context():
         "execution_actions": execution_rows,
         "latest_caasm_snapshot": latest_caasm_snapshot,
         "caasm_snapshot_count": len(caasm_snapshots)
+    }
+
+
+def build_security_context_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Build AI security context within the authenticated tenant boundary.
+
+    Global administrators may receive global platform context.
+    Tenant-scoped identities receive data only for assigned client keys.
+
+    Execution actions and CAASM snapshots currently lack a complete
+    tenant boundary, so they fail closed for tenant-scoped identities.
+    """
+
+    if is_global_admin:
+        return build_security_context()
+
+    normalized_client_keys = tuple(
+        sorted(
+            {
+                str(client_key or "").strip()
+                for client_key in (client_keys or [])
+                if str(client_key or "").strip()
+            }
+        )
+    )
+
+    assets = get_assets_for_access(
+        client_keys=normalized_client_keys,
+        is_global_admin=False,
+    )
+
+    remediation_items = get_remediation_items_for_access(
+        client_keys=normalized_client_keys,
+        is_global_admin=False,
+    )
+
+    remediation_items_with_context = []
+
+    for client_key in normalized_client_keys:
+        remediation_items_with_context.extend(
+            get_remediation_items_with_client_context(
+                client_key
+            )
+        )
+
+    asset_rows = []
+
+    for asset in assets:
+        asset_rows.append({
+            "asset_id": asset[0],
+            "asset_type": asset[1],
+            "account_id": asset[2],
+            "region": asset[3],
+            "hostname": asset[4],
+            "private_ip": asset[5],
+            "public_ip": asset[6],
+            "state": asset[7],
+            "risk_score": asset[8],
+            "last_scan": asset[9],
+        })
+
+    remediation_rows = []
+
+    for item in remediation_items:
+        remediation_rows.append({
+            "id": item[0],
+            "created_at": item[1],
+            "category": item[2],
+            "priority": item[3],
+            "finding": item[4],
+            "recommendation": item[5],
+            "owner": item[6],
+            "status": item[7],
+            "risk_score": item[8],
+            "occurrence_count": (
+                item[9] if len(item) > 9 else 1
+            ),
+            "last_seen_at": (
+                item[10] if len(item) > 10 else None
+            ),
+        })
+
+    remediation_rows_with_context = []
+
+    for item in remediation_items_with_context:
+        remediation_rows_with_context.append({
+            "id": item[0],
+            "created_at": item[1],
+            "category": item[2],
+            "priority": item[3],
+            "finding": item[4],
+            "recommendation": item[5],
+            "owner": item[6],
+            "status": item[7],
+            "risk_score": item[8],
+            "occurrence_count": (
+                item[9] if len(item) > 9 else 1
+            ),
+            "last_seen_at": (
+                item[10] if len(item) > 10 else None
+            ),
+            "aws_account_id": (
+                item[11] if len(item) > 11 else None
+            ),
+            "client_name": (
+                item[12] if len(item) > 12 else None
+            ),
+        })
+
+    return {
+        "assets": asset_rows,
+        "remediation_items": remediation_rows,
+        "remediation_items_with_context": (
+            remediation_rows_with_context
+        ),
+        "execution_actions": [],
+        "latest_caasm_snapshot": {},
+        "caasm_snapshot_count": 0,
     }
 
 
