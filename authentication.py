@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
-PASSWORD_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_ALGORITHM = "pbkdf2_sha256"  # nosec B105
 DEFAULT_PBKDF2_ITERATIONS = 600_000
 MIN_PBKDF2_ITERATIONS = 100_000
 MAX_PBKDF2_ITERATIONS = 2_000_000

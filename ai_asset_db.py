@@ -261,33 +261,38 @@ def get_ai_assets_for_access(
         if not normalized_client_keys:
             return []
 
-        placeholders = ",".join(
-            "?"
-            for _ in normalized_client_keys
-        )
+        rows = []
 
-        return cursor.execute(
-            f"""
-            SELECT
-                client_key,
-                ai_asset_id,
-                asset_type,
-                name,
-                provider,
-                environment,
-                description,
-                risk_score,
-                status,
-                created_at,
-                updated_at
-            FROM ai_assets
-            WHERE client_key IN ({placeholders})
-            ORDER BY
-                risk_score DESC,
-                name
-            """,
-            normalized_client_keys,
-        ).fetchall()
+        for client_key in normalized_client_keys:
+            rows.extend(
+                cursor.execute(
+                    """
+                    SELECT
+                        client_key,
+                        ai_asset_id,
+                        asset_type,
+                        name,
+                        provider,
+                        environment,
+                        description,
+                        risk_score,
+                        status,
+                        created_at,
+                        updated_at
+                    FROM ai_assets
+                    WHERE client_key = ?
+                    """,
+                    (client_key,),
+                ).fetchall()
+            )
+
+        return sorted(
+            rows,
+            key=lambda row: (
+                -(row[7] or 0),
+                str(row[3] or ""),
+            ),
+        )
 
     finally:
         connection.close()
@@ -398,25 +403,30 @@ def get_ai_relationships_for_access(
         if not normalized_client_keys:
             return []
 
-        placeholders = ",".join(
-            "?"
-            for _ in normalized_client_keys
-        )
+        rows = []
 
-        return cursor.execute(
-            f"""
-            SELECT
-                client_key,
-                source_asset_id,
-                relationship_type,
-                target_asset_id,
-                created_at
-            FROM ai_asset_relationships
-            WHERE client_key IN ({placeholders})
-            ORDER BY created_at DESC
-            """,
-            normalized_client_keys,
-        ).fetchall()
+        for client_key in normalized_client_keys:
+            rows.extend(
+                cursor.execute(
+                    """
+                    SELECT
+                        client_key,
+                        source_asset_id,
+                        relationship_type,
+                        target_asset_id,
+                        created_at
+                    FROM ai_asset_relationships
+                    WHERE client_key = ?
+                    """,
+                    (client_key,),
+                ).fetchall()
+            )
+
+        return sorted(
+            rows,
+            key=lambda row: str(row[4] or ""),
+            reverse=True,
+        )
 
     finally:
         connection.close()

@@ -220,33 +220,46 @@ def add_client(
 def get_clients(*, include_client_key=False):
     init_client_db()
 
-    selected_columns = """
-        id,
-        client_name,
-        aws_account_id,
-        role_arn,
-        environment,
-        cloud_provider,
-        azure_subscription_id,
-        azure_tenant_id,
-        azure_client_id
-    """
-
-    if include_client_key:
-        selected_columns += ", client_key"
-
     connection = sqlite3.connect(_database_path())
 
     try:
         cursor = connection.cursor()
 
-        cursor.execute(
-            f"""
-            SELECT {selected_columns}
-            FROM clients
-            ORDER BY id
-            """
-        )
+        if include_client_key:
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    client_name,
+                    aws_account_id,
+                    role_arn,
+                    environment,
+                    cloud_provider,
+                    azure_subscription_id,
+                    azure_tenant_id,
+                    azure_client_id,
+                    client_key
+                FROM clients
+                ORDER BY id
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    client_name,
+                    aws_account_id,
+                    role_arn,
+                    environment,
+                    cloud_provider,
+                    azure_subscription_id,
+                    azure_tenant_id,
+                    azure_client_id
+                FROM clients
+                ORDER BY id
+                """
+            )
 
         return cursor.fetchall()
     finally:
@@ -316,40 +329,57 @@ def get_clients_for_access(
 
     init_client_db()
 
-    selected_columns = """
-        id,
-        client_name,
-        aws_account_id,
-        role_arn,
-        environment,
-        cloud_provider,
-        azure_subscription_id,
-        azure_tenant_id,
-        azure_client_id
-    """
-
-    if include_client_key:
-        selected_columns += ", client_key"
-
-    placeholders = ", ".join(
-        "?"
-        for _ in normalized_keys
-    )
-
     connection = sqlite3.connect(
         _database_path()
     )
 
     try:
-        return connection.execute(
-            f"""
-            SELECT {selected_columns}
-            FROM clients
-            WHERE client_key IN ({placeholders})
-            ORDER BY id
-            """,
-            tuple(normalized_keys),
-        ).fetchall()
+        rows = []
+
+        for client_key in normalized_keys:
+            if include_client_key:
+                query = """
+                    SELECT
+                        id,
+                        client_name,
+                        aws_account_id,
+                        role_arn,
+                        environment,
+                        cloud_provider,
+                        azure_subscription_id,
+                        azure_tenant_id,
+                        azure_client_id,
+                        client_key
+                    FROM clients
+                    WHERE client_key = ?
+                """
+            else:
+                query = """
+                    SELECT
+                        id,
+                        client_name,
+                        aws_account_id,
+                        role_arn,
+                        environment,
+                        cloud_provider,
+                        azure_subscription_id,
+                        azure_tenant_id,
+                        azure_client_id
+                    FROM clients
+                    WHERE client_key = ?
+                """
+
+            rows.extend(
+                connection.execute(
+                    query,
+                    (client_key,),
+                ).fetchall()
+            )
+
+        return sorted(
+            rows,
+            key=lambda row: row[0],
+        )
     finally:
         connection.close()
 
