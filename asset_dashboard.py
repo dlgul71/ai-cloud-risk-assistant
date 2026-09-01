@@ -1,8 +1,8 @@
-from asset_db import get_assets
+from asset_db import get_all_assets_admin
 
 
 def get_top_risky_assets(limit=10):
-    assets = get_assets()
+    assets = get_all_assets_admin()
 
     sorted_assets = sorted(
         assets,

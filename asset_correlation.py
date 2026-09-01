@@ -1,9 +1,9 @@
-from asset_db import get_assets
+from asset_db import get_all_assets_admin
 from securityhub_ingest import get_securityhub_findings
 from guardduty_ingest import get_guardduty_findings
 
 def correlate_securityhub_to_assets():
-    assets = get_assets()
+    assets = get_all_assets_admin()
     findings = get_securityhub_findings()
 
     correlated = []
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     for item in results:
         print(item)
 def correlate_guardduty_to_assets():
-    assets = get_assets()
+    assets = get_all_assets_admin()
     findings = get_guardduty_findings()
 
     correlated = []

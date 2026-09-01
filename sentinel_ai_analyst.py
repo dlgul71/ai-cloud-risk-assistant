@@ -1,20 +1,27 @@
 from pathlib import Path
 from demo_mode import sanitize_text
 
-from asset_db import get_assets
+from asset_db import (
+    get_all_assets_admin,
+    get_assets_for_access,
+)
 from remediation_db import (
-    get_remediation_items,
-    get_remediation_items_with_client_context
+    get_all_remediation_items_admin,
+    get_all_remediation_items_with_context_admin,
+    get_remediation_items_for_access,
+    get_remediation_items_with_client_context,
 )
 from remediation_execution import get_execution_actions
 from caasm_snapshot_engine import load_caasm_snapshots
 
 
 def build_security_context():
-    assets = get_assets()
-    remediation_items = get_remediation_items()
+    assets = get_all_assets_admin()
+    remediation_items = (
+        get_all_remediation_items_admin()
+    )
     remediation_items_with_context = (
-        get_remediation_items_with_client_context()
+        get_all_remediation_items_with_context_admin()
     )
     execution_actions = get_execution_actions()
     caasm_snapshots = load_caasm_snapshots()
@@ -120,6 +127,129 @@ def build_security_context():
         "execution_actions": execution_rows,
         "latest_caasm_snapshot": latest_caasm_snapshot,
         "caasm_snapshot_count": len(caasm_snapshots)
+    }
+
+
+def build_security_context_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Build AI security context within the authenticated tenant boundary.
+
+    Global administrators may receive global platform context.
+    Tenant-scoped identities receive data only for assigned client keys.
+
+    Execution actions and CAASM snapshots currently lack a complete
+    tenant boundary, so they fail closed for tenant-scoped identities.
+    """
+
+    if is_global_admin:
+        return build_security_context()
+
+    normalized_client_keys = tuple(
+        sorted(
+            {
+                str(client_key or "").strip()
+                for client_key in (client_keys or [])
+                if str(client_key or "").strip()
+            }
+        )
+    )
+
+    assets = get_assets_for_access(
+        client_keys=normalized_client_keys,
+        is_global_admin=False,
+    )
+
+    remediation_items = get_remediation_items_for_access(
+        client_keys=normalized_client_keys,
+        is_global_admin=False,
+    )
+
+    remediation_items_with_context = []
+
+    for client_key in normalized_client_keys:
+        remediation_items_with_context.extend(
+            get_remediation_items_with_client_context(
+                client_key
+            )
+        )
+
+    asset_rows = []
+
+    for asset in assets:
+        asset_rows.append({
+            "asset_id": asset[0],
+            "asset_type": asset[1],
+            "account_id": asset[2],
+            "region": asset[3],
+            "hostname": asset[4],
+            "private_ip": asset[5],
+            "public_ip": asset[6],
+            "state": asset[7],
+            "risk_score": asset[8],
+            "last_scan": asset[9],
+        })
+
+    remediation_rows = []
+
+    for item in remediation_items:
+        remediation_rows.append({
+            "id": item[0],
+            "created_at": item[1],
+            "category": item[2],
+            "priority": item[3],
+            "finding": item[4],
+            "recommendation": item[5],
+            "owner": item[6],
+            "status": item[7],
+            "risk_score": item[8],
+            "occurrence_count": (
+                item[9] if len(item) > 9 else 1
+            ),
+            "last_seen_at": (
+                item[10] if len(item) > 10 else None
+            ),
+        })
+
+    remediation_rows_with_context = []
+
+    for item in remediation_items_with_context:
+        remediation_rows_with_context.append({
+            "id": item[0],
+            "created_at": item[1],
+            "category": item[2],
+            "priority": item[3],
+            "finding": item[4],
+            "recommendation": item[5],
+            "owner": item[6],
+            "status": item[7],
+            "risk_score": item[8],
+            "occurrence_count": (
+                item[9] if len(item) > 9 else 1
+            ),
+            "last_seen_at": (
+                item[10] if len(item) > 10 else None
+            ),
+            "aws_account_id": (
+                item[11] if len(item) > 11 else None
+            ),
+            "client_name": (
+                item[12] if len(item) > 12 else None
+            ),
+        })
+
+    return {
+        "assets": asset_rows,
+        "remediation_items": remediation_rows,
+        "remediation_items_with_context": (
+            remediation_rows_with_context
+        ),
+        "execution_actions": [],
+        "latest_caasm_snapshot": {},
+        "caasm_snapshot_count": 0,
     }
 
 
@@ -1116,3 +1246,556 @@ def get_persistent_remediation_items(context, minimum_occurrences=2, limit=10):
         ),
         reverse=True
     )[:limit]
+
+
+
+def get_available_clients_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Return only clients visible to the authenticated identity.
+    """
+
+    try:
+        from client_db import get_clients_for_access
+
+        rows = get_clients_for_access(
+            client_keys=client_keys,
+            is_global_admin=is_global_admin,
+            include_client_key=True,
+        )
+
+        return [
+            {
+                "id": row[0],
+                "client_name": row[1],
+                "aws_account_id": row[2],
+                "role_arn": row[3],
+                "environment": row[4],
+                "cloud_provider": (
+                    row[5] if len(row) > 5 else None
+                ),
+                "azure_subscription_id": (
+                    row[6] if len(row) > 6 else None
+                ),
+                "azure_tenant_id": (
+                    row[7] if len(row) > 7 else None
+                ),
+                "azure_client_id": (
+                    row[8] if len(row) > 8 else None
+                ),
+                "client_key": (
+                    row[9] if len(row) > 9 else None
+                ),
+            }
+            for row in rows
+        ]
+
+    except Exception:
+        return []
+
+
+def compare_clients_by_combined_risk_for_access(
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Compare risk only across clients visible to the authenticated user.
+    """
+
+    context = build_security_context_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
+
+    assets = context.get("assets", [])
+
+    remediation_items = context.get(
+        "remediation_items_with_context",
+        [],
+    )
+
+    clients = get_available_clients_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
+
+    client_rows = []
+
+    for client in clients:
+        account_id = str(
+            client.get("aws_account_id", "")
+        )
+
+        client_assets = [
+            asset
+            for asset in assets
+            if str(asset.get("account_id")) == account_id
+        ]
+
+        client_remediation = [
+            item
+            for item in remediation_items
+            if str(item.get("aws_account_id")) == account_id
+        ]
+
+        risk_scores = [
+            asset.get("risk_score", 0) or 0
+            for asset in client_assets
+        ]
+
+        avg_asset_risk = round(
+            sum(risk_scores) / len(risk_scores),
+            2,
+        ) if risk_scores else 0
+
+        highest_asset_risk = (
+            max(risk_scores)
+            if risk_scores
+            else 0
+        )
+
+        public_assets = len([
+            asset
+            for asset in client_assets
+            if asset.get("public_ip")
+        ])
+
+        critical_assets = len([
+            asset
+            for asset in client_assets
+            if (asset.get("risk_score", 0) or 0) >= 80
+        ])
+
+        critical_remediation = len([
+            item
+            for item in client_remediation
+            if str(
+                item.get("priority", "")
+            ).upper() == "CRITICAL"
+        ])
+
+        high_remediation = len([
+            item
+            for item in client_remediation
+            if str(
+                item.get("priority", "")
+            ).upper() == "HIGH"
+        ])
+
+        open_remediation = len([
+            item
+            for item in client_remediation
+            if str(
+                item.get("status", "")
+            ).lower() == "open"
+        ])
+
+        combined_risk_score = round(
+            min(
+                100,
+                (highest_asset_risk * 0.40)
+                + (avg_asset_risk * 0.20)
+                + min(
+                    20,
+                    critical_remediation * 10,
+                )
+                + min(
+                    10,
+                    high_remediation * 5,
+                )
+                + min(
+                    10,
+                    public_assets * 10,
+                )
+            ),
+            2,
+        )
+
+        client_rows.append({
+            "Client": client.get("client_name"),
+            "AWS Account ID": account_id,
+            "Environment": client.get("environment"),
+            "Total Assets": len(client_assets),
+            "Average Asset Risk": avg_asset_risk,
+            "Highest Asset Risk": highest_asset_risk,
+            "Public Assets": public_assets,
+            "Critical Assets": critical_assets,
+            "Open Remediation": open_remediation,
+            "Critical Remediation": critical_remediation,
+            "High Remediation": high_remediation,
+            "Combined Risk Score": combined_risk_score,
+        })
+
+    return sorted(
+        client_rows,
+        key=lambda item: item.get(
+            "Combined Risk Score",
+            0,
+        ),
+        reverse=True,
+    )
+
+
+def generate_local_analyst_response_for_access(
+    question,
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Generate local AI-style analysis using only authorized tenant data.
+    """
+
+    context = build_security_context_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
+
+    metrics = calculate_analyst_metrics(context)
+    top_items = get_top_remediation_items(
+        context,
+        limit=10,
+    )
+
+    question_text = str(question).lower()
+
+    if (
+        "which client" in question_text
+        or "compare clients" in question_text
+        or "highest risk client" in question_text
+        or "client risk ranking" in question_text
+    ):
+        client_rows = (
+            compare_clients_by_combined_risk_for_access(
+                client_keys=client_keys,
+                is_global_admin=is_global_admin,
+            )
+        )
+
+        lines = [
+            "DGS Sentinel AI — Authorized Client Risk Ranking",
+            "=" * 60,
+            "",
+        ]
+
+        if not client_rows:
+            lines.append(
+                "No authorized client-risk data is available."
+            )
+            return sanitize_text("\n".join(lines))
+
+        for index, client in enumerate(
+            client_rows,
+            start=1,
+        ):
+            lines.append(
+                f"{index}. {client.get('Client')} "
+                f"| Account: "
+                f"{client.get('AWS Account ID')} "
+                f"| Combined Risk Score: "
+                f"{client.get('Combined Risk Score')} "
+                f"| Assets: "
+                f"{client.get('Total Assets')} "
+                f"| Open Remediation: "
+                f"{client.get('Open Remediation')}"
+            )
+
+        return sanitize_text("\n".join(lines))
+
+    if (
+        "what changed" in question_text
+        or "since the last" in question_text
+        or "snapshot comparison" in question_text
+        or "posture change" in question_text
+    ):
+        if is_global_admin:
+            return generate_caasm_change_summary()
+
+        return sanitize_text(
+            "CAASM snapshot comparison is unavailable for "
+            "tenant-scoped analysis until snapshots have an "
+            "explicit tenant boundary."
+        )
+
+    lines = [
+        "DGS Sentinel AI Security Analyst",
+        "",
+        "Authorized Security Summary",
+        "-" * 50,
+    ]
+
+    for key, value in metrics.items():
+        lines.append(f"{key}: {value}")
+
+    if (
+        "top risk" in question_text
+        or "fix first" in question_text
+        or "priority" in question_text
+        or "critical" in question_text
+    ):
+        lines.extend([
+            "",
+            "Top Authorized Remediation Priorities",
+            "-" * 50,
+        ])
+
+        if top_items:
+            for item in top_items:
+                lines.append(
+                    f"{item.get('priority')} | "
+                    f"{item.get('category')} | "
+                    f"{item.get('finding')} | "
+                    f"Risk Score: "
+                    f"{item.get('risk_score')}"
+                )
+
+                lines.append(
+                    f"Recommendation: "
+                    f"{item.get('recommendation')}"
+                )
+        else:
+            lines.append(
+                "No authorized remediation items are available."
+            )
+
+    elif (
+        "caasm" in question_text
+        or "identity" in question_text
+        or "mfa" in question_text
+    ):
+        if not is_global_admin:
+            lines.extend([
+                "",
+                "Tenant Security Context",
+                "-" * 50,
+                (
+                    "Global CAASM snapshot and identity metrics "
+                    "are excluded until those records have an "
+                    "explicit tenant boundary."
+                ),
+            ])
+        else:
+            lines.extend([
+                "",
+                "CAASM and Identity Governance Summary",
+                "-" * 50,
+                (
+                    f"CAASM Score: "
+                    f"{metrics.get('CAASM Score')}"
+                ),
+                (
+                    f"Asset Coverage %: "
+                    f"{metrics.get('Asset Coverage %')}"
+                ),
+                (
+                    f"MFA Coverage %: "
+                    f"{metrics.get('MFA Coverage %')}"
+                ),
+                (
+                    f"Orphaned Accounts: "
+                    f"{metrics.get('Orphaned Accounts')}"
+                ),
+                (
+                    f"Privileged Without MFA: "
+                    f"{metrics.get('Privileged Without MFA')}"
+                ),
+            ])
+
+    else:
+        lines.extend([
+            "",
+            "Recommended Focus",
+            "-" * 50,
+            "1. Review authorized critical and high-risk findings.",
+            "2. Review public-facing assets.",
+            "3. Validate IAM and MFA controls.",
+            "4. Address recurring remediation items.",
+            "5. Continue recurring tenant-scoped scans.",
+        ])
+
+    lines.extend([
+        "",
+        (
+            "Note: This response uses only data authorized "
+            "for the authenticated identity."
+        ),
+    ])
+
+    return sanitize_text("\n".join(lines))
+
+
+def generate_client_analyst_response_for_access(
+    question,
+    client_name,
+    aws_account_id,
+    *,
+    client_keys=None,
+    is_global_admin=False,
+):
+    """
+    Generate client-specific analysis only after access validation.
+    """
+
+    visible_clients = get_available_clients_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
+
+    authorized_accounts = {
+        str(
+            client.get("aws_account_id", "")
+        )
+        for client in visible_clients
+        if client.get("aws_account_id")
+    }
+
+    normalized_account_id = str(
+        aws_account_id or ""
+    )
+
+    if normalized_account_id not in authorized_accounts:
+        return sanitize_text(
+            "Access denied: the selected client account is "
+            "not authorized for the authenticated identity."
+        )
+
+    context = build_security_context_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
+
+    filtered_context = filter_context_by_account(
+        context=context,
+        aws_account_id=aws_account_id,
+    )
+
+    metrics = calculate_analyst_metrics(
+        filtered_context
+    )
+
+    top_items = get_top_remediation_items(
+        filtered_context,
+        limit=10,
+    )
+
+    question_text = str(question).lower()
+
+    lines = [
+        "DGS Sentinel AI — Client Analyst Response",
+        "=" * 60,
+        "",
+        f"Client: {client_name}",
+        f"AWS Account ID: {aws_account_id}",
+        "",
+        "Authorized Client Metrics",
+        "-" * 60,
+    ]
+
+    for key, value in metrics.items():
+        lines.append(f"{key}: {value}")
+
+    if (
+        "top risk" in question_text
+        or "fix first" in question_text
+        or "priority" in question_text
+        or "critical" in question_text
+    ):
+        lines.extend([
+            "",
+            "Top Client Remediation Priorities",
+            "-" * 60,
+        ])
+
+        if top_items:
+            for index, item in enumerate(
+                top_items,
+                start=1,
+            ):
+                lines.append(
+                    f"{index}. "
+                    f"{item.get('priority')} | "
+                    f"{item.get('category')} | "
+                    f"{item.get('finding')} | "
+                    f"Risk Score: "
+                    f"{item.get('risk_score')}"
+                )
+
+                lines.append(
+                    f"   Recommendation: "
+                    f"{item.get('recommendation')}"
+                )
+        else:
+            lines.append(
+                "No authorized client-specific remediation "
+                "items are available."
+            )
+
+    elif (
+        "identity" in question_text
+        or "mfa" in question_text
+    ):
+        identity_items = [
+            item
+            for item in top_items
+            if (
+                "identity" in str(
+                    item.get("category", "")
+                ).lower()
+                or "iam" in str(
+                    item.get("finding", "")
+                ).lower()
+                or "mfa" in str(
+                    item.get("finding", "")
+                ).lower()
+            )
+        ]
+
+        lines.extend([
+            "",
+            "Client Identity-Risk Summary",
+            "-" * 60,
+        ])
+
+        if identity_items:
+            for index, item in enumerate(
+                identity_items,
+                start=1,
+            ):
+                lines.append(
+                    f"{index}. "
+                    f"{item.get('priority')} | "
+                    f"{item.get('finding')} | "
+                    f"Risk Score: "
+                    f"{item.get('risk_score')}"
+                )
+        else:
+            lines.append(
+                "No authorized client-specific identity-risk "
+                "findings are available."
+            )
+
+    else:
+        lines.extend([
+            "",
+            "Recommended Client Focus",
+            "-" * 60,
+            "1. Review public-facing assets.",
+            "2. Review critical and high-risk findings.",
+            "3. Validate IAM and MFA controls.",
+            "4. Review cloud-security findings.",
+            "5. Continue recurring tenant-scoped scans.",
+        ])
+
+    lines.extend([
+        "",
+        (
+            "Note: This response is grounded only in authorized "
+            "data for the selected client account."
+        ),
+    ])
+
+    return sanitize_text("\n".join(lines))

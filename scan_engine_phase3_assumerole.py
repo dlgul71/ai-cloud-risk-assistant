@@ -981,7 +981,19 @@ def scan_client_config(role_arn):
     return findings, scan_errors, service
 
 
-def run_client_scan(role_arn, client_name=None):
+def run_client_scan(
+    role_arn,
+    client_name=None,
+    *,
+    client_key,
+):
+    normalized_client_key = str(
+        client_key or ""
+    ).strip()
+
+    if not normalized_client_key:
+        raise ValueError("client_key is required")
+
     print("=" * 60)
     print("DGS SENTINEL AI PHASE 13 CLIENT AWS SCAN")
     print("=" * 60)
@@ -1034,6 +1046,7 @@ def run_client_scan(role_arn, client_name=None):
 
     for instance in ec2_instances:
         asset_record = {
+            "client_key": normalized_client_key,
             "asset_id": instance.get("instance_id"),
             "asset_type": "EC2",
             "account_id": account_id,
@@ -1060,6 +1073,7 @@ def run_client_scan(role_arn, client_name=None):
         user_name = iam_user.get("user_name", "Unknown")
 
         save_asset({
+            "client_key": normalized_client_key,
             "asset_id": f"{account_id}:iam:{user_name}",
             "asset_type": "IAM User",
             "account_id": account_id,
@@ -1084,6 +1098,7 @@ def run_client_scan(role_arn, client_name=None):
         )
 
         save_asset({
+            "client_key": normalized_client_key,
             "asset_id": f"{account_id}:s3:{bucket_name}",
             "asset_type": "S3 Bucket",
             "account_id": account_id,
@@ -1329,6 +1344,7 @@ def run_client_scan(role_arn, client_name=None):
 
         save_remediation_items(
             remediation_plan,
+            client_key=normalized_client_key,
             aws_account_id=account_id,
             client_name=bound_client_name,
         )
