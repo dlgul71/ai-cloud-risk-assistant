@@ -271,13 +271,13 @@ Current backup tooling covers:
 - `assets.db`
 - `clients.db`
 - `remediation.db`
+- `operational_monitoring.db`
 
 The following require explicit backup and restore coverage:
 
 - `users.db`
 - `ai_assets.db`
 - CAASM alert data.
-- Operational-monitoring data.
 - Other required audit or execution data.
 
 Backup creation is insufficient without restoration and integrity verification.

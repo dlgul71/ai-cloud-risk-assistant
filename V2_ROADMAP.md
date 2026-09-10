@@ -214,13 +214,13 @@ Current default coverage:
 - `assets.db`
 - `clients.db`
 - `remediation.db`
+- `operational_monitoring.db`
 
 Required additions:
 
 - `users.db`
 - `ai_assets.db`
 - CAASM alert data.
-- Operational-monitoring data.
 - Other required audit and execution data.
 
 Exit requirements:

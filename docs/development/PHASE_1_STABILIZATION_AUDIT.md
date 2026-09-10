@@ -145,13 +145,13 @@ The current default backup set includes:
 - `assets.db`
 - `clients.db`
 - `remediation.db`
+- `operational_monitoring.db`
 
 The default backup set does not include at least:
 
 - `users.db`
 - `ai_assets.db`
 - CAASM alert persistence.
-- Operational-monitoring persistence.
 
 This is a high-priority recovery and tenant-continuity gap.
 
