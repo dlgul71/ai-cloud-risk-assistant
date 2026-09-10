@@ -189,13 +189,16 @@ Current limitations:
 - Multiple independent SQLite files.
 - CAASM alert persistence uses a relative path outside centralized storage handling.
 
+Accepted decision:
+
+- [ADR-0001: Database and Migration Strategy](docs/architecture/ADR-0001-DATABASE-MIGRATION-STRATEGY.md).
+
 Planned work:
 
 - Document current schemas.
 - Centralize CAASM alert persistence under `DGS_DATA_DIR`.
-- Create an architecture decision record for production persistence.
-- Approve a formal migration strategy.
-- Define PostgreSQL or another production datastore only after architecture review.
+- Implement the accepted versioned-migration strategy.
+- Define PostgreSQL or another production datastore only through a separate architecture decision.
 - Preserve tenant boundaries during migration.
 - Add migration and rollback testing.
 

@@ -407,6 +407,7 @@ The current default backup scope is incomplete and must not be treated as full p
 ## Documentation
 
 - [Current-State Architecture](docs/architecture/CURRENT_STATE.md)
+- [Database Migration Strategy](docs/architecture/ADR-0001-DATABASE-MIGRATION-STRATEGY.md)
 - [Phase 1 Stabilization Audit](docs/development/PHASE_1_STABILIZATION_AUDIT.md)
 - [Enterprise Operations Roadmap](V2_ROADMAP.md)
 - [Changelog](CHANGELOG.md)
