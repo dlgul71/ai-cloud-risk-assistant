@@ -137,6 +137,8 @@ Additional SQLite persistence supports:
 - Tables are created at application runtime.
 - Schema evolution uses inline `ALTER TABLE` logic.
 - No centralized schema-version registry was found.
+- `caasm_alert_db.py` uses a relative `caasm_alerts.db` path instead of `DGS_DATA_DIR`.
+- The relative CAASM alert path may be unwritable in the hardened read-only container.
 
 ### Backup and Recovery Gap
 

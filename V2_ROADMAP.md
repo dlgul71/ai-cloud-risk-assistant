@@ -187,10 +187,12 @@ Current limitations:
 - Runtime table creation.
 - Inline schema updates.
 - Multiple independent SQLite files.
+- CAASM alert persistence uses a relative path outside centralized storage handling.
 
 Planned work:
 
 - Document current schemas.
+- Centralize CAASM alert persistence under `DGS_DATA_DIR`.
 - Create an architecture decision record for production persistence.
 - Approve a formal migration strategy.
 - Define PostgreSQL or another production datastore only after architecture review.

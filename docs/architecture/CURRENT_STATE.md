@@ -251,7 +251,9 @@ Additional persistence supports:
 - Remediation audit records.
 - Remediation execution records.
 
-Database paths use the configured DGS data directory. Docker uses `/data` as the persistent volume.
+Most database paths use the configured DGS data directory. Docker uses `/data` as the persistent volume.
+
+CAASM alert persistence is an exception. `caasm_alert_db.py` currently uses the relative path `caasm_alerts.db` rather than the centralized data-directory helper. Its resolved location therefore depends on the process working directory and may not be writable in the hardened read-only container.
 
 ### Current Persistence Limitations
 
@@ -261,6 +263,7 @@ Database paths use the configured DGS data directory. Docker uses `/data` as the
 - Inline schema updates.
 - Multiple independent database files.
 - Incomplete default backup coverage.
+- CAASM alert persistence is not centralized under `DGS_DATA_DIR`.
 
 SQLite is acceptable for the present engineering stage but is not an approved production-scale multi-tenant persistence architecture.
 

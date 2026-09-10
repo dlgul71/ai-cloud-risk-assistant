@@ -153,7 +153,9 @@ Production credentials must use password hashes or the approved persistent-user 
 
 ## Persistent Data
 
-Runtime data is rooted at `DGS_DATA_DIR`. The hardened container uses `/data`.
+Most runtime data is rooted at `DGS_DATA_DIR`. The hardened container uses `/data`.
+
+`caasm_alert_db.py` is a current exception: it resolves `caasm_alerts.db` relative to the process working directory. Do not assume that CAASM alert data is stored under `DGS_DATA_DIR`.
 
 Known database domains include:
 
@@ -204,9 +206,12 @@ python -m scripts.backup_recovery_cli create \
   --database "${DGS_DATA_DIR}/remediation.db" \
   --database "${DGS_DATA_DIR}/operational_monitoring.db" \
   --database "${DGS_DATA_DIR}/users.db" \
-  --database "${DGS_DATA_DIR}/ai_assets.db" \
-  --database "${DGS_DATA_DIR}/caasm_alerts.db"
+  --database "${DGS_DATA_DIR}/ai_assets.db"
 ```
+
+If CAASM alert persistence is used, determine and document the actual resolved path to `caasm_alerts.db` and include that path with a separate `--database` argument. Do not assume it is located under `DGS_DATA_DIR`.
+
+A hardened read-only container deployment that requires CAASM alert persistence must not proceed until the writable storage path has been explicitly designed, tested, and approved.
 
 If a listed database is not used in the target environment, document that determination rather than silently omitting it.
 
@@ -522,6 +527,7 @@ Deployment is complete only when:
 - No formal staging environment exists.
 - No formal schema-migration framework exists.
 - Default backup coverage remains incomplete.
+- CAASM alert persistence is not yet centralized under `DGS_DATA_DIR`.
 - Recovery requires operator-controlled steps.
 - High availability and automatic failover are not implemented.
 - Centralized production observability is incomplete.
