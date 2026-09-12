@@ -78,13 +78,13 @@ Completed:
 - Coordinated vulnerability disclosure.
 - Engineering contribution standards.
 - Verified release changelog.
+- Consolidated and corrected root README.
+- Production deployment and rollback runbook.
+- Accepted database migration architecture decision record.
+- Controlled release procedure.
 
 Remaining:
 
-- Consolidate and correct the root README.
-- Add production deployment and rollback runbook.
-- Add database and migration architecture decision record.
-- Add release procedure.
 - Add incident-response and recovery runbooks.
 - Add AI security and governance documentation.
 
