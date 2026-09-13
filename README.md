@@ -1,977 +1,442 @@
-# 🛡️ DGS Sentinel AI
+# DGS Sentinel AI
 
-![DGS Sentinel AI Banner](caasm-portfolio-banner.jpg)
+![DGS Sentinel AI](caasm-portfolio-banner.jpg)
 
-Enterprise AI-Powered Cybersecurity Analytics Platform
+A multi-tenant cloud-security analytics platform developed by Data Generated Solutions, LLC.
 
-DGS Sentinel AI is a next-generation cybersecurity analytics and cloud exposure management platform designed to provide real-time visibility across enterprise cloud environments.
+DGS Sentinel AI combines cloud asset discovery, identity exposure analysis, threat intelligence, tenant-scoped risk analytics, AI-assisted reporting, and guarded remediation workflows.
 
+> **Current status:** Phase 1 stabilization. The platform has a production-oriented engineering foundation, but it is not represented as deployed at production scale across multiple paying customers.
 
-The platform combines:
+## Platform Overview
+
+DGS Sentinel AI provides a unified security-analysis layer across AWS, Azure, Axonius, Splunk, vulnerability intelligence, and application-generated evidence.
+
+The platform demonstrates capabilities aligned with:
 
 - Cyber Asset Attack Surface Management (CAASM)
 - Cloud Security Posture Management (CSPM)
-- Cloud-Native Application Protection Platform (CNAPP)
-- AI-powered executive cyber risk analytics
-- Threat intelligence correlation
-- Automated cloud exposure monitoring
+- Cloud-native security analytics
+- Identity exposure management
+- Security operations reporting
+- AI-assisted cyber-risk analysis
+- Guarded remediation and evidence management
 
-DGS Sentinel AI helps organizations identify security risks, exposed assets, vulnerable identities, and cloud misconfigurations while delivering executive-level remediation guidance and operational threat visibility.
+AI output is advisory. It cannot authorize or execute remediation.
 
----
+## Capability Status
 
-# 🚀 Core Platform Capabilities
+| Capability | Status |
+| --- | --- |
+| Multi-tenant data isolation | Implemented |
+| Persistent authentication | Implemented foundation |
+| Tenant authorization and user administration | Implemented |
+| Executive, SOC, and asset dashboards | Implemented |
+| AWS asset and finding discovery | Implemented |
+| AWS cross-account AssumeRole scanning | Implemented |
+| Azure resource and security discovery | Implemented |
+| Microsoft Defender for Cloud intelligence | Implemented, read-only |
+| Axonius asset and identity correlation | Implemented |
+| CAASM exposure alerting | Implemented foundation |
+| Splunk HEC audit-event delivery | Implemented |
+| AI-assisted security narratives | Implemented, advisory |
+| Guarded cloud remediation | Implemented for allowlisted actions |
+| Scheduled cloud scanning | Planned |
+| Complete backup coverage | Partial |
+| Formal database migrations | Planned |
+| Repeatable staging infrastructure | Planned |
 
-# 📸 Platform Screenshots
+See [V2_ROADMAP.md](V2_ROADMAP.md) for current priorities and status definitions.
 
-## Executive Security Dashboard
+## Architecture
 
-![Dashboard](screenshots/dashboard.png)
-
----
-
-## GuardDuty Threat Intelligence
-
-![GuardDuty](screenshots/guardduty.png)
-
----
-
-## IAM Exposure Analytics
-
-![IAM Analytics](screenshots/iam-analytics.png)
-
----
-
-## Cloud Security Scorecard
-
-![Scorecard](screenshots/scorecard.png)
-
----
-
-## MITRE ATT&CK Mapping
-
-![MITRE](screenshots/mitre-mapping.png)
-
----
-
-## AI Executive Risk Summary
-
-![AI Summary](screenshots/ai-summary.png)
-
----
-
-## Executive Security Dashboard
-- Enterprise cyber risk scoring
-- Executive KPI visualization
-- Threat severity analytics
-- Enterprise exposure monitoring
-- Cloud risk posture analytics
-- Operational threat intelligence
-
-## Cloud Security Posture Management (CSPM)
-- AWS Security Hub integration
-- Cloud misconfiguration detection
-- Public exposure analysis
-- Security posture scoring
-- Compliance visibility
-- Cloud asset inventory
-
-## Cyber Asset Attack Surface Management (CAASM)
-- Enterprise asset visibility
-- EC2 asset discovery
-- IAM identity analytics
-- Stale credential exposure detection
-- Asset correlation and normalization
-- Cloud identity exposure analysis
-
-## Cloud-Native Application Protection Platform (CNAPP)
-- GuardDuty threat intelligence ingestion
-- Runtime threat visibility
-- Threat severity prioritization
-- Identity risk analytics
-- Exposure intelligence correlation
-
-## AI Security Copilot
-- AI executive remediation guidance
-- AI-generated risk narratives
-- Executive threat analysis
-- Cloud risk recommendations
-- Automated security interpretation
-
-## Threat Intelligence & Vulnerability Analytics
-- Known Exploited Vulnerability (KEV) mapping
-- MITRE ATT&CK mapping
-- Threat severity classification
-- Exploitation intelligence correlation
-- Risk prioritization analytics
-
-## Reporting & Executive Exports
-- Executive PDF reporting
-- Threat evidence exports
-- Remediation reporting
-- Operational security dashboards
-- Security analytics reporting
-
----
-
-# ☁️ AWS Services Integrated
-
-DGS Sentinel AI currently integrates with:
-
-- AWS Security Hub
-- AWS GuardDuty
-- AWS IAM
-- AWS EC2
-- AWS S3
-- AWS Organizations
-- AWS STS
-
----
-
-# 🧠 AI & Analytics Features
-
-The platform leverages AI-assisted cybersecurity analytics to:
-
-- Generate executive security summaries
-- Prioritize remediation actions
-- Correlate threat intelligence
-- Analyze cloud exposure risk
-- Produce operational risk narratives
-- Enhance security operations visibility
-
----
-
-# 📊 Security Analytics
-
-## Identity & Access Analytics
-- MFA visibility
-- Privileged account exposure
-- Stale credential analysis
-- Identity risk analytics
-
-## Threat Detection
-- GuardDuty threat ingestion
-- Threat severity analysis
-- Cloud runtime threat visibility
-- Security Hub findings aggregation
-
-## Vulnerability Intelligence
-- KEV intelligence enrichment
-- Exploited vulnerability prioritization
-- Ransomware exposure visibility
-- CVE risk scoring
-
-## Attack Surface Visibility
-- Cloud asset inventory
-- Public exposure analysis
-- S3 exposure analytics
-- Cloud risk correlation
-
----
-
-# 🏗️ Platform Architecture
-
-DGS Sentinel AI follows a modular cybersecurity analytics architecture:
-
-1. Cloud Telemetry Ingestion
-2. Threat Intelligence Correlation
-3. Asset Normalization
-4. Exposure Analytics
-5. AI Risk Interpretation
-6. Executive Reporting
-7. Continuous Security Monitoring
-
----
-
-# 🛠️ Technology Stack
-
-## Backend & Analytics
-- Python
-- Pandas
-- Requests
-
-## Cloud & Security
-- AWS Boto3
-- AWS Security Hub
-- AWS GuardDuty
-- AWS IAM
-
-## AI & Automation
-- OpenAI API
-- AI Executive Risk Analytics
-- Automated Threat Correlation
-
-## Visualization & Reporting
-- Streamlit
-- Plotly
-- ReportLab
-
----
-
-# ⚙️ Installation
-
-```bash
-git clone https://github.com/dlgul71/ai-cloud-risk-assistant.git
-
-cd ai-cloud-risk-assistant
-
-python3 -m venv venv
-
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-streamlit run app.py
+```mermaid
+flowchart TD
+    A["AWS, Azure and Axonius"] --> B["Secure connectors and scan engines"]
+    B --> C["Tenant-scoped data and risk correlation"]
+    C --> D["Dashboards, reports and AI analysis"]
+    C --> E["Approval, remediation and audit evidence"]
 ```
 
----
+The application currently uses Python, Streamlit, Boto3, Azure SDKs, Plotly, OpenAI APIs, ReportLab, and multiple tenant-aware SQLite persistence domains.
 
-# 🔑 Environment Configuration
+See [Current-State Architecture](docs/architecture/CURRENT_STATE.md) for the verified component and data-flow model.
 
-## OpenAI API Key
+## Core Capabilities
 
-```bash
-export OPENAI_API_KEY="your_api_key_here"
-```
+### Cloud Asset and Exposure Discovery
 
-## AWS Configuration
+- AWS EC2 discovery
+- IAM identity and MFA analytics
+- Security-group and open-port inspection
+- Amazon S3 exposure analysis
+- Security Hub finding ingestion
+- GuardDuty threat intelligence
+- Multi-account AWS AssumeRole boundaries
+- Azure compute, storage, resource, and subscription discovery
+- Microsoft Defender for Cloud intelligence
 
-```bash
-export AWS_PROFILE=default
-export AWS_REGION=us-east-1
-```
+### CAASM and Identity Analytics
 
----
-
-# 📈 Current Platform Features
-
-✅ AWS Security Hub ingestion  
-✅ AWS GuardDuty integration  
-✅ IAM exposure analytics  
-✅ EC2 asset inventory  
-✅ S3 exposure analytics  
-✅ KEV intelligence correlation  
-✅ MITRE ATT&CK mapping  
-✅ Executive PDF reporting  
-✅ AI remediation guidance  
-✅ Risk trend analytics  
-✅ Enterprise security scorecard  
-✅ Multi-account AWS visibility  
-
----
-
-# 🔮 Future Enhancements
-
-- Multi-cloud support (Azure/GCP)
-- Docker deployment
-- Kubernetes security monitoring
-- Vulnerability scanner integrations
-- Real-time alerting engine
-- CI/CD security analytics
-- RBAC authentication
-- Multi-tenant SaaS architecture
-- Security Lake ingestion
-- Axonius-style asset correlation
-- Real-time threat intelligence feeds
-
----
-
-# 👨‍💻 Author
-
-David L. Gulledge
-
-Cybersecurity | CAASM | Cloud Security | AI Security Analytics | Enterprise Risk Management
-
-GitHub:
-https://github.com/dlgul71
-
-LinkedIn:
-https://www.linkedin.com/in/david-l-gulledge-8b5a328/
-
----
-
-# ⚠️ Disclaimer
-
-DGS Sentinel AI is intended for cybersecurity research, cloud security analytics, enterprise visibility, and authorized security operations activities only.
-
-Users are responsible for ensuring compliance with organizational security policies and applicable laws.# 🛡️ DGS Sentinel AI
-
-Enterprise AI-Powered Cybersecurity Analytics Platform
-
-DGS Sentinel AI is a next-generation cybersecurity analytics and cloud exposure management platform designed to provide real-time visibility across enterprise cloud environments.
-
-The platform combines:
-
-- Cyber Asset Attack Surface Management (CAASM)
-- Cloud Security Posture Management (CSPM)
-- Cloud-Native Application Protection Platform (CNAPP)
-- AI-powered executive cyber risk analytics
-- Threat intelligence correlation
-- Automated cloud exposure monitoring
-
-DGS Sentinel AI helps organizations identify security risks, exposed assets, vulnerable identities, and cloud misconfigurations while delivering executive-level remediation guidance and operational threat visibility.
-
----
-
-# 🚀 Core Platform Capabilities
-
-## Executive Security Dashboard
-- Enterprise cyber risk scoring
-- Executive KPI visualization
-- Threat severity analytics
-- Enterprise exposure monitoring
-- Cloud risk posture analytics
-- Operational threat intelligence
-
-## Cloud Security Posture Management (CSPM)
-- AWS Security Hub integration
-- Cloud misconfiguration detection
-- Public exposure analysis
-- Security posture scoring
-- Compliance visibility
-- Cloud asset inventory
-
-## Cyber Asset Attack Surface Management (CAASM)
-- Enterprise asset visibility
-- EC2 asset discovery
-- IAM identity analytics
-- Stale credential exposure detection
-- Asset correlation and normalization
-- Cloud identity exposure analysis
-
-## Cloud-Native Application Protection Platform (CNAPP)
-- GuardDuty threat intelligence ingestion
-- Runtime threat visibility
-- Threat severity prioritization
-- Identity risk analytics
-- Exposure intelligence correlation
-
-## AI Security Copilot
-- AI executive remediation guidance
-- AI-generated risk narratives
-- Executive threat analysis
-- Cloud risk recommendations
-- Automated security interpretation
-
-## Threat Intelligence & Vulnerability Analytics
-- Known Exploited Vulnerability (KEV) mapping
-- MITRE ATT&CK mapping
-- Threat severity classification
-- Exploitation intelligence correlation
-- Risk prioritization analytics
-
-## Reporting & Executive Exports
-- Executive PDF reporting
-- Threat evidence exports
-- Remediation reporting
-- Operational security dashboards
-- Security analytics reporting
-
----
-
-# ☁️ AWS Services Integrated
-
-DGS Sentinel AI currently integrates with:
-
-- AWS Security Hub
-- AWS GuardDuty
-- AWS IAM
-- AWS EC2
-- AWS S3
-- AWS Organizations
-- AWS STS
-
----
-
-# 🧠 AI & Analytics Features
-
-The platform leverages AI-assisted cybersecurity analytics to:
-
-- Generate executive security summaries
-- Prioritize remediation actions
-- Correlate threat intelligence
-- Analyze cloud exposure risk
-- Produce operational risk narratives
-- Enhance security operations visibility
-
----
-
-# 📊 Security Analytics
-
-## Identity & Access Analytics
-- MFA visibility
-- Privileged account exposure
-- Stale credential analysis
-- Identity risk analytics
-
-## Threat Detection
-- GuardDuty threat ingestion
-- Threat severity analysis
-- Cloud runtime threat visibility
-- Security Hub findings aggregation
-
-## Vulnerability Intelligence
-- KEV intelligence enrichment
-- Exploited vulnerability prioritization
-- Ransomware exposure visibility
-- CVE risk scoring
-
-## Attack Surface Visibility
-- Cloud asset inventory
-- Public exposure analysis
-- S3 exposure analytics
-- Cloud risk correlation
-
----
-
-# 🏗️ Platform Architecture
-
-DGS Sentinel AI follows a modular cybersecurity analytics architecture:
-
-1. Cloud Telemetry Ingestion
-2. Threat Intelligence Correlation
-3. Asset Normalization
-4. Exposure Analytics
-5. AI Risk Interpretation
-6. Executive Reporting
-7. Continuous Security Monitoring
-
----
-
-# 🛠️ Technology Stack
-
-## Backend & Analytics
-- Python
-- Pandas
-- Requests
-
-## Cloud & Security
-- AWS Boto3
-- AWS Security Hub
-- AWS GuardDuty
-- AWS IAM
-
-## AI & Automation
-- OpenAI API
-- AI Executive Risk Analytics
-- Automated Threat Correlation
-
-## Visualization & Reporting
-- Streamlit
-- Plotly
-- ReportLab
-
----
-
-# ⚙️ Installation
-
-```bash
-git clone https://github.com/dlgul71/ai-cloud-risk-assistant.git
-
-cd ai-cloud-risk-assistant
-
-python3 -m venv venv
-
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-streamlit run app.py
-```
-
----
-
-# 🔑 Environment Configuration
-
-## OpenAI API Key
-
-```bash
-export OPENAI_API_KEY="your_api_key_here"
-```
-
-## AWS Configuration
-
-```bash
-export AWS_PROFILE=default
-export AWS_REGION=us-east-1
-```
-
----
-
-# 📈 Current Platform Features
-
-✅ AWS Security Hub ingestion  
-✅ AWS GuardDuty integration  
-✅ IAM exposure analytics  
-✅ EC2 asset inventory  
-✅ S3 exposure analytics  
-✅ KEV intelligence correlation  
-✅ MITRE ATT&CK mapping  
-✅ Executive PDF reporting  
-✅ AI remediation guidance  
-✅ Risk trend analytics  
-✅ Enterprise security scorecard  
-✅ Multi-account AWS visibility  
-
----
-
-# 🔮 Future Enhancements
-
-- Multi-cloud support (Azure/GCP)
-- Docker deployment
-- Kubernetes security monitoring
-- Vulnerability scanner integrations
-- Real-time alerting engine
-- CI/CD security analytics
-- RBAC authentication
-- Multi-tenant SaaS architecture
-- Security Lake ingestion
-- Axonius-style asset correlation
-- Real-time threat intelligence feeds
-
----
-
-# 👨‍💻 Author
-
-David L. Gulledge
-
-Cybersecurity | CAASM | Cloud Security | AI Security Analytics | Enterprise Risk Management
-
-GitHub:
-https://github.com/dlgul71
-
-LinkedIn:
-https://www.linkedin.com/in/david-l-gulledge-8b5a328/
-
----
-
-# ⚠️ Disclaimer
-
-DGS Sentinel AI is intended for cybersecurity research, cloud security analytics, enterprise visibility, and authorized security operations activities only.
-
-Users are responsible for ensuring compliance with organizational security policies and applicable laws.# 🛡️ DGS Sentinel AI
-
-### AI-Powered Cloud Exposure Management Platform
-
-![Python](https://img.shields.io/badge/Python-3.13-blue)
-![AWS](https://img.shields.io/badge/AWS-Cloud-orange)
-![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
-![OpenAI](https://img.shields.io/badge/OpenAI-AI-green)
-![CAASM](https://img.shields.io/badge/CAASM-Cyber%20Asset%20Visibility-purple)
-
-![Dashboard](screenshots/dashboard.png)
-
-DGS Sentinel AI is an AI-powered cloud exposure management platform designed to provide real-time AWS asset visibility, attack surface analysis, cloud security analytics, and AI-generated remediation guidance aligned with modern CAASM/CSPM concepts.
-
-Built using AWS, Python, Streamlit, Plotly, OpenAI APIs, and Boto3.
-
----
-
-# 🚀 Project Overview
-
-DGS Sentinel AI automates cloud security visibility and exposure analysis by integrating AWS infrastructure discovery, IAM visibility, risk analytics, and AI-driven security insights into a unified dashboard platform.
-
-The platform is designed to simulate modern:
-
-* CAASM (Cyber Asset Attack Surface Management)
-* CSPM (Cloud Security Posture Management)
-* Cloud Exposure Management
-* Attack Surface Analytics
-* AI Security Operations
-
----
-
-# 🔥 Why This Project Matters
-
-Modern cloud environments often suffer from visibility gaps across assets, identities, internet exposure conditions, and security configurations.
-
-DGS Sentinel AI demonstrates how AI-driven cloud exposure management platforms can improve visibility, automate risk analysis, and support modern cloud security operations aligned with CAASM and CSPM methodologies.
-
----
-
-# 🧠 Platform Capabilities
-
-* AWS EC2 Asset Discovery
-* IAM Visibility & Identity Analytics
-* Security Group Inspection
-* Open Port Detection
-* Internet Exposure Analysis
-* Risk Severity Classification
-* AI Security Risk Analysis
-* Interactive Plotly Dashboards
-* Executive Security Reporting
-* CSV Security Findings Export
-* Cloud Exposure Analytics
-* CAASM/CSPM Concepts
-
----
-
-# 📊 Dashboard Features
-
-## Executive Security Dashboard
-
-Provides:
-
-* Total cloud asset visibility
-* High-risk asset detection
-* Public exposure analysis
-* Secure asset tracking
-* Executive cloud risk metrics
-
----
-
-## Interactive Risk Analytics
-
-Built using Plotly interactive visualizations:
-
-* Risk severity distribution
-* Exposure analytics
-* Public vs private asset visibility
-* Cloud attack surface insights
-
----
-
-## AI Security Analysis
-
-OpenAI-powered analysis engine provides:
-
-* Executive summaries
-* Cloud exposure insights
-* Security recommendations
-* Remediation guidance
-* Risk prioritization
-
----
-
-# 🏗️ Platform Architecture
-
-```text
-AWS EC2 / IAM
-        │
-        ▼
-     Boto3 SDK
-        │
-        ▼
-Python Risk Engine
-        │
-        ├── Plotly Analytics
-        │
-        ├── Streamlit Dashboard
-        │
-        └── OpenAI Risk Analysis
-
-
-# 🔐 Authentication & Security
-
-DGS Sentinel AI includes built-in authentication and role-based access
-control to protect cloud security telemetry and sensitive remediation
-operations.
-
-Current security capabilities include:
-
-- Username and password authentication
-- Protected dashboard access
-- Session management and automatic timeout
-- Logout functionality
-- Secure credential storage through environment variables or Streamlit secrets
-- Role-aware navigation
-- Action-level remediation authorization
-- Safe fallback to the Viewer role for unknown role values
-
-## Application Authentication Configuration
-
-~~~bash
-export APP_USERNAME="administrator"
-export APP_PASSWORD="replace-with-a-secure-password"  # pragma: allowlist secret
-export DGS_APP_ROLE="Administrator"
-~~~
-
-Supported application roles are:
-
-- `Administrator` — full dashboard, client-management, approval, execution,
-  evidence, and system-health access
-- `Analyst` — dashboard, scan, and execution-evidence access
-- `Viewer` — read-only dashboard access
-
-Role names are normalized without regard to capitalization. Missing or invalid
-role values default safely to `Viewer`.
-
----
-
-# 📡 Splunk SIEM Integration
-
-DGS Sentinel AI can export filtered remediation audit events to Splunk through
-the HTTP Event Collector (HEC).
-
-## Splunk HEC Configuration
-
-~~~bash
-export SPLUNK_HEC_URL="https://splunk.example.com:8088"
-export SPLUNK_HEC_TOKEN="replace-with-a-secure-hec-token"
-export SPLUNK_INDEX="dgs_security"
-export SPLUNK_SOURCE="dgs_sentinel_ai"
-export SPLUNK_SOURCETYPE="dgs:security:event"
-export SPLUNK_VERIFY_SSL="true"
-export SPLUNK_TIMEOUT_SECONDS="10"
-~~~
-
-The application automatically normalizes the HEC URL to:
-
-~~~text
-/services/collector/event
-~~~
-
-The HEC token is excluded from application configuration summaries and must
-never be committed to Git, logs, screenshots, or documentation.
-
-## Audit Event Export
-
-From the **Execution Center**:
-
-1. Open the **Execution Audit Trail**.
-2. Optionally filter records by remediation action ID.
-3. Select **Send Filtered Audit Events to Splunk**.
-4. Review the event-level delivery results.
-
-Each exported event includes:
-
-- Audit ID and action ID
-- Event timestamp and event type
-- Event detail and actor
-- Product and schema metadata
-- Splunk index, source, and sourcetype metadata
-
-Only users with remediation-execution permission can initiate the export.
-
----
-
-# 🔎 Axonius CAASM Integration
-
-DGS Sentinel AI supports secure mock and live Axonius connector modes for
-collecting asset and identity records.
-
-## Axonius Configuration
-
-~~~bash
-export AXONIUS_BASE_URL="https://your-tenant.example.com"
-export AXONIUS_API_KEY="replace-with-an-api-key"  # pragma: allowlist secret
-export AXONIUS_API_SECRET="replace-with-an-api-secret"  # pragma: allowlist secret
-export AXONIUS_ASSETS_PATH="/api/assets"
-export AXONIUS_IDENTITIES_PATH="/api/identities"
-export AXONIUS_VERIFY_SSL="true"
-export AXONIUS_TIMEOUT_SECONDS="30"
-~~~
-
-Set the asset and identity paths to the authorized routes supported by the
-Axonius tenant and API version.
-
-The connector:
-
-- Requires an HTTPS base URL
-- Rejects embedded URL credentials
-- Rejects absolute endpoint URLs
-- Keeps the API key and secret out of configuration summaries
-- Defaults to SSL certificate verification
-- Uses mock data when live credentials are unavailable
-- Provides an optional read-only connectivity check under **System Health**
-
-## Correlated Exposure Analytics
-
-DGS Sentinel AI v1.6 correlates Axonius asset, identity, and connector-coverage
-records to identify combined exposure conditions that may not be visible when
-the datasets are reviewed separately.
-
-Correlation capabilities include:
-
-- Asset-owner and identity matching
-- Privileged-access and MFA analysis
+- Axonius asset and identity ingestion
+- Asset-owner and identity correlation
+- Privileged-access analysis
+- MFA exposure detection
 - Orphaned-identity detection
-- Unmanaged-asset detection
-- Connector availability and coverage analysis
-- Per-asset correlated exposure scoring
-- Critical, high, moderate, and standard prioritization
-- Correlation dashboard metrics and charts
-- Correlated exposure CSV export
-- Snapshot persistence, trend analysis, and delta reporting
-- Correlation-aware executive recommendations
+- Unmanaged-asset identification
+- Connector coverage analysis
+- Persistent CAASM exposure alerts
+- Alert acknowledgment and resolution workflows
 
-See `docs/AXONIUS_CORRELATION_VALIDATION.md` for the v1.6 validation record.
+### Threat and Vulnerability Intelligence
 
-## Correlated Exposure Alerting
-
-DGS Sentinel AI v1.7 converts critical and high correlated-exposure results
-into persistent operational alerts.
-
-Alerting capabilities include:
-
-- Stable alert fingerprints
-- Asset-and-source alert deduplication
-- Recurring-alert occurrence tracking
-- Open, acknowledged, and resolved lifecycle states
-- Configurable notification cooldowns
-- Successful-delivery tracking
-- Automatic reopening of recurring resolved exposures
-- Optional Splunk HEC delivery
-- Partial-delivery failure reporting
-- RBAC-controlled alert processing and lifecycle actions
-- Dashboard alert metrics, acknowledgment, and resolution controls
-
-Alert processing requires scan permission. Alert acknowledgment and resolution
-require remediation-execution permission.
-
-Splunk delivery requires `SPLUNK_HEC_URL` and `SPLUNK_HEC_TOKEN`.
-
-See `docs/AXONIUS_ALERTING_VALIDATION.md` for the v1.7 validation record.
-
-Do not commit Axonius or Splunk credentials to Git, logs, screenshots, or
-documentation.
-
-See `docs/AXONIUS_CONNECTOR_VALIDATION.md` for the v1.5 validation record.
-
-## Microsoft Defender for Cloud Intelligence
-
-DGS Sentinel AI v1.8 expands the existing Azure security-posture integration
-into a resilient, read-only Microsoft Defender for Cloud intelligence layer.
-
-Defender capabilities include:
-
-- Secure-score discovery and percentage normalization
-- Secure-score control analysis
-- Healthy, unhealthy, and not-applicable resource counts
-- Assessment metadata enrichment
-- Recommendation severity and operational prioritization
-- Actual affected Azure resource-ID extraction
-- Remediation guidance, categories, threats, tactics, and techniques
-- Defender security-alert discovery
-- Alert severity, status, compromised entity, and MITRE technique context
-- Defender pricing and protection-plan visibility
-- Complete, partial, and failed component-discovery status
-- Partial-failure preservation of available results
-- Dashboard metrics and dedicated Defender analysis tabs
-
-The v1.8 integration is read-only. It does not modify Defender plans, update
-alert states, create assessments, or execute remediation actions.
-
-Validation used controlled Azure SDK objects and automated tests. Production
-tenant validation requires authorized Microsoft Entra credentials and
-appropriate Defender for Cloud read permissions.
-
-See `docs/AZURE_DEFENDER_CLOUD_VALIDATION.md` for the v1.8 validation record.
-
-Do not commit Azure tenant IDs, client secrets, access tokens, alert evidence,
-or other sensitive cloud information to Git, logs, screenshots, or
-documentation.
-
----
-
-# 📄 Executive Reporting
-
-DGS Sentinel AI generates executive-level cyber risk assessment reports designed for leadership, compliance teams, and security stakeholders.
-
-Report capabilities include:
-
-- Executive risk summaries
-- Security posture metrics
-- AI-generated risk narratives
-- Threat intelligence analysis
-- Remediation prioritization
+- Known Exploited Vulnerabilities correlation
+- EPSS enrichment
+- NVD vulnerability intelligence
 - MITRE ATT&CK mapping
-- PDF export for client deliverables
+- Severity classification
+- Exposure prioritization
+- Correlated risk scoring
 
-Reports help organizations communicate cyber risk in business-focused language while providing actionable remediation guidance.
+### Dashboards and Reporting
 
----
+- Tenant-scoped executive dashboard
+- Tenant-scoped SOC dashboard
+- Tenant-scoped asset dashboard
+- Security scorecards
+- Risk-trend analysis
+- CSV exports
+- Executive PDF reporting
+- Remediation and execution evidence
+- AI-generated risk narratives
 
-# 🐳 Docker Deployment
+### Guarded Remediation
 
-Build the container:
+Live remediation is disabled by default.
+
+The remediation framework includes:
+
+- Role and permission checks
+- Separation of approval and execution
+- Allowlisted actions
+- Dry-run capability
+- Preconditions
+- Idempotency controls
+- Post-remediation verification
+- Audit records
+- Structured execution evidence
+- Tamper-evident evidence integrity
+- HMAC evidence authentication
+- Evidence-key rotation support
+
+New live actions require targeted testing and documented safety review.
+
+## Screenshots
+
+### Executive Security Dashboard
+
+![Executive Security Dashboard](screenshots/dashboard.png)
+
+### GuardDuty Threat Intelligence
+
+![GuardDuty Threat Intelligence](screenshots/guardduty.png)
+
+### IAM Exposure Analytics
+
+![IAM Exposure Analytics](screenshots/iam-analytics.png)
+
+### Cloud Security Scorecard
+
+![Cloud Security Scorecard](screenshots/scorecard1.png)
+
+### MITRE ATT&CK Mapping
+
+![MITRE ATT&CK Mapping](screenshots/mitre-mapping.png)
+
+### AI Executive Risk Summary
+
+![AI Executive Risk Summary](screenshots/ai-summary.png)
+
+## Security Model
+
+DGS Sentinel AI implements:
+
+- Persistent application users
+- Password hashing
+- Secure session management
+- Session expiration
+- Failed-login tracking
+- Account lockout
+- Authentication audit events
+- Role normalization
+- Tenant-scoped client access
+- Global-administrator restrictions
+- Action-level permission enforcement
+
+Supported roles are:
+
+| Role | General access |
+| --- | --- |
+| Administrator | Administration, dashboards, scanning, approvals, execution, evidence, and health |
+| Analyst | Authorized dashboards, scanning, and execution-evidence access |
+| Viewer | Read-only authorized dashboard access |
+
+Legacy environment-based authentication fallback is disabled by default and should not be used as the preferred authentication path.
+
+## Local Installation
+
+### Requirements
+
+- Python 3.11 or Python 3.13
+- Git
+- Authorized cloud credentials for live integrations
+- Docker, if using the container workflow
+
+### Setup
 
 ```bash
-docker build -t dgs-sentinel-ai .
+git clone https://github.com/dlgul71/ai-cloud-risk-assistant.git
+cd ai-cloud-risk-assistant
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+cp .env.example .env
 ```
 
-Run locally:
+Never commit the populated `.env` file, cloud credentials, API keys, tokens, client secrets, or security evidence.
+
+### Create the First Persistent Administrator
+
+Generate a password hash without exposing the plaintext password in shell history:
 
 ```bash
-docker run -p 8501:8501 dgs-sentinel-ai
+python - <<'PYHASH'
+from getpass import getpass
+from authentication import hash_password
+
+password = getpass("Administrator password: ")
+confirmation = getpass("Confirm administrator password: ")
+
+if not password or password != confirmation:
+    raise SystemExit("Passwords are empty or do not match.")
+
+print("APP_PASSWORD_HASH=" + hash_password(password))
+PYHASH
 ```
 
-Run with AWS credentials and Streamlit secrets mounted:
+Add the generated `APP_PASSWORD_HASH` value and the desired `APP_USERNAME` to the local environment or `.env` file.
+
+Then create the administrator:
 
 ```bash
-docker run -p 8501:8501 \
-  -v ~/.aws:/root/.aws:ro \
-  -v $(pwd)/.streamlit:/app/.streamlit:ro \
-  dgs-sentinel-ai
+python -m scripts.bootstrap_admin_user
 ```
 
-Access the application:
+The bootstrap command will not overwrite an existing user and does not accept a plaintext password for persistent-user creation.
+
+### Start the Application
+
+```bash
+streamlit run app.py
+```
+
+Open:
 
 ```text
 http://localhost:8501
 ```
 
----
+## Configuration
 
-# 🚀 Phase 1 Milestones Completed
+Configuration examples are available in [.env.example](.env.example).
 
-✅ Authentication System
+Important safety defaults include:
 
-✅ Secure Dashboard Access
+```text
+DGS_ALLOW_LEGACY_AUTH_FALLBACK=false
+DGS_PUBLIC_DEMO_MODE=false
+DGS_LIVE_REMEDIATION_ENABLED=false
+```
 
-✅ Session Timeout Controls
+Do not enable live remediation without validating permissions, preconditions, evidence authentication, rollback expectations, and the target account or subscription.
 
-✅ Executive PDF Reporting
+### AWS
 
-✅ Docker Containerization
+DGS Sentinel AI supports the standard AWS credential chain and explicitly configured cross-account AssumeRole access.
 
-✅ Cloud Threat Intelligence Integration
+Common local settings include:
 
-✅ IAM Exposure Analytics
+```text
+AWS_REGION=us-east-1
+AWS_PROFILE=default
+```
 
-✅ MITRE ATT&CK Mapping
+Use least-privilege roles. Cross-account actions must preserve explicit STS AssumeRole boundaries.
 
-✅ AI Executive Risk Analysis
+### Azure
 
-DGS Sentinel AI is now deployable as a secure cloud security visibility and cyber risk assessment platform.
+Azure integration uses Microsoft Entra service-principal credentials:
 
----
+```text
+AZURE_TENANT_ID=
+AZURE_CLIENT_ID=
+AZURE_CLIENT_SECRET=
+AZURE_SUBSCRIPTION_ID=
+```
 
-# 🔐 Remediation Evidence Key Rotation Operations
+Use only the permissions required for the intended read-only discovery or explicitly approved remediation workflow.
 
-DGS Sentinel AI signs remediation evidence with HMAC-SHA256.
+### OpenAI
 
-## Required Environment Variables
+AI-assisted analysis is optional:
 
-~~~bash
-export DGS_REMEDIATION_EVIDENCE_HMAC_KEY="current-signing-key"
-~~~
+```text
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.5
+```
 
-During a key rotation, retain prior keys temporarily:
+AI context is tenant-scoped and should contain only the information required for the analysis.
 
-~~~bash
-export DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS="previous-key-one,previous-key-two"
-~~~
+### Axonius
 
-New evidence is signed only with the current key. Previous keys are used only to verify historical evidence.
+Axonius configuration includes:
 
-## Rotation Procedure
+```text
+AXONIUS_BASE_URL=
+AXONIUS_API_KEY=
+AXONIUS_API_SECRET=
+```
 
-1. Record the current evidence key ID.
-2. Generate and securely store a new HMAC key.
-3. Move the current key into `DGS_REMEDIATION_EVIDENCE_PREVIOUS_HMAC_KEYS`.
-4. Configure the new key as `DGS_REMEDIATION_EVIDENCE_HMAC_KEY`.
-5. Restart the application.
-6. Run the key-rotation validator:
+The connector requires HTTPS, rejects embedded URL credentials, uses bounded timeouts, and keeps secrets out of configuration summaries.
 
-~~~bash
-python -m scripts.check_remediation_evidence_keys
-~~~
+See:
 
-7. Confirm all signed records report `VERIFIED`.
-8. Keep prior keys available for the required evidence-retention period.
-9. Remove an old key only after no retained evidence depends on its key ID.
+- [Axonius Connector Validation](docs/AXONIUS_CONNECTOR_VALIDATION.md)
+- [Axonius Correlation Validation](docs/AXONIUS_CORRELATION_VALIDATION.md)
+- [Axonius Alerting Validation](docs/AXONIUS_ALERTING_VALIDATION.md)
 
-The validator returns exit code `0` when all signed evidence verifies, `1` when verification fails, and `2` when required key configuration is missing.
+### Splunk
 
-Never commit HMAC keys to Git, application source code, logs, screenshots, or documentation.
+Filtered remediation audit events and CAASM alerts can be delivered to Splunk through the HTTP Event Collector.
+
+See [Splunk HEC Validation](docs/SPLUNK_HEC_VALIDATION.md) for configuration and verified behavior.
+
+## Docker
+
+Build the hardened image:
+
+```bash
+docker build -t dgs-sentinel-ai .
+```
+
+Run with persistent application data:
+
+```bash
+docker run --rm \
+  -p 8501:8501 \
+  --env-file .env \
+  -v dgs-sentinel-data:/data \
+  dgs-sentinel-ai
+```
+
+For local AWS-profile testing, mount the credentials read-only under the non-root container user’s home:
+
+```bash
+docker run --rm \
+  -p 8501:8501 \
+  --env-file .env \
+  -v dgs-sentinel-data:/data \
+  -v "${HOME}/.aws:/home/dgs/.aws:ro" \
+  dgs-sentinel-ai
+```
+
+The image:
+
+- Runs as the non-root `dgs` user
+- Uses `/data` for persistent runtime data
+- Exposes port `8501`
+- Includes a Streamlit health check
+
+After startup, run the deployment smoke test:
+
+```bash
+python -m scripts.production_smoke_test \
+  --base-url http://127.0.0.1:8501
+```
+
+## Testing and Validation
+
+Run the automated test suite:
+
+```bash
+python -m pytest
+```
+
+The verified Phase 1 baseline includes:
+
+- 447 passing tests
+- Python 3.11 and Python 3.13 CI
+- Bandit static analysis
+- Dependency vulnerability auditing
+- Dependency integrity checking
+- Committed-secret scanning
+- Hardened Docker validation
+- Streamlit health-check validation
+
+Whole-production-code coverage is currently 40%. Selected security and tenant modules have stronger focused coverage, while several active execution paths still require additional testing.
+
+See:
+
+- [Phase 1 Stabilization Audit](docs/development/PHASE_1_STABILIZATION_AUDIT.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
+
+## Backup and Recovery
+
+Backup, verification, and restoration commands are available through:
+
+```bash
+python -m scripts.backup_recovery_cli --help
+```
+
+The current default backup scope is incomplete and must not be treated as full platform recovery coverage. See the Phase 1 audit and roadmap for the databases that still need to be added.
+
+## Documentation
+
+- [Current-State Architecture](docs/architecture/CURRENT_STATE.md)
+- [AI Security and Governance](docs/security/AI_SECURITY_AND_GOVERNANCE.md)
+- [Database Migration Strategy](docs/architecture/ADR-0001-DATABASE-MIGRATION-STRATEGY.md)
+- [Deployment and Rollback Runbook](docs/operations/DEPLOYMENT_AND_ROLLBACK.md)
+- [Incident Response and Recovery Runbook](docs/operations/INCIDENT_RESPONSE_AND_RECOVERY.md)
+- [Release Procedure](docs/operations/RELEASE_PROCEDURE.md)
+- [Phase 1 Stabilization Audit](docs/development/PHASE_1_STABILIZATION_AUDIT.md)
+- [Enterprise Operations Roadmap](V2_ROADMAP.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Azure Defender Validation](docs/AZURE_DEFENDER_CLOUD_VALIDATION.md)
+- [Azure Remediation Validation](docs/AZURE_REMEDIATION_VALIDATION.md)
+- [Azure NSG Remediation Validation](docs/AZURE_NSG_REMEDIATION_VALIDATION.md)
+
+## Current Stabilization Priorities
+
+1. Compile all tracked production modules in CI.
+2. Measure whole-production-code coverage in CI.
+3. Test critical scan, report, and headless execution paths.
+4. Expand backup and recovery scope.
+5. Implement formal schema migrations from the accepted architecture decision.
+6. Decompose the Streamlit application incrementally behind tests.
+7. Add repeatable staging and deployment infrastructure.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. All changes must preserve tenant isolation, security controls, failure evidence, documentation accuracy, and protected-branch requirements.
+
+## Security Reporting
+
+Do not report suspected vulnerabilities through public GitHub issues.
+
+Follow [SECURITY.md](SECURITY.md) and use GitHub Private Vulnerability Reporting.
