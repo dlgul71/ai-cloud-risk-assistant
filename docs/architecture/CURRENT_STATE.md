@@ -1,6 +1,6 @@
 # DGS Sentinel AI Current-State Architecture
 
-**Document date:** September 2, 2026
+**Document date:** September 13, 2026
 **Architecture baseline:** `main` commit `9a35b3e`
 **Document branch:** `phase-1-stabilization-docs`
 **Status:** Verified current-state architecture
@@ -348,8 +348,6 @@ Incomplete operational capabilities include:
 - Infrastructure as code.
 - Repeatable staging deployment.
 - Centralized metrics and alerting.
-- Incident-response runbook.
-- Rollback procedure.
 - Complete disaster-recovery exercise.
 - Scheduled AWS and Azure scanning.
 - Email, Slack, and Teams alerting.
@@ -373,15 +371,14 @@ Changes crossing these boundaries require explicit threat review and negative te
 1. Streamlit application monolith.
 2. Forty-percent whole-production-code coverage.
 3. Zero measured coverage for the active AssumeRole scan engine.
-4. Multiple SQLite databases without formal migrations.
+4. Multiple SQLite databases without implemented formal migrations.
 5. Incomplete backup scope.
 6. Broad exception handling.
 7. Unreferenced legacy scan engines.
 8. Duplicate nested application directory.
-9. Incomplete canonical documentation.
-10. No infrastructure as code.
-11. No complete staging operating model.
-12. Incomplete scheduled scanning and alert routing.
+9. No infrastructure as code.
+10. No complete staging operating model.
+11. Incomplete scheduled scanning and alert routing.
 
 ## Architecture Direction
 
@@ -396,7 +393,7 @@ Phase 2 will define and implement:
 - Secrets management.
 - Observability.
 - Backup and restore validation.
-- Incident and rollback procedures.
+- Production-scale incident exercises and automated recovery.
 - Controlled staging deployment.
 
 A separate API or service architecture should be considered only after domain boundaries are extracted from `app.py` and protected with tests.

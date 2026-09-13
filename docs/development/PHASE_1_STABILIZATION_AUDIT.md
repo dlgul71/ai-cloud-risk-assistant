@@ -1,6 +1,7 @@
 # DGS Sentinel AI Phase 1 Stabilization Audit
 
 **Audit date:** September 2, 2026
+**Resolution update:** September 13, 2026
 **Repository:** `dlgul71/ai-cloud-risk-assistant`
 **Branch:** `phase-1-stabilization-docs`
 **Baseline commit:** `9a35b3e`
@@ -11,7 +12,7 @@
 
 DGS Sentinel AI has completed Gate 0 and entered Phase 1 stabilization. The verified platform includes multi-tenant security, persistent authentication, tenant authorization, tenant-scoped dashboards, user administration, AI-security capabilities, AWS multi-account assessment, Azure integrations, reporting, audit evidence, and guarded remediation.
 
-The platform has a strong automated-test and security-scanning foundation. However, production-code coverage is uneven, persistence relies on multiple SQLite databases without formal migrations, backup scope is incomplete, the Streamlit application is highly concentrated in `app.py`, and product documentation does not fully reflect the implemented state.
+The platform has a strong automated-test and security-scanning foundation. At the audit baseline, production-code coverage was uneven, persistence relied on multiple SQLite databases without formal migrations, backup scope was incomplete, the Streamlit application was highly concentrated in `app.py`, and product documentation did not fully reflect the implemented state. The documentation finding has since been addressed on the stabilization branch; the engineering limitations remain active.
 
 DGS Sentinel AI remains accurately described as a DGS-developed, production-oriented, multi-client security platform. It is not currently represented as deployed at production scale across multiple paying customers.
 
@@ -210,20 +211,20 @@ Existing documentation includes:
 - Integration-validation documents.
 - Backup/recovery and production smoke-test scripts.
 
-Missing canonical documentation includes:
+At the audit baseline, missing canonical documentation included:
 
 - `SECURITY.md`
 - `CONTRIBUTING.md`
 - `CHANGELOG.md`
 - Architecture overview.
 - Architecture decision records.
-- Production deployment runbook.
+- Production deployment and rollback runbook.
 - Release procedure.
-- Incident and recovery runbooks.
-- Database schema and migration strategy.
+- Incident-response and recovery runbook.
+- Database migration strategy.
 - AI security and governance model.
 
-The README repeats major sections and contains a Docker command that mounts AWS credentials under `/root/.aws`, although the hardened container runs as user `dgs` with home `/home/dgs`. The documented command also omits the persistent `/data` volume.
+These documentation findings have been addressed on the stabilization branch. The root README was consolidated, corrected for the hardened runtime, and updated with persistent-data guidance. Documentation must continue to be maintained as engineering behavior changes.
 
 ## V2 Roadmap Status
 
@@ -236,11 +237,11 @@ The README repeats major sections and contains a Docker command that mounts AWS 
 | Audit and compliance | Partial |
 | Production operations | Partial |
 
-Email, Slack, Microsoft Teams, generalized severity routing, formal recovery drills, full control mapping, and a production runbook remain incomplete or unverified.
+Email, Slack, Microsoft Teams, generalized severity routing, formal recovery drills, full control mapping, production infrastructure, and production-scale operational validation remain incomplete or unverified.
 
 ## Stabilization Priorities
 
-1. Correct and consolidate documentation.
+1. Maintain canonical documentation as engineering behavior changes.
 2. Compile all tracked production modules in CI.
 3. Establish an honest whole-production-code coverage baseline.
 4. Add tests for active scanning, reporting, headless operation, and extracted application logic.

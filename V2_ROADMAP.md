@@ -3,7 +3,7 @@
 **Roadmap status:** Active
 **Current phase:** Phase 1 Stabilization
 **Baseline:** `main` commit `9a35b3e`
-**Last verified:** September 2, 2026
+**Last verified:** September 13, 2026
 
 ## Objective
 
@@ -31,10 +31,10 @@ DGS Sentinel AI is not currently represented as deployed at production scale acr
 | User administration | Implemented |
 | Tenant-scoped dashboards | Implemented |
 | Tenant-aware AI engineering | Implemented foundation |
-| Documentation and workspace standards | In progress |
+| Documentation and workspace standards | Implemented foundation |
 | Whole-production-code coverage | Partial |
 | Complete database backup and recovery | Partial |
-| Formal schema migrations | Planned |
+| Formal schema migrations | Partial |
 | Scheduled cloud scanning | Planned |
 | Enterprise alert routing | Partial |
 | Centralized audit and compliance | Partial |
@@ -68,7 +68,7 @@ Completed controls:
 
 ### 1. Professional Documentation
 
-**Status:** In progress
+**Status:** Implemented foundation
 
 Completed:
 
@@ -83,10 +83,7 @@ Completed:
 - Accepted database migration architecture decision record.
 - Controlled release procedure.
 - Incident-response and recovery runbook.
-
-Remaining:
-
-- Add AI security and governance documentation.
+- AI security and governance guide.
 
 ### 2. Multi-Tenant Security Assurance
 
@@ -365,16 +362,15 @@ Required work:
 
 ## Current Phase 1 Priorities
 
-1. Complete canonical documentation.
-2. Expand CI compilation to all tracked production modules.
-3. Establish whole-production-code coverage in CI.
-4. Test critical active execution paths.
-5. Expand backup and recovery scope.
-6. Document schemas and approve a migration strategy.
-7. Review high-risk broad exception handling.
-8. Remove verified legacy and duplicate files.
-9. Add staging and deployment architecture.
-10. Publish a stabilized v2.1 release candidate.
+1. Expand CI compilation to all tracked production modules.
+2. Establish whole-production-code coverage in CI.
+3. Test critical active execution paths.
+4. Expand backup and recovery scope.
+5. Implement versioned schema migrations from the accepted architecture decision.
+6. Review high-risk broad exception handling.
+7. Remove verified legacy and duplicate files.
+8. Add staging and deployment architecture.
+9. Publish a stabilized v2.1 release candidate.
 
 ## Phase 1 Definition of Done
 

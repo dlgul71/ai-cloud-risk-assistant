@@ -23,6 +23,11 @@ Release-readiness and validation tags describe engineering milestones. They do n
 - Current-state architecture documentation.
 - Coordinated vulnerability disclosure policy.
 - Engineering contribution standards.
+- Production deployment and rollback runbook.
+- Database migration architecture decision record.
+- Controlled release procedure.
+- Incident-response and recovery runbook.
+- AI security and governance guide.
 
 ### Changed
 
@@ -31,12 +36,16 @@ Release-readiness and validation tags describe engineering milestones. They do n
 - Hardened tenant database queries for security scanning.
 - Protected `main` with required pull requests and CI checks.
 - Enabled GitHub Private Vulnerability Reporting.
+- Consolidated and corrected the root README.
+- Updated the enterprise roadmap with verified documentation and migration status.
+- Documented the CAASM alert persistence-path limitation.
 
 ### Security
 
 - Enforced tenant boundaries across users, clients, assets, findings, dashboards, AI context, and remediation data.
 - Strengthened persistent authentication, account lockout, and secure session management.
 - Reconciled reviewed secret-detection findings.
+- Updated GitPython to the patched 3.1.59 security release.
 - Verified Python 3.11, Python 3.13, security scanning, and hardened Docker validation after the v2 integration.
 
 ### Known Stabilization Work

@@ -407,6 +407,7 @@ The current default backup scope is incomplete and must not be treated as full p
 ## Documentation
 
 - [Current-State Architecture](docs/architecture/CURRENT_STATE.md)
+- [AI Security and Governance](docs/security/AI_SECURITY_AND_GOVERNANCE.md)
 - [Database Migration Strategy](docs/architecture/ADR-0001-DATABASE-MIGRATION-STRATEGY.md)
 - [Deployment and Rollback Runbook](docs/operations/DEPLOYMENT_AND_ROLLBACK.md)
 - [Incident Response and Recovery Runbook](docs/operations/INCIDENT_RESPONSE_AND_RECOVERY.md)
@@ -422,14 +423,13 @@ The current default backup scope is incomplete and must not be treated as full p
 
 ## Current Stabilization Priorities
 
-1. Complete canonical operations documentation.
-2. Compile all tracked production modules in CI.
-3. Measure whole-production-code coverage in CI.
-4. Test critical scan, report, and headless execution paths.
-5. Expand backup and recovery scope.
-6. Establish formal schema migrations.
-7. Decompose the Streamlit application incrementally behind tests.
-8. Add repeatable staging and deployment infrastructure.
+1. Compile all tracked production modules in CI.
+2. Measure whole-production-code coverage in CI.
+3. Test critical scan, report, and headless execution paths.
+4. Expand backup and recovery scope.
+5. Implement formal schema migrations from the accepted architecture decision.
+6. Decompose the Streamlit application incrementally behind tests.
+7. Add repeatable staging and deployment infrastructure.
 
 ## Contributing
 
