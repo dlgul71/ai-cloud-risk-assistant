@@ -82,10 +82,10 @@ Completed:
 - Production deployment and rollback runbook.
 - Accepted database migration architecture decision record.
 - Controlled release procedure.
+- Incident-response and recovery runbook.
 
 Remaining:
 
-- Add incident-response and recovery runbooks.
 - Add AI security and governance documentation.
 
 ### 2. Multi-Tenant Security Assurance
