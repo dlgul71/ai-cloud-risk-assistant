@@ -326,9 +326,9 @@ Protected `main` requires:
 - Security Scanning.
 - Hardened Docker Image.
 
-The workflow performs dependency installation, `pip check`, compilation of all 74 tracked non-test Python files, automated testing, selected-module coverage enforcement, Bandit, pip-audit, detect-secrets, Docker build, non-root validation, image-configuration validation, and Streamlit health validation.
+The workflow performs dependency installation, `pip check`, compilation of all 74 tracked non-test Python files, automated testing, whole-production coverage reporting and 40.60% floor enforcement, combined selected-module 70% coverage enforcement, Bandit, pip-audit, detect-secrets, Docker build, non-root validation, image-configuration validation, and Streamlit health validation.
 
-The remaining CI measurement gap is selected-module rather than whole-production-code coverage.
+Both Python 3.11 and Python 3.13 measure the tracked non-test inventory, including scripts and the nested application. Python 3.13 uploads the whole-production coverage.xml artifact. The remaining gap is insufficient testing of critical execution paths.
 
 ## Operational Architecture
 
@@ -369,7 +369,7 @@ Changes crossing these boundaries require explicit threat review and negative te
 ## Known Architecture Debt
 
 1. Streamlit application monolith.
-2. Forty-percent whole-production-code coverage.
+2. Limited whole-production-code coverage of 40.60%, despite CI measurement and floor enforcement.
 3. Zero measured coverage for the active AssumeRole scan engine.
 4. Multiple SQLite databases without implemented formal migrations.
 5. Incomplete backup scope.

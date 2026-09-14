@@ -32,7 +32,7 @@ DGS Sentinel AI is not currently represented as deployed at production scale acr
 | Tenant-scoped dashboards | Implemented |
 | Tenant-aware AI engineering | Implemented foundation |
 | Documentation and workspace standards | Implemented foundation |
-| Whole-production-code coverage | Partial |
+| Whole-production-code coverage | CI measurement and floor implemented; test coverage remains partial |
 | Complete database backup and recovery | Partial |
 | Formal schema migrations | Partial |
 | Scheduled cloud scanning | Planned |
@@ -144,7 +144,7 @@ Verified baseline:
 - 48 test modules.
 - Python 3.11 and Python 3.13 CI.
 - All 74 tracked non-test Python files compile in both CI versions.
-- 40% whole-production-code coverage.
+- 40.60% whole-production-code coverage across all 74 tracked non-test Python files in both CI versions, with an enforced 40.60% floor.
 - Strong focused coverage for tenant and user-security modules.
 
 Gaps:
@@ -153,12 +153,12 @@ Gaps:
 - The active AssumeRole scan engine has 0% measured coverage.
 - Headless scanning, reporting, client-detection storage, and several ingest modules have 0% measured coverage.
 - `sentinel_ai_analyst.py` has 19% measured coverage.
-- CI coverage enforcement currently covers only selected modules.
+- Critical execution paths remain insufficiently tested despite whole-production coverage enforcement.
 
 Planned work:
 
-- Publish an honest whole-production-code coverage result.
-- Prevent whole-code coverage regression.
+- Maintain whole-production terminal reports and the Python 3.13 XML artifact.
+- Raise the 40.60% whole-production floor as tests improve, preserving the combined 70% gate for app_config.py, app_logging.py, and health_checks.py.
 - Add tests for critical active execution paths.
 - Extract testable domain logic from the Streamlit application incrementally.
 
@@ -361,7 +361,7 @@ Required work:
 
 ## Current Phase 1 Priorities
 
-1. Establish whole-production-code coverage in CI.
+1. Maintain whole-production-code coverage enforcement and raise the floor as testing improves.
 2. Test critical active execution paths.
 3. Expand backup and recovery scope.
 4. Implement versioned schema migrations from the accepted architecture decision.

@@ -95,12 +95,43 @@ jobs:
           AWS_REGION: us-east-1
         run: |
           python -m pytest \
-            --cov=app_config \
-            --cov=app_logging \
-            --cov=health_checks \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=70
+            --cov=. \
+            --cov-report= \
+            --cov-fail-under=0
+
+          python -m coverage report \
+            --precision=2 \
+            --fail-under=70 \
+            app_config.py app_logging.py health_checks.py
+
+      - name: Report whole-production coverage
+        run: |
+          python - <<'PYTHON'
+          import subprocess
+          import sys
+
+          files = [
+              path
+              for path in subprocess.check_output(
+                  ["git", "ls-files", "*.py"], text=True
+              ).splitlines()
+              if not path.startswith("tests/")
+          ]
+          if not files:
+              raise SystemExit("No tracked non-test Python files found.")
+
+          print(f"Reporting coverage for {len(files)} files.", flush=True)
+          subprocess.run(
+              [sys.executable, "-m", "coverage", "xml",
+               "--fail-under=0", "-o", "coverage.xml", *files],
+              check=True,
+          )
+          subprocess.run(
+              [sys.executable, "-m", "coverage", "report",
+               "--precision=2", "--fail-under=40.60", *files],
+              check=True,
+          )
+          PYTHON
 
       - name: Upload coverage artifact
         if: matrix.python-version == '3.13'
