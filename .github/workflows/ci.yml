@@ -128,7 +128,7 @@ jobs:
           )
           subprocess.run(
               [sys.executable, "-m", "coverage", "report",
-               "--precision=2", "--fail-under=0", *files],
+               "--precision=2", "--fail-under=40.60", *files],
               check=True,
           )
           PYTHON
