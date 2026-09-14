@@ -39,6 +39,7 @@ Release-readiness and validation tags describe engineering milestones. They do n
 - Consolidated and corrected the root README.
 - Updated the enterprise roadmap with verified documentation and migration status.
 - Documented the CAASM alert persistence-path limitation.
+- Expanded CI syntax validation from 17 named modules to all 74 tracked non-test Python files.
 
 ### Security
 
@@ -52,8 +53,7 @@ Release-readiness and validation tags describe engineering milestones. They do n
 
 - Whole-production-code coverage is 40%.
 - The active AssumeRole scan engine has no measured coverage.
-- CI compilation covers only selected production modules.
-- SQLite persistence has no formal migration framework.
+- SQLite persistence has no implemented migration framework.
 - Default backup scope is incomplete.
 - `app.py` remains a large Streamlit monolith.
 - Infrastructure as code and a repeatable staging environment are not implemented.

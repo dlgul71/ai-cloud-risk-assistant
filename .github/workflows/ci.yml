@@ -54,26 +54,37 @@ jobs:
       - name: Validate installed packages
         run: python -m pip check
 
-      - name: Compile production modules
+      - name: Compile all tracked non-test Python files
         run: |
-          python -m py_compile \
-            app.py \
-            app_config.py \
-            app_logging.py \
-            storage_paths.py \
-            backup_recovery.py \
-            operational_monitoring.py \
-            health_checks.py \
-            scripts/backup_recovery_cli.py \
-            scan_engine_phase3_assumerole.py \
-            client_detection_store.py \
-            remediation_engine.py \
-            remediation_db.py \
-            remediation_guardrails.py \
-            remediation_live_actions.py \
-            remediation_aws_adapters.py \
-            asset_db.py \
-            client_db.py
+          python - <<'PYTHON'
+          import py_compile
+          import subprocess
+
+          files = [
+              file_name
+              for file_name in subprocess.check_output(
+                  ["git", "ls-files", "*.py"],
+                  text=True,
+              ).splitlines()
+              if not file_name.startswith("tests/")
+          ]
+
+          if not files:
+              raise SystemExit(
+                  "No tracked non-test Python files found."
+              )
+
+          for file_name in files:
+              py_compile.compile(
+                  file_name,
+                  doraise=True,
+              )
+
+          print(
+              f"Compiled {len(files)} tracked "
+              "non-test Python files."
+          )
+          PYTHON
 
       - name: Run unit tests
         env:

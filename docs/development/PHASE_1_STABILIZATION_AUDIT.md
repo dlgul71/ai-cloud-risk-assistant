@@ -108,7 +108,7 @@ Newer tenant and identity components have substantially stronger focused coverag
 
 ### Gaps
 
-- Compilation covers only 17 named production modules rather than all 122 tracked Python files.
+- At the audit baseline, compilation covered only 17 named production modules. This gap was resolved by compiling all 74 tracked non-test Python files in both supported CI versions.
 - Coverage enforcement applies to only three selected modules.
 - GitHub Actions reports Node.js 20 deprecation warnings for action dependencies.
 - The Python base image is version-tagged but not digest-pinned.
@@ -242,17 +242,16 @@ Email, Slack, Microsoft Teams, generalized severity routing, formal recovery dri
 ## Stabilization Priorities
 
 1. Maintain canonical documentation as engineering behavior changes.
-2. Compile all tracked production modules in CI.
-3. Establish an honest whole-production-code coverage baseline.
-4. Add tests for active scanning, reporting, headless operation, and extracted application logic.
-5. Expand backup and recovery coverage to all required databases.
-6. Document current schemas and approve a formal migration strategy.
-7. Refactor `app.py` incrementally behind tests.
-8. Replace broad exception handling with appropriately scoped failures.
-9. Remove verified legacy and duplicate files through reviewed pull requests.
-10. Add infrastructure-as-code and staging deployment controls.
-11. Publish release notes and tag the stabilized v2.1 baseline.
-12. Defer broad feature expansion until stabilization exit criteria pass.
+2. Establish an honest whole-production-code coverage baseline.
+3. Add tests for active scanning, reporting, headless operation, and extracted application logic.
+4. Expand backup and recovery coverage to all required databases.
+5. Implement the accepted formal migration strategy.
+6. Refactor `app.py` incrementally behind tests.
+7. Replace broad exception handling with appropriately scoped failures.
+8. Remove verified legacy and duplicate files through reviewed pull requests.
+9. Add infrastructure-as-code and staging deployment controls.
+10. Publish release notes and tag the stabilized v2.1 baseline.
+11. Defer broad feature expansion until stabilization exit criteria pass.
 
 ## Phase 1 Exit Criteria
 

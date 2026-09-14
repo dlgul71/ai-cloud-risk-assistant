@@ -143,6 +143,7 @@ Verified baseline:
 - 447 tests passed.
 - 48 test modules.
 - Python 3.11 and Python 3.13 CI.
+- All 74 tracked non-test Python files compile in both CI versions.
 - 40% whole-production-code coverage.
 - Strong focused coverage for tenant and user-security modules.
 
@@ -153,11 +154,9 @@ Gaps:
 - Headless scanning, reporting, client-detection storage, and several ingest modules have 0% measured coverage.
 - `sentinel_ai_analyst.py` has 19% measured coverage.
 - CI coverage enforcement currently covers only selected modules.
-- CI compilation covers only selected production modules.
 
 Planned work:
 
-- Compile all tracked production Python files in CI.
 - Publish an honest whole-production-code coverage result.
 - Prevent whole-code coverage regression.
 - Add tests for critical active execution paths.
@@ -362,15 +361,14 @@ Required work:
 
 ## Current Phase 1 Priorities
 
-1. Expand CI compilation to all tracked production modules.
-2. Establish whole-production-code coverage in CI.
-3. Test critical active execution paths.
-4. Expand backup and recovery scope.
-5. Implement versioned schema migrations from the accepted architecture decision.
-6. Review high-risk broad exception handling.
-7. Remove verified legacy and duplicate files.
-8. Add staging and deployment architecture.
-9. Publish a stabilized v2.1 release candidate.
+1. Establish whole-production-code coverage in CI.
+2. Test critical active execution paths.
+3. Expand backup and recovery scope.
+4. Implement versioned schema migrations from the accepted architecture decision.
+5. Review high-risk broad exception handling.
+6. Remove verified legacy and duplicate files.
+7. Add staging and deployment architecture.
+8. Publish a stabilized v2.1 release candidate.
 
 ## Phase 1 Definition of Done
 
