@@ -326,9 +326,9 @@ Protected `main` requires:
 - Security Scanning.
 - Hardened Docker Image.
 
-The workflow performs dependency installation, `pip check`, selected-module compilation, automated testing, selected-module coverage enforcement, Bandit, pip-audit, detect-secrets, Docker build, non-root validation, image-configuration validation, and Streamlit health validation.
+The workflow performs dependency installation, `pip check`, compilation of all 74 tracked non-test Python files, automated testing, selected-module coverage enforcement, Bandit, pip-audit, detect-secrets, Docker build, non-root validation, image-configuration validation, and Streamlit health validation.
 
-Current gaps include incomplete module compilation and selected-module rather than whole-production-code coverage.
+The remaining CI measurement gap is selected-module rather than whole-production-code coverage.
 
 ## Operational Architecture
 

@@ -423,13 +423,12 @@ The current default backup scope is incomplete and must not be treated as full p
 
 ## Current Stabilization Priorities
 
-1. Compile all tracked production modules in CI.
-2. Measure whole-production-code coverage in CI.
-3. Test critical scan, report, and headless execution paths.
-4. Expand backup and recovery scope.
-5. Implement formal schema migrations from the accepted architecture decision.
-6. Decompose the Streamlit application incrementally behind tests.
-7. Add repeatable staging and deployment infrastructure.
+1. Measure whole-production-code coverage in CI.
+2. Test critical scan, report, and headless execution paths.
+3. Expand backup and recovery scope.
+4. Implement formal schema migrations from the accepted architecture decision.
+5. Decompose the Streamlit application incrementally behind tests.
+6. Add repeatable staging and deployment infrastructure.
 
 ## Contributing
 
