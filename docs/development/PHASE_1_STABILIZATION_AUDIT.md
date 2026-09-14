@@ -56,7 +56,7 @@ Gate 0 was completed before this audit.
 
 ### Coverage Finding
 
-The current CI coverage threshold measures only:
+At the audit baseline, the CI coverage threshold measured only:
 
 - `app_config`
 - `app_logging`
@@ -68,7 +68,9 @@ The Phase 1 whole-production-code assessment measured:
 - 4,492 missed statements.
 - 40% total production-code coverage.
 
-Therefore, the selected-module CI coverage figure must not be described as whole-platform coverage.
+The historical selected-module CI coverage figure must not be described as whole-platform coverage.
+
+Update, September 14, 2026: CI measurement now explicitly includes all 74 tracked non-test Python files, including scripts and the nested application. Run 34795081732 measured 7,648 statements and 4,543 missed statements (40.60%) on both Python 3.11 and Python 3.13; both versions passed 447 tests and recorded 82.91% combined focused coverage. That run failed only because secret-baseline line metadata needed updating. After the metadata update and addition of a 40.60% whole-production floor, run 34795463324 passed. The combined 70% focused gate remains intact, and Python 3.13 uploads the whole-production XML report. The earlier statement counts above are historical and use a different inventory; this update does not establish a test-coverage improvement.
 
 ### Major Coverage Gaps
 
@@ -109,7 +111,7 @@ Newer tenant and identity components have substantially stronger focused coverag
 ### Gaps
 
 - At the audit baseline, compilation covered only 17 named production modules. This gap was resolved by compiling all 74 tracked non-test Python files in both supported CI versions.
-- Coverage enforcement applies to only three selected modules.
+- The audit-baseline coverage-enforcement gap is resolved: CI enforces a 40.60% whole-production floor alongside the combined 70% focused gate. Critical execution-path coverage remains incomplete.
 - GitHub Actions reports Node.js 20 deprecation warnings for action dependencies.
 - The Python base image is version-tagged but not digest-pinned.
 - There is no infrastructure-as-code deployment validation.
@@ -242,7 +244,7 @@ Email, Slack, Microsoft Teams, generalized severity routing, formal recovery dri
 ## Stabilization Priorities
 
 1. Maintain canonical documentation as engineering behavior changes.
-2. Establish an honest whole-production-code coverage baseline.
+2. Maintain the verified whole-production-code coverage baseline and raise the enforced floor as tests improve.
 3. Add tests for active scanning, reporting, headless operation, and extracted application logic.
 4. Expand backup and recovery coverage to all required databases.
 5. Implement the accepted formal migration strategy.
