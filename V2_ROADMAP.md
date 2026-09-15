@@ -140,25 +140,25 @@ Remaining:
 
 Verified baseline:
 
-- 447 tests passed.
-- 48 test modules.
+- 456 tests passed.
+- 49 test modules.
 - Python 3.11 and Python 3.13 CI.
 - All 74 tracked non-test Python files compile in both CI versions.
-- 40.60% whole-production-code coverage across all 74 tracked non-test Python files in both CI versions, with an enforced 40.60% floor.
+- 43.03% whole-production-code coverage across all 74 tracked non-test Python files in both CI versions, with an enforced 43.03% floor.
 - Strong focused coverage for tenant and user-security modules.
 
 Gaps:
 
 - `app.py` has 0% measured coverage.
-- The active AssumeRole scan engine has 0% measured coverage.
-- Headless scanning, reporting, client-detection storage, and several ingest modules have 0% measured coverage.
+- The active AssumeRole scan engine has 38.36% measured coverage; collector and orchestration paths still need additional tests.
+- Headless scanning, reporting, and several ingest modules remain untested. Client-detection storage has import-time coverage but no new direct persistence tests.
 - `sentinel_ai_analyst.py` has 19% measured coverage.
 - Critical execution paths remain insufficiently tested despite whole-production coverage enforcement.
 
 Planned work:
 
 - Maintain whole-production terminal reports and the Python 3.13 XML artifact.
-- Raise the 40.60% whole-production floor as tests improve, preserving the combined 70% gate for app_config.py, app_logging.py, and health_checks.py.
+- Raise the 43.03% whole-production floor as tests improve, preserving the combined 70% gate for app_config.py, app_logging.py, and health_checks.py.
 - Add tests for critical active execution paths.
 - Extract testable domain logic from the Streamlit application incrementally.
 

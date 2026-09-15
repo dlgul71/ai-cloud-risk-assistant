@@ -51,8 +51,8 @@ Release-readiness and validation tags describe engineering milestones. They do n
 
 ### Known Stabilization Work
 
-- Whole-production-code coverage remains limited at 40.60%. CI now measures all 74 tracked non-test Python files, enforces a 40.60% floor, and preserves the combined 70% focused gate.
-- The active AssumeRole scan engine has 0% measured coverage.
+- Nine mocked AssumeRole scan tests increase the suite to 456 passing tests and whole-production coverage to 43.03%. CI enforces a 43.03% floor across 74 tracked non-test Python files and preserves the combined 70% focused gate.
+- The active AssumeRole scan engine now has 38.36% measured coverage. Additional collector, pagination, and persistence integration tests remain necessary.
 - SQLite persistence has no implemented migration framework.
 - Default backup scope is incomplete.
 - `app.py` remains a large Streamlit monolith.
