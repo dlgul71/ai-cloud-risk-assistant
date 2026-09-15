@@ -378,7 +378,7 @@ python -m pytest
 
 The verified Phase 1 baseline includes:
 
-- 447 passing tests
+- 456 passing tests
 - Python 3.11 and Python 3.13 CI
 - Bandit static analysis
 - Dependency vulnerability auditing
@@ -387,7 +387,7 @@ The verified Phase 1 baseline includes:
 - Hardened Docker validation
 - Streamlit health-check validation
 
-Whole-production-code coverage is 40.60% across all 74 tracked non-test Python files in Python 3.11 and 3.13 CI, with a 40.60% enforced floor. The combined 70% gate for app_config.py, app_logging.py, and health_checks.py remains in place. Several active execution paths still require additional testing.
+Whole-production-code coverage is 43.03% across all 74 tracked non-test Python files in Python 3.11 and 3.13 CI, with a 43.03% enforced floor. The combined 70% gate for app_config.py, app_logging.py, and health_checks.py remains in place. Nine new AssumeRole scan tests bring that engine to 38.36% coverage; several active execution paths still require additional testing.
 
 See:
 

@@ -72,7 +72,9 @@ The historical selected-module CI coverage figure must not be described as whole
 
 Update, September 14, 2026: CI measurement now explicitly includes all 74 tracked non-test Python files, including scripts and the nested application. Run 34795081732 measured 7,648 statements and 4,543 missed statements (40.60%) on both Python 3.11 and Python 3.13; both versions passed 447 tests and recorded 82.91% combined focused coverage. That run failed only because secret-baseline line metadata needed updating. After the metadata update and addition of a 40.60% whole-production floor, run 34795463324 passed. The combined 70% focused gate remains intact, and Python 3.13 uploads the whole-production XML report. The earlier statement counts above are historical and use a different inventory; this update does not establish a test-coverage improvement.
 
-### Major Coverage Gaps
+Update, September 15, 2026: CI run 34928091875 passed on commit 6b6d98c. Both Python versions passed 456 tests and measured 43.03% whole-production coverage (7,648 statements; 4,357 missed), 38.36% AssumeRole engine coverage, and 82.91% combined focused coverage. Nine new mocked tests cover tenant-key validation, failed identity handling, partial EC2 regional failure, IAM/S3 unknown states, and tenant propagation to storage calls. The follow-up workflow change raises the whole-production floor to 43.03%; that threshold change requires its own CI verification. These tests do not establish downstream tenant isolation or exercise live AWS access.
+
+### Major Coverage Gaps at the Original Audit Baseline
 
 - `app.py`: 0%
 - `scan_engine_phase3_assumerole.py`: 0%
@@ -111,7 +113,7 @@ Newer tenant and identity components have substantially stronger focused coverag
 ### Gaps
 
 - At the audit baseline, compilation covered only 17 named production modules. This gap was resolved by compiling all 74 tracked non-test Python files in both supported CI versions.
-- The audit-baseline coverage-enforcement gap is resolved: CI enforces a 40.60% whole-production floor alongside the combined 70% focused gate. Critical execution-path coverage remains incomplete.
+- The audit-baseline coverage-enforcement gap was resolved with the 40.60% whole-production floor. The September 15 follow-up raises that floor to 43.03%, retaining the combined 70% focused gate. Critical execution-path coverage remains incomplete.
 - GitHub Actions reports Node.js 20 deprecation warnings for action dependencies.
 - The Python base image is version-tagged but not digest-pinned.
 - There is no infrastructure-as-code deployment validation.
