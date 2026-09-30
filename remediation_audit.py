@@ -1,11 +1,18 @@
 import sqlite3
 from datetime import datetime, UTC
 
-DB_NAME = "remediation_actions.db"
+from storage_paths import database_path
+
+# None resolves through DGS_DATA_DIR at call time; explicit overrides remain supported.
+DB_NAME = None
+
+
+def _database_path():
+    return DB_NAME if DB_NAME is not None else database_path("remediation_actions.db")
 
 
 def init_audit_table():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -26,7 +33,7 @@ def init_audit_table():
 def log_remediation_event(action_id, event_type, event_detail, actor="DGS Sentinel AI"):
     init_audit_table()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -53,7 +60,7 @@ def log_remediation_event(action_id, event_type, event_detail, actor="DGS Sentin
 def get_remediation_audit():
     init_audit_table()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
