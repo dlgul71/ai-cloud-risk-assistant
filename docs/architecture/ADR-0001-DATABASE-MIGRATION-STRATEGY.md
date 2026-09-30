@@ -20,12 +20,16 @@ Known database domains include:
 | `users.db` | Persistent users, authentication events, and access assignments |
 | `ai_assets.db` | Tenant-scoped AI asset and relationship data |
 | `caasm_alerts.db` | CAASM correlated-exposure alerts |
+| `dgs_sentinel.db` | Legacy headless scan findings |
+| `remediation_actions.db` | Execution actions, evidence, and remediation audit events |
 
 Most database paths use the centralized `DGS_DATA_DIR` storage location.
 
 At the decision date, `caasm_alert_db.py` used a relative path. The September 30 storage update routes its default `caasm_alerts.db` path through `DGS_DATA_DIR` and retains explicit test overrides. Existing files require controlled relocation; see [CAASM alert storage](../operations/CAASM-ALERT-STORAGE.md).
 
-The legacy `db.py` scan-findings store (`dgs_sentinel.db`) still uses a working-directory path and must be included in the database inventory before claiming all paths are centralized.
+The scan-findings store (`dgs_sentinel.db`) now uses the shared storage helper. `remediation_execution.py` and `remediation_audit.py` still use working-directory paths for `remediation_actions.db`. Full path centralization remains incomplete.
+
+See [the database inventory](DATABASE-INVENTORY.md) for all nine SQLite files, fresh schema definitions, inline upgrade behavior, and default backup coverage.
 
 Current schema behavior includes:
 
@@ -435,6 +439,8 @@ Until the default backup inventory is complete, operators must explicitly add:
 
 - `users.db`
 - `ai_assets.db`
+- `dgs_sentinel.db`
+- The actual working-directory `remediation_actions.db` file, including execution evidence and audit events.
 - The resolved `caasm_alerts.db` path when CAASM alert persistence is used.
 - Any additional required persistent audit or execution data.
 
@@ -546,7 +552,7 @@ Reverse migrations can destroy data or create false confidence. Verified backup 
 ## Implementation Sequence
 
 1. Correct CAASM alert storage to use `DGS_DATA_DIR` — implemented September 30, 2026; existing-data relocation remains an operator action.
-2. Document the existing schema for every database.
+2. Document the existing schema for every database — the code-derived inventory is available; deployed schema validation and formal baseline adoption remain pending.
 3. Define the migration registry schema.
 4. Implement migration discovery and checksum validation.
 5. Implement schema compatibility checks.
