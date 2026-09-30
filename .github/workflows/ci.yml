@@ -337,6 +337,26 @@ jobs:
           print("Scan findings persist under /data.")
           PYTHON
 
+      - name: Verify execution and audit storage in read-only container
+        run: |
+          docker exec -i dgs-sentinel-ci python - <<'PYTHON'
+          from pathlib import Path
+          from remediation_execution import create_execution_action, get_execution_actions
+          from remediation_audit import get_remediation_audit
+
+          result = create_execution_action(
+              finding="ci-execution-storage-check",
+              action_type="Generate Monitoring Review Task",
+              notes="CI persistence check; no remediation execution.",
+          )
+          assert get_execution_actions()[0][0] == result["action_id"]
+          event = get_remediation_audit()[0]
+          assert event[2:4] == (result["action_id"], "ACTION_CREATED")
+          assert Path("/data/remediation_actions.db").is_file()
+          assert not Path("/app/remediation_actions.db").exists()
+          print("Execution actions and audit records persist under /data.")
+          PYTHON
+
       - name: Display container logs
         if: always()
         run: docker logs dgs-sentinel-ci 2>/dev/null || true

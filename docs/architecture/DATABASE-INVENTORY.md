@@ -18,7 +18,7 @@ No database currently has an ordered, checksum-verified schema registry.
 | `ai_assets.db` | [`ai_asset_db.py`](../../ai_asset_db.py) | DGS_DATA_DIR | No | Tenant composite keys; relationships have no declared foreign keys. |
 | `caasm_alerts.db` | [`caasm_alert_db.py`](../../caasm_alert_db.py) | DGS_DATA_DIR | No | Global fingerprint uniqueness; no client_key column. |
 | `dgs_sentinel.db` | [`db.py`](../../db.py) | DGS_DATA_DIR after this change | No | Legacy scan findings; no tenant or account identifier. |
-| `remediation_actions.db` | [`remediation_execution.py`](../../remediation_execution.py), [`remediation_audit.py`](../../remediation_audit.py) | Working directory | No | Execution and audit records; no client_key column. |
+| `remediation_actions.db` | [`remediation_execution.py`](../../remediation_execution.py), [`remediation_audit.py`](../../remediation_audit.py) | DGS_DATA_DIR | No | Execution and audit records; no client_key column. |
 
 DGS_DATA_DIR paths use the shared storage helper and resolve at call time.
 When DGS_DATA_DIR is unset, that helper preserves working-directory behavior.
@@ -492,8 +492,8 @@ CREATE TABLE IF NOT EXISTS remediation_audit (
 
 ## Remaining implementation work
 
-- Centralize remediation_actions.db consistently in execution and audit
-  modules, with verified relocation of historical records.
+- Verify deployment-specific relocation of historical records before changing
+  DGS_DATA_DIR; runtime does not relocate legacy databases automatically.
 - Expand default backup and health inventory with tests and clear optional
   database behavior.
 - Implement the version registry, checksum checks, explicit status/plan/apply
@@ -501,4 +501,5 @@ CREATE TABLE IF NOT EXISTS remediation_audit (
 
 See [ADR-0001](ADR-0001-DATABASE-MIGRATION-STRATEGY.md) for the migration
 policy and [scan findings storage](../operations/SCAN-FINDINGS-STORAGE.md)
-for this change's cutover and rollback requirements.
+and [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md)
+for cutover and rollback requirements.

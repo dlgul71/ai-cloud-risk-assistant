@@ -27,7 +27,7 @@ Most database paths use the centralized `DGS_DATA_DIR` storage location.
 
 At the decision date, `caasm_alert_db.py` used a relative path. The September 30 storage update routes its default `caasm_alerts.db` path through `DGS_DATA_DIR` and retains explicit test overrides. Existing files require controlled relocation; see [CAASM alert storage](../operations/CAASM-ALERT-STORAGE.md).
 
-The scan-findings store (`dgs_sentinel.db`) now uses the shared storage helper. `remediation_execution.py` and `remediation_audit.py` still use working-directory paths for `remediation_actions.db`. Full path centralization remains incomplete.
+The scan-findings store (`dgs_sentinel.db`) and both execution/audit modules for `remediation_actions.db` now use the shared storage helper. With DGS_DATA_DIR unset, working-directory defaults remain compatible; explicit DB_NAME overrides remain supported. Deployment-specific relocation and backup verification are still required.
 
 See [the database inventory](DATABASE-INVENTORY.md) for all nine SQLite files, fresh schema definitions, inline upgrade behavior, and default backup coverage.
 
@@ -440,7 +440,7 @@ Until the default backup inventory is complete, operators must explicitly add:
 - `users.db`
 - `ai_assets.db`
 - `dgs_sentinel.db`
-- The actual working-directory `remediation_actions.db` file, including execution evidence and audit events.
+- The resolved `remediation_actions.db` file, including execution evidence and audit events, plus any legacy working-directory copy pending explicit relocation.
 - The resolved `caasm_alerts.db` path when CAASM alert persistence is used.
 - Any additional required persistent audit or execution data.
 
@@ -597,3 +597,5 @@ Separate decisions are still required for:
 - Retention and archival policy.
 - Recovery-time and recovery-point objectives.
 - Disaster-recovery architecture.
+
+Execution and audit storage now share the DGS_DATA_DIR default, with regressions for SQLite backup relocation, unchanged records and signed evidence, and read-only-container persistence. See [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md). Existing databases require explicit relocation; default backup coverage still excludes remediation_actions.db. This path change does not implement schema versioning or certify any production cutover.

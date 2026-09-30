@@ -3,14 +3,19 @@ import hmac
 import json
 import sqlite3
 from datetime import datetime, UTC
+
+from storage_paths import database_path
 from app_config import get_setting
 from remediation_audit import log_remediation_event
 from remediation_live_actions import execute_controlled_action
 
-DB_NAME = "remediation_actions.db"
-
-
+# None resolves through DGS_DATA_DIR at call time; explicit overrides remain supported.
+DB_NAME = None
 EVIDENCE_AUTHENTICATION_TYPE = "HMAC-SHA256"
+
+
+def _database_path():
+    return DB_NAME if DB_NAME is not None else database_path("remediation_actions.db")
 
 
 def _get_evidence_hmac_key():
@@ -111,7 +116,7 @@ def _build_execution_evidence(
 
 
 def init_execution_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -198,7 +203,7 @@ def create_execution_action(
 ):
     init_execution_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     normalized_provider = (
@@ -294,7 +299,7 @@ def create_execution_action(
 def get_execution_actions():
     init_execution_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -339,7 +344,7 @@ def get_execution_actions():
 def update_execution_action(action_id, approval_status=None, execution_status=None):
     init_execution_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -415,7 +420,7 @@ def update_execution_action(action_id, approval_status=None, execution_status=No
 def simulate_execution(action_id):
     init_execution_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -510,7 +515,7 @@ def execute_live_action(
 
     init_execution_db()
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(
@@ -889,7 +894,7 @@ def verify_execution_evidence(
 ):
     init_execution_db()
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(
@@ -1123,7 +1128,7 @@ def create_actions_from_remediation_plan(
 def simulate_all_approved_actions():
     init_execution_db()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
