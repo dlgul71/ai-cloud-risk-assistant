@@ -6,7 +6,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from sentinel_ai_analyst import (
-    build_security_context,
+    build_security_context_for_access,
+    get_available_clients_for_access,
     filter_context_by_account,
     calculate_analyst_metrics,
     get_top_remediation_items
@@ -18,10 +19,29 @@ COMPANY_NAME = "Data Generated Solutions, LLC"
 
 def generate_client_analyst_pdf(
     client_name,
-    aws_account_id
+    aws_account_id,
+    *,
+    client_keys=None,
+    is_global_admin=False,
 ):
+    real_aws_account_id = str(aws_account_id or "").strip()
+    if not real_aws_account_id:
+        raise ValueError("AWS account ID is required for a client report.")
+
+    client_keys = tuple(client_keys or ())
+    visible_clients = get_available_clients_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
+    authorized_accounts = {
+        str(client.get("aws_account_id") or "").strip()
+        for client in visible_clients
+        if client.get("aws_account_id")
+    }
+    if real_aws_account_id not in authorized_accounts:
+        raise PermissionError("The selected AWS account is not authorized.")
+
     real_client_name = client_name
-    real_aws_account_id = aws_account_id
 
     display_client_name = sanitize_text(
         real_client_name
@@ -31,7 +51,10 @@ def generate_client_analyst_pdf(
         real_aws_account_id
     )
 
-    context = build_security_context()
+    context = build_security_context_for_access(
+        client_keys=client_keys,
+        is_global_admin=is_global_admin,
+    )
 
     filtered_context = filter_context_by_account(
         context=context,

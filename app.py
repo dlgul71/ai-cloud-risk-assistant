@@ -3360,7 +3360,9 @@ if page == "Client Security Dashboard":
 
         client_security_pdf = generate_client_analyst_pdf(
             client_name=client_name,
-            aws_account_id=aws_account_id
+            aws_account_id=aws_account_id,
+            client_keys=_current_user_client_keys(),
+            is_global_admin=_current_user_is_global_admin(),
         )
 
         report_safe_client_name = (
@@ -6490,7 +6492,9 @@ if page == "Ask Sentinel AI":
 
         client_pdf_buffer = generate_client_analyst_pdf(
             client_name=selected_client.get("client_name"),
-            aws_account_id=selected_client.get("aws_account_id")
+            aws_account_id=selected_client.get("aws_account_id"),
+            client_keys=_current_user_client_keys(),
+            is_global_admin=_current_user_is_global_admin(),
         )
 
         safe_client_name = (
