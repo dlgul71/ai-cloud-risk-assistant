@@ -1,7 +1,7 @@
 # SQLite database inventory and schema baseline
 
-Reviewed September 30, 2026 against main commit 9d54435 and the accompanying
-dgs_sentinel.db path correction. This is a code-derived inventory of fresh
+Reviewed September 30, 2026 against main commit 69fe825 and the accompanying
+remediation_actions.db path correction. This is a code-derived inventory of fresh
 schemas, not certification of a deployed database or an adopted migration
 baseline. Existing installations may differ after legacy inline upgrades.
 No database currently has an ordered, checksum-verified schema registry.
@@ -17,7 +17,7 @@ No database currently has an ordered, checksum-verified schema registry.
 | `users.db` | [`user_db.py`](../../user_db.py) | DGS_DATA_DIR | No | Users, access assignments, lockout state, and authentication audit. |
 | `ai_assets.db` | [`ai_asset_db.py`](../../ai_asset_db.py) | DGS_DATA_DIR | No | Tenant composite keys; relationships have no declared foreign keys. |
 | `caasm_alerts.db` | [`caasm_alert_db.py`](../../caasm_alert_db.py) | DGS_DATA_DIR | No | Global fingerprint uniqueness; no client_key column. |
-| `dgs_sentinel.db` | [`db.py`](../../db.py) | DGS_DATA_DIR after this change | No | Legacy scan findings; no tenant or account identifier. |
+| `dgs_sentinel.db` | [`db.py`](../../db.py) | DGS_DATA_DIR | No | Legacy scan findings; no tenant or account identifier. |
 | `remediation_actions.db` | [`remediation_execution.py`](../../remediation_execution.py), [`remediation_audit.py`](../../remediation_audit.py) | DGS_DATA_DIR | No | Execution and audit records; no client_key column. |
 
 DGS_DATA_DIR paths use the shared storage helper and resolve at call time.
@@ -35,8 +35,8 @@ paths in the actual environment before creating a backup.
 
 For complete SQLite recovery, explicitly include users.db, ai_assets.db,
 caasm_alerts.db, dgs_sentinel.db, and remediation_actions.db in addition to
-those four defaults. The last file currently resolves from the working
-directory, so it must not be assumed to live under DGS_DATA_DIR.
+those four defaults. Verify explicit overrides and any legacy working-directory
+copies before assuming all deployed files reside under DGS_DATA_DIR.
 Backups must include execution evidence and audit records, not just
 remediation recommendations. Verify checksums, SQLite integrity, and a
 restoration rehearsal for every affected file.
