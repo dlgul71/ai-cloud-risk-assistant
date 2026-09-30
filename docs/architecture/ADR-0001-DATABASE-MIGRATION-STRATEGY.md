@@ -23,7 +23,9 @@ Known database domains include:
 
 Most database paths use the centralized `DGS_DATA_DIR` storage location.
 
-`caasm_alert_db.py` is a current exception. It uses a relative `caasm_alerts.db` path, making its location dependent on the process working directory and potentially unwritable in the hardened read-only container.
+At the decision date, `caasm_alert_db.py` used a relative path. The September 30 storage update routes its default `caasm_alerts.db` path through `DGS_DATA_DIR` and retains explicit test overrides. Existing files require controlled relocation; see [CAASM alert storage](../operations/CAASM-ALERT-STORAGE.md).
+
+The legacy `db.py` scan-findings store (`dgs_sentinel.db`) still uses a working-directory path and must be included in the database inventory before claiming all paths are centralized.
 
 Current schema behavior includes:
 
@@ -105,7 +107,7 @@ The future implementation must:
 - Work inside the hardened container’s `/data` volume.
 - Avoid writing persistent data to the application directory.
 
-`caasm_alert_db.py` must be migrated from its relative path to the centralized storage helper before CAASM alert persistence is approved for a hardened deployment.
+CAASM alert path centralization is implemented with unit tests and a read-only-container persistence check. This path correction does not add tenant boundaries or versioned schema migrations to CAASM alerts.
 
 ### 4. Introduce Versioned Migrations Per Database Domain
 
@@ -436,7 +438,7 @@ Until the default backup inventory is complete, operators must explicitly add:
 - The resolved `caasm_alerts.db` path when CAASM alert persistence is used.
 - Any additional required persistent audit or execution data.
 
-The CAASM alert database path must not be assumed to be under `DGS_DATA_DIR` until the code is corrected.
+The default CAASM alert database now resolves under `DGS_DATA_DIR`. Existing installations must explicitly relocate any legacy working-directory file before switching locations. Default backup coverage still excludes this database; include the resolved file explicitly.
 
 Backup completion alone is insufficient. Verification and restoration must also succeed.
 
@@ -543,7 +545,7 @@ Reverse migrations can destroy data or create false confidence. Verified backup 
 
 ## Implementation Sequence
 
-1. Correct CAASM alert storage to use `DGS_DATA_DIR`.
+1. Correct CAASM alert storage to use `DGS_DATA_DIR` — implemented September 30, 2026; existing-data relocation remains an operator action.
 2. Document the existing schema for every database.
 3. Define the migration registry schema.
 4. Implement migration discovery and checksum validation.

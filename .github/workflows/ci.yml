@@ -310,6 +310,19 @@ jobs:
           echo "Health endpoint: $RESPONSE"
           test "$RESPONSE" = "ok"
 
+      - name: Verify CAASM alert storage in read-only container
+        run: |
+          docker exec -i dgs-sentinel-ci python - <<'PYTHON'
+          from pathlib import Path
+          from caasm_alert_db import init_alert_db, get_alerts
+
+          init_alert_db()
+          assert get_alerts() == []
+          assert Path("/data/caasm_alerts.db").is_file()
+          assert not Path("/app/caasm_alerts.db").exists()
+          print("CAASM alerts persist under /data.")
+          PYTHON
+
       - name: Display container logs
         if: always()
         run: docker logs dgs-sentinel-ci 2>/dev/null || true
