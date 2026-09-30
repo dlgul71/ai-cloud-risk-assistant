@@ -1,5 +1,6 @@
 """Scan findings persistence and configured-storage regressions."""
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -43,7 +44,7 @@ def test_configured_scan_storage_round_trip(configured_storage):
 def test_existing_schema_and_records_are_preserved(configured_storage):
     data_dir, _ = configured_storage
     target = data_dir / "dgs_sentinel.db"
-    with sqlite3.connect(target) as connection:
+    with closing(sqlite3.connect(target)) as connection, connection:
         connection.execute("""
             CREATE TABLE scan_findings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +65,7 @@ def test_existing_schema_and_records_are_preserved(configured_storage):
     assert [row[1] for row in db.get_all_findings()] == [
         "new-record", "legacy-record"
     ]
-    with sqlite3.connect(target) as connection:
+    with closing(sqlite3.connect(target)) as connection, connection:
         assert connection.execute(
             "SELECT id FROM scan_findings ORDER BY id"
         ).fetchall() == [(7,), (8,)]
