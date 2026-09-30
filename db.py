@@ -1,11 +1,24 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, UTC
 
-DB_NAME = "dgs_sentinel.db"
+from storage_paths import database_path
+
+
+DB_NAME = None
+
+
+def _database_path():
+    """Resolve scan storage while retaining explicit database overrides."""
+
+    return (
+        DB_NAME
+        if DB_NAME is not None
+        else database_path("dgs_sentinel.db")
+    )
 
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -26,10 +39,10 @@ def init_db():
 
 
 def save_findings(findings):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
-    scan_time = datetime.utcnow().isoformat()
+    scan_time = datetime.now(UTC).isoformat()
 
     for finding in findings:
         cursor.execute("""
@@ -58,7 +71,7 @@ def save_findings(findings):
 
 
 def get_all_findings():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(_database_path())
     cursor = conn.cursor()
 
     cursor.execute("""

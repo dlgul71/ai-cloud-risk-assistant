@@ -323,6 +323,20 @@ jobs:
           print("CAASM alerts persist under /data.")
           PYTHON
 
+      - name: Verify scan findings storage in read-only container
+        run: |
+          docker exec -i dgs-sentinel-ci python - <<'PYTHON'
+          from pathlib import Path
+          from db import init_db, save_findings, get_all_findings
+
+          init_db()
+          save_findings([{"cve_id": "ci-storage-check", "risk_score": 0}])
+          assert get_all_findings()[0][1] == "ci-storage-check"
+          assert Path("/data/dgs_sentinel.db").is_file()
+          assert not Path("/app/dgs_sentinel.db").exists()
+          print("Scan findings persist under /data.")
+          PYTHON
+
       - name: Display container logs
         if: always()
         run: docker logs dgs-sentinel-ci 2>/dev/null || true
