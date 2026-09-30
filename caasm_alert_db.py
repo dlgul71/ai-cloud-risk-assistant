@@ -7,7 +7,20 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Iterable
 
 
-DB_NAME = "caasm_alerts.db"
+from storage_paths import database_path
+
+
+DB_NAME = None
+
+
+def _database_path():
+    """Resolve persistent storage while preserving explicit test overrides."""
+
+    return (
+        DB_NAME
+        if DB_NAME is not None
+        else database_path("caasm_alerts.db")
+    )
 
 
 def utc_now() -> str:
@@ -38,7 +51,7 @@ def _timestamp(value: datetime | str | None = None) -> str:
 def init_alert_db() -> None:
     """Create the CAASM alert database and required indexes."""
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(
@@ -102,7 +115,7 @@ def upsert_alerts(
     init_alert_db()
 
     now = _timestamp(observed_at)
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     created = 0
@@ -265,7 +278,7 @@ def get_alerts(
 
     init_alert_db()
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -312,7 +325,7 @@ def acknowledge_alert(
     init_alert_db()
 
     timestamp = _timestamp(acknowledged_at)
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(
@@ -352,7 +365,7 @@ def resolve_alert(
     init_alert_db()
 
     timestamp = _timestamp(resolved_at)
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.execute(
@@ -405,7 +418,7 @@ def get_alerts_due_for_notification(
         - timedelta(minutes=cooldown_minutes)
     ).isoformat()
 
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -458,7 +471,7 @@ def mark_alerts_notified(
     init_alert_db()
 
     timestamp = _timestamp(notified_at)
-    connection = sqlite3.connect(DB_NAME)
+    connection = sqlite3.connect(_database_path())
     cursor = connection.cursor()
 
     cursor.executemany(

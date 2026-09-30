@@ -239,3 +239,86 @@ def test_negative_cooldown_is_rejected(
         caasm_alert_db.get_alerts_due_for_notification(
             cooldown_minutes=-1
         )
+
+
+def test_data_directory_supports_complete_alert_lifecycle(
+    tmp_path, monkeypatch, sample_alert
+):
+    data_dir = tmp_path / "data"
+    work_dir = tmp_path / "app"
+    data_dir.mkdir()
+    work_dir.mkdir()
+    monkeypatch.chdir(work_dir)
+    monkeypatch.setenv("DGS_DATA_DIR", str(data_dir))
+    monkeypatch.setattr(caasm_alert_db, "DB_NAME", None)
+
+    result = caasm_alert_db.upsert_alerts([sample_alert])
+    alert_id = result["alert_ids"][0]
+    assert len(caasm_alert_db.get_alerts_due_for_notification()) == 1
+    assert caasm_alert_db.mark_alerts_notified([alert_id]) == 1
+    assert caasm_alert_db.acknowledge_alert(alert_id, actor="Analyst")
+    assert caasm_alert_db.resolve_alert(alert_id, actor="Administrator")
+    alert = caasm_alert_db.get_alerts(status="RESOLVED")[0]
+    assert alert["notification_count"] == 1
+    assert alert["acknowledged_by"] == "Analyst"
+    assert alert["resolved_by"] == "Administrator"
+    assert (data_dir / "caasm_alerts.db").is_file()
+    assert not (work_dir / "caasm_alerts.db").exists()
+
+
+def test_unconfigured_data_directory_preserves_legacy_location(
+    tmp_path, monkeypatch, sample_alert
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DGS_DATA_DIR", raising=False)
+    monkeypatch.setattr(caasm_alert_db, "DB_NAME", None)
+    caasm_alert_db.upsert_alerts([sample_alert])
+    caasm_alert_db.init_alert_db()
+    assert caasm_alert_db.get_alerts()[0]["fingerprint"] == sample_alert["fingerprint"]
+    assert (tmp_path / "caasm_alerts.db").is_file()
+
+
+def test_explicit_database_override_takes_precedence(
+    tmp_path, monkeypatch, sample_alert
+):
+    data_dir = tmp_path / "configured"
+    data_dir.mkdir()
+    override = tmp_path / "test-alerts.db"
+    monkeypatch.setenv("DGS_DATA_DIR", str(data_dir))
+    monkeypatch.setattr(caasm_alert_db, "DB_NAME", override)
+    caasm_alert_db.upsert_alerts([sample_alert])
+    assert len(caasm_alert_db.get_alerts()) == 1
+    assert override.is_file()
+    assert not (data_dir / "caasm_alerts.db").exists()
+
+
+def test_path_is_resolved_at_call_time_without_copying_legacy_data(
+    tmp_path, monkeypatch, sample_alert
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DGS_DATA_DIR", raising=False)
+    monkeypatch.setattr(caasm_alert_db, "DB_NAME", None)
+    caasm_alert_db.upsert_alerts([sample_alert])
+    legacy_bytes = (tmp_path / "caasm_alerts.db").read_bytes()
+
+    data_dir = tmp_path / "configured"
+    data_dir.mkdir()
+    monkeypatch.setenv("DGS_DATA_DIR", str(data_dir))
+    assert caasm_alert_db.get_alerts() == []
+    assert (tmp_path / "caasm_alerts.db").read_bytes() == legacy_bytes
+
+    monkeypatch.delenv("DGS_DATA_DIR")
+    assert caasm_alert_db.get_alerts()[0]["fingerprint"] == sample_alert["fingerprint"]
+
+
+def test_unavailable_data_directory_does_not_fall_back_to_cwd(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DGS_DATA_DIR", str(tmp_path / "missing" / "data"))
+    monkeypatch.setattr(caasm_alert_db, "DB_NAME", None)
+    with pytest.raises(sqlite3.OperationalError):
+        caasm_alert_db.init_alert_db()
+    assert not (tmp_path / "caasm_alerts.db").exists()
