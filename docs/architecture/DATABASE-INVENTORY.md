@@ -1,7 +1,7 @@
 # SQLite database inventory and schema baseline
 
-Reviewed September 30, 2026 against main commit 69fe825 and the accompanying
-remediation_actions.db path correction. This is a code-derived inventory of fresh
+Reviewed September 30, 2026 against main commit 3b457a0 and the accompanying
+shared backup/health inventory update. This is a code-derived inventory of fresh
 schemas, not certification of a deployed database or an adopted migration
 baseline. Existing installations may differ after legacy inline upgrades.
 No database currently has an ordered, checksum-verified schema registry.
@@ -14,11 +14,11 @@ No database currently has an ordered, checksum-verified schema registry.
 | `clients.db` | [`client_db.py`](../../client_db.py) | DGS_DATA_DIR | Yes | Unique client key; cloud connection metadata. |
 | `remediation.db` | [`remediation_db.py`](../../remediation_db.py) | DGS_DATA_DIR | Yes | Tenant remediation items; legacy rows assigned a quarantine key. |
 | `operational_monitoring.db` | [`operational_monitoring.py`](../../operational_monitoring.py) | DGS_DATA_DIR | Yes | Health runs carry client keys; results reference their run. |
-| `users.db` | [`user_db.py`](../../user_db.py) | DGS_DATA_DIR | No | Users, access assignments, lockout state, and authentication audit. |
-| `ai_assets.db` | [`ai_asset_db.py`](../../ai_asset_db.py) | DGS_DATA_DIR | No | Tenant composite keys; relationships have no declared foreign keys. |
-| `caasm_alerts.db` | [`caasm_alert_db.py`](../../caasm_alert_db.py) | DGS_DATA_DIR | No | Global fingerprint uniqueness; no client_key column. |
-| `dgs_sentinel.db` | [`db.py`](../../db.py) | DGS_DATA_DIR | No | Legacy scan findings; no tenant or account identifier. |
-| `remediation_actions.db` | [`remediation_execution.py`](../../remediation_execution.py), [`remediation_audit.py`](../../remediation_audit.py) | DGS_DATA_DIR | No | Execution and audit records; no client_key column. |
+| `users.db` | [`user_db.py`](../../user_db.py) | DGS_DATA_DIR | Yes | Users, access assignments, lockout state, and authentication audit. |
+| `ai_assets.db` | [`ai_asset_db.py`](../../ai_asset_db.py) | DGS_DATA_DIR | Yes | Tenant composite keys; relationships have no declared foreign keys. |
+| `caasm_alerts.db` | [`caasm_alert_db.py`](../../caasm_alert_db.py) | DGS_DATA_DIR | Yes | Global fingerprint uniqueness; no client_key column. |
+| `dgs_sentinel.db` | [`db.py`](../../db.py) | DGS_DATA_DIR | Yes | Legacy scan findings; no tenant or account identifier. |
+| `remediation_actions.db` | [`remediation_execution.py`](../../remediation_execution.py), [`remediation_audit.py`](../../remediation_audit.py) | DGS_DATA_DIR | Yes | Execution and audit records; no client_key column. |
 
 DGS_DATA_DIR paths use the shared storage helper and resolve at call time.
 When DGS_DATA_DIR is unset, that helper preserves working-directory behavior.
@@ -26,20 +26,21 @@ Explicit module path overrides remain supported. Operational monitoring also
 supports a per-call path. Configured storage must be provisioned writable by
 the runtime user; modules do not all create missing directories identically.
 
-## Backup and recovery gaps
+## Backup and recovery scope
 
-The default lists in backup_recovery.get_database_files and
-health_checks.get_database_files include only the four databases marked Yes.
-An override or explicit database list can change scope; verify the resolved
-paths in the actual environment before creating a backup.
+Backup and health defaults share storage_paths.SQLITE_DATABASE_NAMES and resolve
+all nine paths under DGS_DATA_DIR at call time. Existing explicit backup lists
+and health DATABASE_FILES overrides still replace the default scope. Module
+DB_NAME overrides and legacy working-directory copies require explicit paths;
+the inventory does not discover arbitrary external files.
 
-For complete SQLite recovery, explicitly include users.db, ai_assets.db,
-caasm_alerts.db, dgs_sentinel.db, and remediation_actions.db in addition to
-those four defaults. Verify explicit overrides and any legacy working-directory
-copies before assuming all deployed files reside under DGS_DATA_DIR.
-Backups must include execution evidence and audit records, not just
-remediation recommendations. Verify checksums, SQLite integrity, and a
-restoration rehearsal for every affected file.
+Missing files produce backup/health WARN results and are not created. Backup
+manifests list missing_databases; the create CLI returns 2 when files are missing.
+Verification and restore validate only files recorded in the package, so a PASS
+does not establish that every database required by a deployment was captured.
+An empty package fails verification and cannot be restored. Review missing
+files and rehearse restoration before accepting a backup for recovery.
+See [SQLite backup and health coverage](../operations/SQLITE-BACKUP-HEALTH.md).
 
 SQLite databases are not the entire persistence inventory. Snapshot history,
 client scan results, CAASM snapshot files, logs, configuration, and evidence
@@ -494,8 +495,8 @@ CREATE TABLE IF NOT EXISTS remediation_audit (
 
 - Verify deployment-specific relocation of historical records before changing
   DGS_DATA_DIR; runtime does not relocate legacy databases automatically.
-- Expand default backup and health inventory with tests and clear optional
-  database behavior.
+- Verify deployment-specific backup scope, including path overrides and
+  persistent files outside the default SQLite inventory.
 - Implement the version registry, checksum checks, explicit status/plan/apply
   commands, locking, baseline recognition, and startup compatibility checks.
 

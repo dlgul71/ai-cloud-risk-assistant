@@ -23,8 +23,8 @@ if the historical alerts must remain available.
    locations contain databases, stop and reconcile them explicitly; do not
    overwrite either file.
 3. Create and verify a SQLite-consistent backup of the legacy database.
-   Include it explicitly in the backup scope: the current default backup
-   inventory does not include CAASM alerts.
+   Default backup scope includes DGS_DATA_DIR/caasm_alerts.db. Include the
+   actual legacy or overridden source explicitly when it resides elsewhere.
 4. Restore the verified backup into the prepared destination without
    overwriting an existing database. Use the SQLite backup/recovery utilities,
    rather than copying a live database file that may have WAL sidecars.
@@ -49,6 +49,6 @@ directory is unavailable. CI also initializes and reads alert storage inside
 the non-root, read-only container with its writable `/data` volume.
 
 This is the first storage prerequisite in ADR-0001. The migration registry,
-baseline adoption, ordered schema migrations, expanded backup inventory, and
+baseline adoption, ordered schema migrations, and
 startup compatibility enforcement remain separate work. CAASM alert access
 controls and schema are unchanged.

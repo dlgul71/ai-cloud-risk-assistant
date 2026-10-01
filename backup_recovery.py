@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Iterable
 
 from storage_paths import (
-    database_path,
+    default_database_paths,
     get_data_directory,
 )
 
@@ -24,12 +24,7 @@ DEFAULT_BACKUP_ROOT = None
 def get_database_files() -> tuple[Path, ...]:
     """Return databases included in the default backup package."""
 
-    return (
-        database_path("assets.db"),
-        database_path("clients.db"),
-        database_path("remediation.db"),
-        database_path("operational_monitoring.db"),
-    )
+    return default_database_paths()
 
 
 def get_backup_root() -> Path:

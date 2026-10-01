@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sqlite3
 import tempfile
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ from axonius_connector import (
 )
 from splunk_hec import SplunkHECError, send_event
 from storage_paths import (
-    database_path,
+    default_database_paths,
     get_data_directory,
 )
 
@@ -41,12 +42,7 @@ def get_database_files() -> list[Path]:
             for database_file in DATABASE_FILES
         ]
 
-    return [
-        database_path("assets.db"),
-        database_path("clients.db"),
-        database_path("remediation.db"),
-        database_path("operational_monitoring.db"),
-    ]
+    return list(default_database_paths())
 
 
 def get_storage_directories() -> list[Path]:
@@ -261,20 +257,17 @@ def check_databases() -> list[dict[str, str]]:
             continue
 
         try:
-            connection = sqlite3.connect(
+            with closing(sqlite3.connect(
                 (
                     f"file:{database_path.resolve()}"
                     "?mode=ro"
                 ),
                 uri=True,
                 timeout=3,
-            )
-
-            quick_check = connection.execute(
-                "PRAGMA quick_check"
-            ).fetchone()
-
-            connection.close()
+            )) as connection:
+                quick_check = connection.execute(
+                    "PRAGMA quick_check"
+                ).fetchone()
 
             database_ok = bool(
                 quick_check
