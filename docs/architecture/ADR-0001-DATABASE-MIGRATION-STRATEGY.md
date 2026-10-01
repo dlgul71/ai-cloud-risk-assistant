@@ -435,16 +435,16 @@ The compatibility check must distinguish:
 
 Migration backup scope must include every database affected by the release, not merely the current default set.
 
-Until the default backup inventory is complete, operators must explicitly add:
+Backup and health defaults now share an inventory covering all nine SQLite
+databases under DGS_DATA_DIR. Explicit database lists and module path overrides
+must be reviewed against the actual deployment. Legacy working-directory copies
+pending relocation and additional persistent files remain outside that default.
 
-- `users.db`
-- `ai_assets.db`
-- `dgs_sentinel.db`
-- The resolved `remediation_actions.db` file, including execution evidence and audit events, plus any legacy working-directory copy pending explicit relocation.
-- The resolved `caasm_alerts.db` path when CAASM alert persistence is used.
-- Any additional required persistent audit or execution data.
-
-The default CAASM alert database now resolves under `DGS_DATA_DIR`. Existing installations must explicitly relocate any legacy working-directory file before switching locations. Default backup coverage still excludes this database; include the resolved file explicitly.
+Missing files are reported as warnings and are not initialized by backup/health
+checks. Verification and restoration cover packaged files only; a successful
+verification does not establish that missing databases were optional for a
+specific deployment. Review the manifest and rehearse complete restoration.
+See [SQLite backup and health coverage](../operations/SQLITE-BACKUP-HEALTH.md).
 
 Backup completion alone is insufficient. Verification and restoration must also succeed.
 
@@ -561,7 +561,7 @@ Reverse migrations can destroy data or create false confidence. Verified backup 
 8. Add fresh-database tests.
 9. Add existing-database baseline adoption.
 10. Convert inline schema changes into ordered migrations.
-11. Expand default backup coverage.
+11. Validate complete deployment backup scope (all nine SQLite defaults are now included).
 12. Add migration and restoration CI tests.
 13. Rehearse migration using production-representative test data.
 14. Update deployment and release procedures.
@@ -598,4 +598,4 @@ Separate decisions are still required for:
 - Recovery-time and recovery-point objectives.
 - Disaster-recovery architecture.
 
-Execution and audit storage now share the DGS_DATA_DIR default, with regressions for SQLite backup relocation, unchanged records and signed evidence, and read-only-container persistence. See [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md). Existing databases require explicit relocation; default backup coverage still excludes remediation_actions.db. This path change does not implement schema versioning or certify any production cutover.
+Execution and audit storage now share the DGS_DATA_DIR default, with regressions for SQLite backup relocation, unchanged records and signed evidence, and read-only-container persistence. See [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md). Existing databases require explicit relocation; the default backup inventory now includes remediation_actions.db. This path change does not implement schema versioning or certify any production cutover.

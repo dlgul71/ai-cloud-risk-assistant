@@ -8,6 +8,19 @@ from pathlib import Path
 
 DATA_DIRECTORY_ENV = "DGS_DATA_DIR"
 
+# Shared default inventory for SQLite backup and health checks.
+SQLITE_DATABASE_NAMES = (
+    "assets.db",
+    "clients.db",
+    "remediation.db",
+    "operational_monitoring.db",
+    "users.db",
+    "ai_assets.db",
+    "caasm_alerts.db",
+    "dgs_sentinel.db",
+    "remediation_actions.db",
+)
+
 
 def get_data_directory() -> Path:
     """Return the configured persistent runtime data directory."""
@@ -72,3 +85,9 @@ def runtime_directory(
     )
 
     return directory
+
+
+def default_database_paths() -> tuple[Path, ...]:
+    """Resolve the default SQLite inventory without creating files."""
+
+    return tuple(database_path(name) for name in SQLITE_DATABASE_NAMES)

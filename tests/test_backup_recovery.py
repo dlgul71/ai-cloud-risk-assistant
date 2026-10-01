@@ -257,4 +257,9 @@ def test_default_database_files_use_data_directory(
         tmp_path / "clients.db",
         tmp_path / "remediation.db",
         tmp_path / "operational_monitoring.db",
+        tmp_path / "users.db",
+        tmp_path / "ai_assets.db",
+        tmp_path / "caasm_alerts.db",
+        tmp_path / "dgs_sentinel.db",
+        tmp_path / "remediation_actions.db",
     )

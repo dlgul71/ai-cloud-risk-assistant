@@ -21,8 +21,9 @@ relocation before resuming scans.
 2. Identify the actual source and destination files. If both contain data,
    preserve both and reconcile them explicitly before proceeding.
 3. Create a SQLite-consistent backup of the source, verify checksums and
-   integrity, and rehearse restoration. The default backup inventory does
-   not include `dgs_sentinel.db`; add its actual path explicitly.
+   integrity, and rehearse restoration. Default backup scope includes
+   DGS_DATA_DIR/dgs_sentinel.db; explicitly add a legacy or overridden source
+   when its actual path is elsewhere.
 4. Restore the verified backup into the prepared destination without
    overwriting an existing database. Do not copy a live SQLite file and
    discard its WAL or journal sidecars.
@@ -46,6 +47,6 @@ directories, and empty saves. CI saves and reads a synthetic finding inside
 the non-root read-only container and verifies its database is under `/data`.
 
 This change does not add tenant identifiers, a version registry, automatic
-schema upgrades, or default backup inclusion. The
+schema upgrades. Default backup scope now includes the resolved file. The
 [database inventory](../architecture/DATABASE-INVENTORY.md) lists the
 remaining path, schema, health, and recovery gaps.

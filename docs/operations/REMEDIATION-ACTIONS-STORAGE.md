@@ -47,9 +47,9 @@ delete the original; stop writers and resolve the discrepancy before continuing.
 
 ## Backup and rollback
 
-The default backup inventory does not yet include remediation_actions.db.
-Include the resolved file explicitly in complete backups, along with the
-other stores in the [database inventory](../architecture/DATABASE-INVENTORY.md).
+The default backup inventory includes DGS_DATA_DIR/remediation_actions.db,
+along with the other stores in the [database inventory](../architecture/DATABASE-INVENTORY.md).
+Include legacy or overridden files explicitly when their actual paths differ.
 Protect backups and evidence keys separately, and rehearse complete restoration.
 
 Before rollback, stop writers and back up the current destination consistently.
