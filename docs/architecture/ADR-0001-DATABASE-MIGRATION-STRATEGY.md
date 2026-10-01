@@ -1,6 +1,6 @@
 # ADR-0001: Database and Migration Strategy
 
-**Status:** Accepted for Phase 1; implementation pending
+**Status:** Accepted for Phase 1; storage, backup inventory, and read-only registry inspection implemented; adoption/apply pending
 **Decision date:** September 9, 2026
 **Decision owners:** DGS Sentinel AI maintainers
 **Applies to:** Persistent application data and schema evolution
@@ -37,7 +37,7 @@ Current schema behavior includes:
 - Inline `ALTER TABLE` operations.
 - Module-specific schema initialization.
 - Module-specific indexes.
-- No centralized schema-version registry.
+- Registry contract and read-only inspection are defined; existing databases have not been adopted.
 - No formal ordered migration framework.
 - No consistent migration audit record.
 - No automated compatibility check between application and database versions.
@@ -127,7 +127,7 @@ Each database will contain a migration registry with fields equivalent to:
 | `applied_at` | UTC application timestamp |
 | `application_version` | Application release applying the migration |
 
-The exact table and field names will be finalized during implementation.
+The registry contract is now defined as `schema_migrations` with `version`, `name`, `checksum`, `applied_at`, and `application_version`; see [read-only migration status](../operations/DATABASE-MIGRATION-STATUS.md). No registry is initialized or populated automatically.
 
 Migration files will be:
 
@@ -153,7 +153,7 @@ The future migration interface will provide separate operations equivalent to:
 - Apply.
 - Verification.
 
-The exact CLI does not exist yet and must not be represented as implemented.
+The read-only command `python -m scripts.database_migrations_cli status` is implemented. Plan, apply, verification, baseline adoption, and startup compatibility enforcement remain pending. No domain has an approved migration catalog yet.
 
 After the migration framework is introduced, application startup should:
 
@@ -383,7 +383,7 @@ database_migrations/
 └── caasm_alerts/
 ```
 
-This structure is illustrative and not yet implemented.
+The shared `database_migrations` package and status CLI are implemented. The domain subdirectories and ordered migration files shown above remain illustrative and unimplemented; all reviewed catalogs are currently empty.
 
 The migration engine should own:
 
@@ -553,10 +553,10 @@ Reverse migrations can destroy data or create false confidence. Verified backup 
 
 1. Correct CAASM alert storage to use `DGS_DATA_DIR` — implemented September 30, 2026; existing-data relocation remains an operator action.
 2. Document the existing schema for every database — the code-derived inventory is available; deployed schema validation and formal baseline adoption remain pending.
-3. Define the migration registry schema.
-4. Implement migration discovery and checksum validation.
+3. Define the migration registry schema — contract implemented; no deployed registry adoption.
+4. Implement migration discovery and checksum validation — immutable descriptors and history/checksum inspection implemented; approved domain migrations and filesystem discovery remain pending.
 5. Implement schema compatibility checks.
-6. Implement explicit status, plan, apply, and verify operations.
+6. Implement explicit status, plan, apply, and verify operations — read-only status implemented; other operations remain pending.
 7. Add migration locking.
 8. Add fresh-database tests.
 9. Add existing-database baseline adoption.
