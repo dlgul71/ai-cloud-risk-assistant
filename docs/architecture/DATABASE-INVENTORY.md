@@ -4,7 +4,9 @@ Reviewed September 30, 2026 against main commit 3b457a0 and the accompanying
 shared backup/health inventory update. This is a code-derived inventory of fresh
 schemas, not certification of a deployed database or an adopted migration
 baseline. Existing installations may differ after legacy inline upgrades.
-No database currently has an ordered, checksum-verified schema registry.
+A shared registry contract and read-only history/checksum inspector now exist,
+but no domain has an approved migration catalog or an adopted version registry.
+See [migration status](../operations/DATABASE-MIGRATION-STATUS.md).
 
 ## Persistent database inventory
 
@@ -489,7 +491,8 @@ CREATE TABLE IF NOT EXISTS remediation_audit (
    execution statuses, evidence integrity fields, and audit chronology
    without exporting sensitive row values into migration evidence.
 6. Adopt a version only after a recognized schema and its data invariants
-   pass. Registry design and adoption tooling are still pending.
+   pass. The registry contract is defined; baseline recognition and adoption tooling
+   are still pending.
 
 ## Remaining implementation work
 
@@ -497,8 +500,10 @@ CREATE TABLE IF NOT EXISTS remediation_audit (
   DGS_DATA_DIR; runtime does not relocate legacy databases automatically.
 - Verify deployment-specific backup scope, including path overrides and
   persistent files outside the default SQLite inventory.
-- Implement the version registry, checksum checks, explicit status/plan/apply
-  commands, locking, baseline recognition, and startup compatibility checks.
+- Approve domain migration catalogs and baseline recognition; then implement
+  controlled adoption, plan/apply/verify, locking, and startup compatibility.
+  Registry metadata checks and read-only status are implemented; they do not
+  certify application schema or data compatibility.
 
 See [ADR-0001](ADR-0001-DATABASE-MIGRATION-STRATEGY.md) for the migration
 policy and [scan findings storage](../operations/SCAN-FINDINGS-STORAGE.md)
