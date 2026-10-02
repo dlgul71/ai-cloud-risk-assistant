@@ -5,7 +5,7 @@ No baseline adoption, schema application, or startup enforcement is performed.
 
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
@@ -108,6 +108,20 @@ def _registry_shape_valid(connection: sqlite3.Connection) -> bool:
     return False
 
 
+@contextmanager
+def _readonly_connection(path: Path):
+    """Open an existing database with bounded, read-only snapshot inspection."""
+
+    uri = path.resolve().as_uri() + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True, timeout=3)) as connection:
+        connection.execute("PRAGMA query_only = ON")
+        connection.execute("PRAGMA trusted_schema = OFF")
+        deadline = time.monotonic() + 5
+        connection.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
+        connection.execute("BEGIN")
+        yield connection
+
+
 def inspect_database(
     database_name: str,
     path: Path,
@@ -146,13 +160,7 @@ def inspect_database(
             return finish("ERROR", "Database path is not a regular file.")
         # as_uri escapes URI metacharacters in filenames; do not use immutable,
         # which could ignore committed WAL data and hide the current history.
-        uri = path.resolve().as_uri() + "?mode=ro"
-        with closing(sqlite3.connect(uri, uri=True, timeout=3)) as connection:
-            connection.execute("PRAGMA query_only = ON")
-            connection.execute("PRAGMA trusted_schema = OFF")
-            deadline = time.monotonic() + 5
-            connection.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
-            connection.execute("BEGIN")
+        with _readonly_connection(path) as connection:
             if connection.execute("PRAGMA quick_check").fetchone() != ("ok",):
                 return finish("INTEGRITY_FAILED", "SQLite integrity check failed.")
             objects = connection.execute(
