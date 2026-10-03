@@ -9,6 +9,7 @@ from pathlib import Path
 from database_migrations import inspect_database
 from database_migrations.baseline import recognize_baseline
 from database_migrations.adoption import adopt_empty_baseline
+from database_migrations.data_validation import validate_database_data
 from storage_paths import SQLITE_DATABASE_NAMES, default_database_paths
 
 
@@ -25,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     for command, help_text in (
         ("status", "Read registry status; do not create or migrate databases."),
         ("baseline", "Recognize reviewed fresh schema shape without adopting a version."),
+        ("validate-data", "Check local stored-data invariants without repair or adoption."),
     ):
         command_parser = commands.add_parser(command, help=help_text)
         command_parser.add_argument("--database", action="append", type=_database_argument, help="Known filename=PATH; repeat to replace the default scope.")
@@ -53,7 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     targets = args.database or list(zip(SQLITE_DATABASE_NAMES, default_database_paths()))
     if len({name for name, _ in targets}) != len(targets):
         parser.error("Each database domain may be specified only once.")
-    inspect = recognize_baseline if args.command == "baseline" else inspect_database
+    inspectors = {"baseline": recognize_baseline, "status": inspect_database, "validate-data": validate_database_data}
+    inspect = inspectors[args.command]
     results = [inspect(name, path) for name, path in targets]
     if args.json:
         print(json.dumps({"databases": results}, indent=2, sort_keys=True))
@@ -63,10 +66,11 @@ def main(argv: list[str] | None = None) -> int:
     failures = {
         "ERROR", "INTEGRITY_FAILED", "INVALID_REGISTRY", "UNSUPPORTED_VERSION",
         "HISTORY_MISMATCH", "CHECKSUM_MISMATCH",
+        "DATA_ISSUES",
     }
     if any(row["status"] in failures for row in results):
         return 1
-    expected = "RECOGNIZED" if args.command == "baseline" else "CURRENT"
+    expected = {"baseline": "RECOGNIZED", "status": "CURRENT", "validate-data": "LOCAL_CHECKS_PASSED"}[args.command]
     return 0 if all(row["status"] == expected for row in results) else 2
 
 
