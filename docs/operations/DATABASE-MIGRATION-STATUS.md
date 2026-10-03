@@ -93,3 +93,10 @@ Version 1 now identifies the immutable reviewed fresh schema for each domain.
 Status remains read-only and never creates or adopts a registry. For the separate
 explicit command and its populated-file refusal policy, see
 [controlled empty-baseline adoption](EMPTY-BASELINE-ADOPTION.md).
+
+## Read-only stored-data checks
+
+The separate `validate-data` command checks reviewed local data policies for all
+nine exactly recognized domains, including populated files. It changes no data
+or versions and does not authorize adoption. See
+[populated data validation](POPULATED-DATA-VALIDATION.md) for scope and limitations.
