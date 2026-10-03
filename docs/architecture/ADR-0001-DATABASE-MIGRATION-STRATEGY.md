@@ -1,6 +1,6 @@
 # ADR-0001: Database and Migration Strategy
 
-**Status:** Accepted for Phase 1; storage, backup inventory, registry inspection, and fresh-schema recognition implemented; adoption/apply pending
+**Status:** Accepted for Phase 1; storage, backup inventory, registry inspection, and fresh-schema recognition and empty fresh-baseline adoption implemented; populated adoption/apply pending
 **Decision date:** September 9, 2026
 **Decision owners:** DGS Sentinel AI maintainers
 **Applies to:** Persistent application data and schema evolution
@@ -127,7 +127,7 @@ Each database will contain a migration registry with fields equivalent to:
 | `applied_at` | UTC application timestamp |
 | `application_version` | Application release applying the migration |
 
-The registry contract is now defined as `schema_migrations` with `version`, `name`, `checksum`, `applied_at`, and `application_version`; see [read-only migration status](../operations/DATABASE-MIGRATION-STATUS.md). No registry is initialized or populated automatically.
+The registry contract is now defined as `schema_migrations` with `version`, `name`, `checksum`, `applied_at`, and `application_version`; see [read-only migration status](../operations/DATABASE-MIGRATION-STATUS.md). No registry is initialized or populated automatically. The explicit [empty-baseline adoption command](../operations/EMPTY-BASELINE-ADOPTION.md) can record version 1 only for an exactly reviewed, empty file after a verified backup.
 
 Migration files will be:
 
@@ -153,7 +153,7 @@ The future migration interface will provide separate operations equivalent to:
 - Apply.
 - Verification.
 
-The read-only command `python -m scripts.database_migrations_cli status` is implemented. Plan, apply, verification, baseline adoption, and startup compatibility enforcement remain pending. No domain has an approved migration catalog yet.
+The read-only command `python -m scripts.database_migrations_cli status` is implemented. Each domain now has the immutable reviewed fresh baseline as version 1. Explicit adoption is restricted to empty databases. Populated baseline adoption, ordered apply, and startup compatibility enforcement remain pending.
 
 After the migration framework is introduced, application startup should:
 
@@ -383,7 +383,7 @@ database_migrations/
 └── caasm_alerts/
 ```
 
-The shared `database_migrations` package and status CLI are implemented. The domain subdirectories and ordered migration files shown above remain illustrative and unimplemented; all reviewed catalogs are currently empty.
+The shared `database_migrations` package and status CLI are implemented. The domain subdirectories and ordered migration files shown above remain illustrative and unimplemented; each reviewed catalog contains its immutable version-one fresh baseline; no later upgrade payloads are approved.
 
 The migration engine should own:
 
@@ -552,14 +552,14 @@ Reverse migrations can destroy data or create false confidence. Verified backup 
 ## Implementation Sequence
 
 1. Correct CAASM alert storage to use `DGS_DATA_DIR` — implemented September 30, 2026; existing-data relocation remains an operator action.
-2. Document the existing schema for every database — the code-derived inventory is available; deployed schema validation and formal baseline adoption remain pending.
+2. Document the existing schema for every database — the code-derived inventory is available; populated deployed schema/data validation and adoption remain pending; empty fresh-schema adoption is implemented.
 3. Define the migration registry schema — contract implemented; no deployed registry adoption.
-4. Implement migration discovery and checksum validation — immutable descriptors and history/checksum inspection implemented; approved domain migrations and filesystem discovery remain pending.
+4. Implement migration discovery and checksum validation — immutable descriptors and history/checksum inspection implemented; version-one fresh baseline catalogs are implemented; later upgrade discovery remains pending.
 5. Implement schema compatibility checks.
-6. Implement explicit status, plan, apply, and verify operations — read-only status implemented; other operations remain pending.
-7. Add migration locking.
+6. Implement explicit status, plan, apply, and verify operations — read-only status/recognition and explicit empty-baseline adoption implemented; ordered upgrades remain pending.
+7. Add migration locking — empty-baseline adoption uses a bounded write reservation; general upgrade locking remains pending.
 8. Add fresh-database tests.
-9. Add existing-database baseline adoption — strict read-only fresh-schema recognition implemented; historical recognition and controlled adoption remain pending.
+9. Add existing-database baseline adoption — strict read-only fresh-schema recognition implemented; explicit empty fresh-baseline adoption implemented; historical recognition and populated adoption remain pending.
 10. Convert inline schema changes into ordered migrations.
 11. Validate complete deployment backup scope (all nine SQLite defaults are now included).
 12. Add migration and restoration CI tests.
@@ -601,3 +601,5 @@ Separate decisions are still required for:
 Execution and audit storage now share the DGS_DATA_DIR default, with regressions for SQLite backup relocation, unchanged records and signed evidence, and read-only-container persistence. See [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md). Existing databases require explicit relocation; the default backup inventory now includes remediation_actions.db. This path change does not implement schema versioning or certify any production cutover.
 
 Read-only fresh-schema recognition covers all nine domains through reviewed definition checksums and schema fingerprints, including triggers and constraints. See [baseline recognition](../operations/DATABASE-BASELINE-RECOGNITION.md). Recognition is not data certification or version adoption; no migration catalog or startup compatibility enforcement is enabled by this step.
+
+Controlled adoption of empty reviewed fresh schemas is now available for all nine domains, with backup verification, a transactional version-one registry record, and writer exclusion. Populated installations remain refused; see [empty-baseline adoption](../operations/EMPTY-BASELINE-ADOPTION.md).
