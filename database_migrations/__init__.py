@@ -1,11 +1,8 @@
-"""Read-only SQLite migration registry inspection.
-
-No baseline adoption, schema application, or startup enforcement is performed.
-"""
+"""SQLite migration metadata and read-only registry inspection."""
 
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
@@ -61,12 +58,17 @@ class Migration:
 def get_migrations(database_name: str) -> tuple[Migration, ...]:
     """Return the reviewed catalog for a known domain.
 
-    No baselines/migrations are approved yet; all nine catalogs are empty.
+    Version one records the reviewed fresh schema without executing its SQL.
+    Adoption is restricted to empty databases by the separate operator command.
     """
 
     if database_name not in SQLITE_DATABASE_NAMES:
         raise ValueError("Unknown database domain.")
-    return ()
+    from database_migrations.baseline import BASELINE_DIRECTORY, _reviewed_candidate
+
+    candidate = _reviewed_candidate(database_name)
+    definition = (BASELINE_DIRECTORY / candidate["definition"]).read_bytes().decode("utf-8")
+    return (Migration(1, candidate["baseline_id"], definition),)
 
 
 def _validate_catalog(migrations: tuple[Migration, ...]) -> None:
@@ -108,6 +110,20 @@ def _registry_shape_valid(connection: sqlite3.Connection) -> bool:
     return False
 
 
+@contextmanager
+def _readonly_connection(path: Path):
+    """Open an existing database with bounded, read-only snapshot inspection."""
+
+    uri = path.resolve().as_uri() + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True, timeout=3)) as connection:
+        connection.execute("PRAGMA query_only = ON")
+        connection.execute("PRAGMA trusted_schema = OFF")
+        deadline = time.monotonic() + 5
+        connection.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
+        connection.execute("BEGIN")
+        yield connection
+
+
 def inspect_database(
     database_name: str,
     path: Path,
@@ -119,9 +135,13 @@ def inspect_database(
     application tables, tenant invariants, or release compatibility were proved.
     """
 
-    reviewed = get_migrations(database_name) if migrations is None else tuple(migrations)
-    # Validate domain even when a caller supplies a catalog for isolated testing.
-    get_migrations(database_name)
+    if database_name not in SQLITE_DATABASE_NAMES:
+        raise ValueError("Unknown database domain.")
+    try:
+        reviewed = get_migrations(database_name) if migrations is None else tuple(migrations)
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"database": database_name, "path": str(path), "status": "ERROR",
+                "detail": "Reviewed catalog validation failed."}
     _validate_catalog(reviewed)
     path = Path(path).expanduser()
     result = {
@@ -146,13 +166,7 @@ def inspect_database(
             return finish("ERROR", "Database path is not a regular file.")
         # as_uri escapes URI metacharacters in filenames; do not use immutable,
         # which could ignore committed WAL data and hide the current history.
-        uri = path.resolve().as_uri() + "?mode=ro"
-        with closing(sqlite3.connect(uri, uri=True, timeout=3)) as connection:
-            connection.execute("PRAGMA query_only = ON")
-            connection.execute("PRAGMA trusted_schema = OFF")
-            deadline = time.monotonic() + 5
-            connection.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
-            connection.execute("BEGIN")
+        with _readonly_connection(path) as connection:
             if connection.execute("PRAGMA quick_check").fetchone() != ("ok",):
                 return finish("INTEGRITY_FAILED", "SQLite integrity check failed.")
             objects = connection.execute(

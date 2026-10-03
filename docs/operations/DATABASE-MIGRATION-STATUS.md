@@ -33,12 +33,12 @@ and unique per domain; checksums are SHA-256 of exact UTF-8 migration SQL, inclu
 whitespace; timestamps must contain an explicit UTC offset. Applied SQL must remain
 immutable after release. This module never executes descriptor SQL.
 
-No domain currently has an approved migration or baseline: get_migrations returns
-an empty tuple for all nine domains. Existing files without a registry are
-UNVERSIONED; they are not recognized or adopted by status. A populated registry
-is UNSUPPORTED_VERSION with the current empty catalogs. Do not manually insert
-registry rows to suppress these results. Adoption must later validate deployed
-schemas/data invariants and verified backup/restore evidence.
+Each domain has one immutable reviewed fresh baseline, `fresh_09ce292`, at version
+1. Existing files without a registry remain UNVERSIONED and are never adopted by
+status. A registry must match the reviewed identity and exact definition checksum.
+Do not manually insert registry rows. The separate empty-baseline adoption command
+requires a verified backup and refuses populated files; populated adoption still
+requires domain-specific schema/data invariant validation.
 
 ## Results and exit codes
 
@@ -58,8 +58,8 @@ schemas/data invariants and verified backup/restore evidence.
 
 Exit 0 requires every inspected registry to be CURRENT. Exit 2 means missing,
 unversioned, empty, or pending state; invalid arguments also use argparse exit 2.
-Exit 1 means an inspection or registry failure. Because catalogs are currently
-empty, the shipped CLI cannot report CURRENT or certify startup readiness.
+Exit 1 means an inspection or registry failure. CURRENT can now identify matching
+version-one registry metadata, but it does not certify startup readiness.
 JSON exposes paths and safe status/count/version metadata, not persisted migration
 names, release strings, timestamps, application rows, or underlying exception text.
 
@@ -84,3 +84,19 @@ table, index, foreign key, tenant boundary, authentication state, or signing
 evidence. Even a matching fixture catalog's CURRENT result only validates migration
 metadata. Plan/apply/adopt/verify commands, schema recognition, startup compatibility,
 locking, and recovery execution remain future work under ADR-0001.
+
+Read-only fresh-schema recognition is now available separately through `python -m scripts.database_migrations_cli baseline`. See [baseline recognition](DATABASE-BASELINE-RECOGNITION.md). It does not adopt registry versions or change the meaning of CURRENT.
+
+## Empty fresh-baseline adoption
+
+Version 1 now identifies the immutable reviewed fresh schema for each domain.
+Status remains read-only and never creates or adopts a registry. For the separate
+explicit command and its populated-file refusal policy, see
+[controlled empty-baseline adoption](EMPTY-BASELINE-ADOPTION.md).
+
+## Read-only stored-data checks
+
+The separate `validate-data` command checks reviewed local data policies for all
+nine exactly recognized domains, including populated files. It changes no data
+or versions and does not authorize adoption. See
+[populated data validation](POPULATED-DATA-VALIDATION.md) for scope and limitations.
