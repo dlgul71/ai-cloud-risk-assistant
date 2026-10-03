@@ -1,6 +1,6 @@
 # ADR-0001: Database and Migration Strategy
 
-**Status:** Accepted for Phase 1; storage, backup inventory, registry inspection, and fresh-schema recognition and empty fresh-baseline adoption implemented; populated adoption/apply pending
+**Status:** Accepted for Phase 1; storage, backup inventory, registry inspection, fresh-schema recognition, and empty fresh-baseline adoption implemented; populated adoption/apply pending
 **Decision date:** September 9, 2026
 **Decision owners:** DGS Sentinel AI maintainers
 **Applies to:** Persistent application data and schema evolution
