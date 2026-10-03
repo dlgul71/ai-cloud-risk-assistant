@@ -6,6 +6,7 @@ tenant relationships and evidence authentication require separate review.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import sqlite3
@@ -100,7 +101,7 @@ def _registry_matches(connection, migration):
             and isinstance(rows[0][5], int) and 0 < rows[0][5] <= 80)
 
 
-def validate_database_data(database_name: str, path: Path) -> dict[str, object]:
+def validate_database_data(database_name: str, path: Path, *, _connection=None) -> dict[str, object]:
     """Check an existing read-only snapshot and return only safe counts/codes."""
     if database_name not in SQLITE_DATABASE_NAMES:
         raise ValueError("Unknown database domain.")
@@ -120,7 +121,9 @@ def validate_database_data(database_name: str, path: Path) -> dict[str, object]:
             return result
         if not path.is_file():
             return finish("ERROR", "Database path is not a regular file.")
-        with _readonly_connection(path) as connection:
+        # Deployment validation supplies an already-open read-only transaction,
+        # so local and relationship checks use the same held snapshot.
+        with (_readonly_connection(path) if _connection is None else nullcontext(_connection)) as connection:
             if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
                 return finish("INTEGRITY_FAILED", "SQLite integrity check failed.")
             registry = connection.execute(
