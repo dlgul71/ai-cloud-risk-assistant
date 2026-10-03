@@ -1,7 +1,4 @@
-"""Read-only SQLite migration registry inspection.
-
-No baseline adoption, schema application, or startup enforcement is performed.
-"""
+"""SQLite migration metadata and read-only registry inspection."""
 
 from __future__ import annotations
 
@@ -61,12 +58,17 @@ class Migration:
 def get_migrations(database_name: str) -> tuple[Migration, ...]:
     """Return the reviewed catalog for a known domain.
 
-    No baselines/migrations are approved yet; all nine catalogs are empty.
+    Version one records the reviewed fresh schema without executing its SQL.
+    Adoption is restricted to empty databases by the separate operator command.
     """
 
     if database_name not in SQLITE_DATABASE_NAMES:
         raise ValueError("Unknown database domain.")
-    return ()
+    from database_migrations.baseline import BASELINE_DIRECTORY, _reviewed_candidate
+
+    candidate = _reviewed_candidate(database_name)
+    definition = (BASELINE_DIRECTORY / candidate["definition"]).read_bytes().decode("utf-8")
+    return (Migration(1, candidate["baseline_id"], definition),)
 
 
 def _validate_catalog(migrations: tuple[Migration, ...]) -> None:
@@ -133,9 +135,13 @@ def inspect_database(
     application tables, tenant invariants, or release compatibility were proved.
     """
 
-    reviewed = get_migrations(database_name) if migrations is None else tuple(migrations)
-    # Validate domain even when a caller supplies a catalog for isolated testing.
-    get_migrations(database_name)
+    if database_name not in SQLITE_DATABASE_NAMES:
+        raise ValueError("Unknown database domain.")
+    try:
+        reviewed = get_migrations(database_name) if migrations is None else tuple(migrations)
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"database": database_name, "path": str(path), "status": "ERROR",
+                "detail": "Reviewed catalog validation failed."}
     _validate_catalog(reviewed)
     path = Path(path).expanduser()
     result = {
