@@ -82,3 +82,8 @@ Populated adoption stays disabled. Before enabling it, define and review those
 remaining policies, validate one coherent deployment snapshot, verify complete
 backup/restore evidence, and revalidate the locked target during adoption. Do not
 delete data or manually insert registry rows to avoid a reported issue.
+
+The separate [deployment validation command](DEPLOYMENT-DATA-VALIDATION.md) now
+checks reviewed tenant links, AI endpoint inventory, signed execution payloads,
+and terminal live approval metadata across a stopped nine-file set. It reuses
+local checks and retains explicit ownership, signature-context, and adoption gaps.
