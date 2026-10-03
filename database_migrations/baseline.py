@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import sqlite3
 
-from database_migrations import REGISTRY_TABLE, _readonly_connection, get_migrations
+from database_migrations import REGISTRY_TABLE, _readonly_connection
 from storage_paths import SQLITE_DATABASE_NAMES
 
 
@@ -25,7 +25,7 @@ def _sql_tokens(sql: str) -> list[str]:
     return [token if token[0] in "'\"`[" else token.lower() for token in tokens]
 
 
-def schema_fingerprint(connection: sqlite3.Connection) -> str:
+def schema_fingerprint(connection: sqlite3.Connection, *, omit_registry: bool = False) -> str:
     """Hash schema metadata only, including constraint SQL and internal indexes.
 
     sqlite_sequence data and other SQLite-maintained objects are excluded.
@@ -38,6 +38,8 @@ def schema_fingerprint(connection: sqlite3.Connection) -> str:
     ).fetchall()
     schema = []
     for kind, name, table, sql in objects:
+        if omit_registry and (name == REGISTRY_TABLE or table == REGISTRY_TABLE):
+            continue
         entry = {"type": kind, "name": name, "table": table, "sql": _sql_tokens(sql or "")}
         if kind == "table":
             entry["columns"] = connection.execute(
@@ -94,7 +96,8 @@ def _reviewed_candidate(database_name: str) -> dict[str, str]:
 def recognize_baseline(database_name: str, path: Path) -> dict[str, object]:
     """Recognize schema shape only; never adopt a version or certify data safety."""
 
-    get_migrations(database_name)  # Validate reviewed domain independently of path.
+    if database_name not in SQLITE_DATABASE_NAMES:
+        raise ValueError("Unknown database domain.")
     path = Path(path).expanduser()
     result = {
         "database": database_name, "path": str(path), "status": "MISSING",
