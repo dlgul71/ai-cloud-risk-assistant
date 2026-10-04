@@ -47,3 +47,20 @@ aggregate SQLite field bytes per domain, in addition to source read deadlines.
 Rehearsal output may still fail data/relationship checks and always remains
 ineligible for adoption. Unassigned tenants, unavailable signing keys, missing
 stores, and provider gaps remain review items.
+
+## Check the converted copies
+
+From the review checkout, run the existing read-only data validator on exactly the
+three generated files:
+
+```bash
+python -m scripts.database_migrations_cli validate-data \
+  --database "remediation.db=$HOME/sentinel-schema-rehearsal-v1/remediation.db" \
+  --database "operational_monitoring.db=$HOME/sentinel-schema-rehearsal-v1/operational_monitoring.db" \
+  --database "remediation_actions.db=$HOME/sentinel-schema-rehearsal-v1/remediation_actions.db"
+```
+
+LOCAL_CHECKS_PASSED applies only to the selected local checks. The preserved
+legacy-unassigned ownership and unavailable original signing keys still require
+review, even if all three local checks pass. Do not replace application databases
+with rehearsal output.
