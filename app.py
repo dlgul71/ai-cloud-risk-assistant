@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from io import BytesIO
+from executive_report import generate_pdf, generate_remediation_playbook, load_export_inventory
 
 import boto3
 import pandas as pd
@@ -764,7 +765,7 @@ if init_client_db is not None:
 
 def safe_get_findings():
     """Safely load saved findings from db.py."""
-    if get_all_findings is None:
+    if not _current_user_is_global_admin() or get_all_findings is None:
         return []
 
     try:
@@ -846,43 +847,6 @@ def normalize_findings(rows):
         demo_warning(f"CISA KEV enrichment unavailable: {e}")
 
     return df
-
-
-def generate_remediation_playbook(df):
-    """Build a remediation playbook from findings."""
-    playbook = []
-
-    if df.empty:
-        return playbook
-
-    for _, row in df.iterrows():
-        priority = row.get("Priority", "STANDARD")
-        cve_id = row.get("CVE ID", "Unknown")
-        risk_score = row.get("Risk Score", 0)
-        kev = row.get("KEV Exploited", 0)
-
-        if priority == "CRITICAL" or kev == 1:
-            remediation_priority = "Immediate patching or isolation required"
-            business_impact = "High exploitation likelihood and potential business disruption"
-        elif priority == "HIGH":
-            remediation_priority = "Remediate within standard SLA"
-            business_impact = "Elevated exposure risk"
-        else:
-            remediation_priority = "Monitor and remediate during normal patch cycle"
-            business_impact = "Lower immediate business impact"
-
-        playbook.append(
-            {
-                "Priority": priority,
-                "CVE ID": cve_id,
-                "Risk Score": risk_score,
-                "Remediation Priority": remediation_priority,
-                "Business Impact": business_impact,
-                "Required Action": row.get("Required Action", ""),
-            }
-        )
-
-    return playbook
 
 
 def build_mitre_mapping(df):
@@ -1015,168 +979,6 @@ def generate_ai_analysis(summary, remediation_playbook):
         lines.append("- No saved remediation items are currently available.")
 
     return "\n".join(lines)
-
-
-def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative="", asset_summary=None):
-    """Generate a branded DGS Sentinel AI executive PDF report."""
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-
-    width, height = letter
-
-    def add_footer():
-        pdf.setFont("Helvetica", 8)
-        pdf.drawString(
-            50,
-            30,
-            "Data Generated Solutions, LLC | DGS Sentinel AI Executive Cyber Risk Assessment"
-        )
-        pdf.drawRightString(
-            width - 50,
-            30,
-            f"Generated {datetime.now().strftime('%Y-%m-%d')}"
-        )
-
-    def new_page():
-        pdf.showPage()
-        add_footer()
-        return height - 60
-
-    y = height - 60
-
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(50, y, "DGS Sentinel AI")
-
-    y -= 25
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(50, y, "Executive Cyber Risk Assessment Report")
-
-    y -= 20
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(50, y, f"Prepared by: {COMPANY_NAME}")
-
-    y -= 15
-    pdf.drawString(
-        50,
-        y,
-        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-
-    y -= 35
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Executive Summary")
-
-    y -= 18
-    pdf.setFont("Helvetica", 9)
-
-    intro_lines = [
-        "DGS Sentinel AI provides executive-level visibility into cloud exposure, identity risk,",
-        "threat intelligence, and remediation priorities across monitored cloud environments.",
-        "This report summarizes key risk indicators, business impact areas, and recommended actions."
-    ]
-
-    for line in intro_lines:
-        pdf.drawString(50, y, line)
-        y -= 14
-
-    y -= 20
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Executive Metrics")
-
-    y -= 20
-    pdf.setFont("Helvetica", 10)
-
-    for key, value in summary.items():
-        clean_key = str(key).replace("_", " ").title()
-        pdf.drawString(65, y, f"{clean_key}: {value}")
-        y -= 15
-
-        if y < 80:
-            y = new_page()
-            pdf.setFont("Helvetica", 10)
-
-    y -= 20
-
-    if asset_summary:
-        pdf.setFont("Helvetica-Bold", 12)
-        pdf.drawString(50, y, "Asset & Client Exposure Summary")
-
-        y -= 20
-        pdf.setFont("Helvetica", 10)
-
-        for key, value in asset_summary.items():
-            clean_key = str(key).replace("_", " ").title()
-            pdf.drawString(65, y, f"{clean_key}: {value}")
-            y -= 15
-
-            if y < 80:
-                y = new_page()
-                pdf.setFont("Helvetica", 10)
-
-        y -= 20
-
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Risk Narrative")
-
-    y -= 20
-    pdf.setFont("Helvetica", 9)
-
-    for line in risk_narrative.splitlines():
-        clean_line = line.strip()
-
-        if clean_line:
-            pdf.drawString(65, y, clean_line[:110])
-            y -= 14
-
-            if y < 80:
-                y = new_page()
-                pdf.setFont("Helvetica", 9)
-
-    y -= 20
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "Top Remediation Priorities")
-
-    y -= 20
-    pdf.setFont("Helvetica", 8)
-
-    for item in remediation_playbook[:10]:
-        line = (
-            f"{item.get('Priority', '')} | "
-            f"{item.get('CVE ID', item.get('Asset', ''))} | "
-            f"{item.get('Remediation Priority', item.get('Issue', ''))} | "
-            f"{item.get('Business Impact', '')}"
-        )
-
-        pdf.drawString(65, y, line[:115])
-        y -= 14
-
-        if y < 80:
-            y = new_page()
-            pdf.setFont("Helvetica", 8)
-
-    y -= 20
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, y, "AI Executive Analysis")
-
-    y -= 20
-    pdf.setFont("Helvetica", 9)
-
-    for line in ai_analysis.splitlines():
-        clean_line = line.strip()
-
-        if clean_line:
-            pdf.drawString(65, y, clean_line[:110])
-            y -= 14
-
-            if y < 80:
-                y = new_page()
-                pdf.setFont("Helvetica", 9)
-
-    add_footer()
-    pdf.save()
-    buffer.seek(0)
-
-    return buffer
 
 
 def generate_caasm_pdf(
@@ -9544,59 +9346,35 @@ export_col1, export_col2, export_col3 = st.columns(3)
 
 csv_data = df.to_csv(index=False).encode("utf-8") if not df.empty else b""
 mitre_csv = mitre_df.to_csv(index=False).encode("utf-8") if not mitre_df.empty else b""
-asset_summary = {}
-
+report_context = {
+    "Active Client Context": selected_client_data[1] if selected_client_data else "DGS Internal / Default AWS Account",
+    "AWS Finding Scope": ("Shared legacy finding store; not attributed to the active client."
+                          if _current_user_is_global_admin() else
+                          "Unavailable for tenant-scoped users; legacy store lacks tenant ownership. Zero displayed findings do not establish a clean assessment."),
+    "Azure Finding Scope": "Current Azure session results; zero findings do not prove scan coverage.",
+}
+st.caption(report_context["AWS Finding Scope"])
 try:
-    from client_db import get_clients
-    from asset_db import get_all_assets_admin
-
-    pdf_clients = get_clients()
-    pdf_assets = get_all_assets_admin()
-
-    if pdf_assets:
-        pdf_asset_df = pd.DataFrame(
-            pdf_assets,
-            columns=[
-                "Asset ID",
-                "Asset Type",
-                "Account ID",
-                "Region",
-                "Hostname",
-                "Private IP",
-                "Public IP",
-                "State",
-                "Risk Score",
-                "Last Scan"
-            ]
-        )
-
-        asset_summary = {
-            "Total Clients": len(pdf_clients),
-            "Total Assets": len(pdf_asset_df),
-            "Average Asset Risk": round(pdf_asset_df["Risk Score"].mean(), 2),
-            "Critical Assets": len(pdf_asset_df[pdf_asset_df["Risk Score"] >= 80]),
-            "Public Assets": len(pdf_asset_df[pdf_asset_df["Public IP"].notna() & (pdf_asset_df["Public IP"] != "")]),
-            "Stopped Assets": len(pdf_asset_df[pdf_asset_df["State"] == "stopped"])
-        }
-    else:
-        asset_summary = {
-            "Total Clients": len(pdf_clients),
-            "Total Assets": 0,
-            "Average Asset Risk": 0,
-            "Critical Assets": 0,
-            "Public Assets": 0,
-            "Stopped Assets": 0
-        }
-
+    from asset_db import get_assets_for_access
+    asset_summary = load_export_inventory(
+        selected_client=selected_client_data,
+        client_keys=_current_user_client_keys(),
+        is_global_admin=_current_user_is_global_admin(),
+        visible_clients=_get_visible_clients(),
+        resolve_client_key=get_client_key,
+        read_assets=get_assets_for_access,
+    )
 except Exception:
-    asset_summary = {}
+    asset_summary = {"Inventory Scope": "Unavailable; no global inventory fallback was used."}
 
 pdf_buffer = generate_pdf(
     ai_analysis=ai_analysis,
     summary=summary,
     remediation_playbook=remediation_playbook,
     risk_narrative=risk_narrative,
-    asset_summary=asset_summary
+    asset_summary=asset_summary,
+    report_context=report_context,
+    company_name=COMPANY_NAME,
 )
 
 export_col1.download_button(
