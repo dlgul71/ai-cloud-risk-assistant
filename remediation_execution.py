@@ -1,17 +1,20 @@
-import hashlib
 import hmac
-import json
 import sqlite3
 from datetime import datetime, UTC
 
 from storage_paths import database_path
 from app_config import get_setting
+from remediation_evidence import (
+    EVIDENCE_AUTHENTICATION_TYPE,
+    build_execution_evidence as _build_execution_evidence,
+    calculate_evidence_hash,
+    evidence_key_id,
+)
 from remediation_audit import log_remediation_event
 from remediation_live_actions import execute_controlled_action
 
 # None resolves through DGS_DATA_DIR at call time; explicit overrides remain supported.
 DB_NAME = None
-EVIDENCE_AUTHENTICATION_TYPE = "HMAC-SHA256"
 
 
 def _database_path():
@@ -33,9 +36,7 @@ def _get_evidence_hmac_key():
 
 
 def _get_evidence_key_id(key):
-    return hashlib.sha256(
-        key.encode("utf-8")
-    ).hexdigest()[:16]
+    return evidence_key_id(key)
 
 
 def _get_previous_evidence_hmac_keys():
@@ -61,58 +62,7 @@ def _get_evidence_verification_keys():
 
 
 def _calculate_execution_evidence_hash(evidence, key=None):
-    signing_key = key or _get_evidence_hmac_key()
-
-    canonical_evidence = json.dumps(
-        evidence,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-
-    return hmac.new(
-        signing_key.encode("utf-8"),
-        canonical_evidence.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _build_execution_evidence(
-    action_id,
-    finding,
-    action_type,
-    approval_status,
-    execution_status,
-    execution_mode,
-    aws_account_id,
-    client_name,
-    role_arn,
-    adapter,
-    resource_id,
-    request_id,
-    verification_request_id,
-    verification_status,
-    result_message,
-    executed_at,
-):
-    return {
-        "action_id": action_id,
-        "finding": finding,
-        "action_type": action_type,
-        "approval_status": approval_status,
-        "execution_status": execution_status,
-        "execution_mode": execution_mode,
-        "aws_account_id": aws_account_id,
-        "client_name": client_name,
-        "role_arn": role_arn,
-        "adapter": adapter,
-        "resource_id": resource_id,
-        "request_id": request_id,
-        "verification_request_id": verification_request_id,
-        "verification_status": verification_status,
-        "result_message": result_message,
-        "executed_at": executed_at,
-    }
+    return calculate_evidence_hash(evidence, key or _get_evidence_hmac_key())
 
 
 def init_execution_db():

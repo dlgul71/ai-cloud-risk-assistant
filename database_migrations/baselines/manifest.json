@@ -1,0 +1,60 @@
+{
+  "databases": {
+    "ai_assets.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "ai_assets.sql",
+      "definition_sha256": "5c056c37d9556b4c8665fff951913adf2f591e07413cd4ec2cb9189446190c92",
+      "schema_sha256": "0dd90df35b289b393eee3c456299822141a3449072303ba3400e4b26a732e93a"
+    },
+    "assets.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "assets.sql",
+      "definition_sha256": "22e255b7249d63067d0ab292b1ac4080b308e7b6a2be6946e3bddf421e6dea41",
+      "schema_sha256": "b61dca8c0cec26046448d5d12501416feef72229a555acd11c0e497177d9833e"
+    },
+    "caasm_alerts.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "caasm_alerts.sql",
+      "definition_sha256": "9828d5d1c416d3a068af65a90711252dd8bb22ce8c7a88523c64c846e14353ec",
+      "schema_sha256": "c3d32c3d053751a75cd5a4bd54407b4ea926f2d34124df43d6041f3abf5274d3"
+    },
+    "clients.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "clients.sql",
+      "definition_sha256": "56b2ecd382e4488b6f51ae735600e5526c39b5b74e49e4bb3c47edddc2bf22be",
+      "schema_sha256": "bdd1a3546fa70750fd326a4b87d6494c6a9db75dedb602e599a37ba3ad712da0"
+    },
+    "dgs_sentinel.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "dgs_sentinel.sql",
+      "definition_sha256": "72cfb9cd6c5f24bbece849d7c10342ed927b6735c6025a035b694566bcb18c29",
+      "schema_sha256": "ca062629887dba5060503ddc419b8e598c5e07763c61ba2a685a3f3ed9d31a0d"
+    },
+    "operational_monitoring.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "operational_monitoring.sql",
+      "definition_sha256": "1d23c9a0bc97f3ce2695b32f10f1ec600f292deb46e1c00c32910cda1adab610",
+      "schema_sha256": "5b5101993dd4de5bcd31c94eb2d6c2dc6559c8c8d127f6c5e4c7d264afe59b8b"
+    },
+    "remediation.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "remediation.sql",
+      "definition_sha256": "84801eac4759c9410026200fcd003984176b292da72f2957c953570debd7b0a3",
+      "schema_sha256": "c700ffee6c2d225e4121ca8b9f1b7cfbda5524490047b9a3aa132e1f972c49ac"
+    },
+    "remediation_actions.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "remediation_actions.sql",
+      "definition_sha256": "3be472e5880704fb70e34de20894e409569a886f231d121eb3a2c46bc18e62b3",
+      "schema_sha256": "4244a9245af747c6d6043bfc0250c49242eeb6115f7bc01ecaf90dff49fa57f8"
+    },
+    "users.db": {
+      "baseline_id": "fresh_09ce292",
+      "definition": "users.sql",
+      "definition_sha256": "963f9a6d29f05a47107d1c452e55a7f44e0fefb9b9c3c461573592295af6deeb",
+      "schema_sha256": "edfdf904ee488ac11cd5fbc1886e6f407e79c1d8871c8ed3a1a4c86908bd1d62"
+    }
+  },
+  "format_version": 1,
+  "source_commit": "09ce292bee5e57e88c2397da23a4fe0ae89c398f"
+}
