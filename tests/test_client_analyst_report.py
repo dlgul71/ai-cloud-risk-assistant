@@ -54,6 +54,15 @@ def isolated_report(monkeypatch):
             return super().drawString(x, y, text, *args, **kwargs)
 
     monkeypatch.setattr(report.canvas, "Canvas", RecordingCanvas)
+    from reportlab.pdfgen.textobject import PDFTextObject
+    original_run = PDFTextObject._textOut
+
+    def record_run(self, text, TStar=0):
+        rendered.append((self._canvas.getPageNumber(), None, None, text))
+        return original_run(self, text, TStar)
+
+    monkeypatch.setattr(PDFTextObject, "_textOut", record_run)
+
     return context, clients, build, rendered
 
 
@@ -248,3 +257,32 @@ def test_app_pdf_exports_forward_authenticated_access():
             assert isinstance(value, ast.Call)
             assert isinstance(value.func, ast.Name)
             assert value.func.id == helper
+
+
+def test_long_words_complete_content_and_single_footer_per_page(isolated_report, monkeypatch):
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from reportlab.pdfgen.textobject import PDFTextObject
+    widths = []
+    original = PDFTextObject._textOut
+
+    def capture(self, text, TStar=0):
+        widths.append(stringWidth(text, self._fontname, self._fontsize))
+        return original(self, text, TStar)
+
+    monkeypatch.setattr(PDFTextObject, "_textOut", capture)
+    isolated_report[0]["remediation_items_with_context"] = [
+        dict(finding("FINDING_START " + "x" * 700 + " FINDING_END", score=100-i),
+             recommendation="Review affected resources and validate evidence. " * 30 + "RECOMMENDATION_END")
+        for i in range(10)
+    ]
+    generate()
+    text = render_text(isolated_report)
+    assert text.count("FINDING_END") == 10
+    assert text.count("RECOMMENDATION_END") == 10
+    assert max(widths) <= 512.1
+    footers = [row for row in isolated_report[3] if row[2] == 36]
+    pages = {row[0] for row in isolated_report[3]}
+    assert len(pages) > 1
+    assert {row[0] for row in footers} == pages
+    assert len(footers) == len(pages)
+    assert "Assessment Notes" in text
