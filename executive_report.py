@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from io import BytesIO
-from xml.sax.saxutils import escape
+from html import escape
 
 from pathlib import Path
 
@@ -96,7 +96,7 @@ def generate_pdf(ai_analysis, summary, remediation_playbook, risk_narrative="",
 
     def paragraph(value, style="ReportBody"):
         text = str(value).replace("\u2014", "-").replace("\u2013", "-")
-        story.append(Paragraph(escape(text).replace("\n", "<br/>"), styles[style]))
+        story.append(Paragraph(escape(text, quote=False).replace("\n", "<br/>"), styles[style]))
 
     def section(title):
         paragraph(title, "ReportSection")
