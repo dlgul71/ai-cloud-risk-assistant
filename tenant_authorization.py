@@ -87,6 +87,7 @@ TENANT_SCOPED_PAGES = frozenset(
         "Executive Dashboard",
         "SOC Dashboard",
         "Asset Dashboard",
+        "Linux Security Monitoring",
     }
 )
 
