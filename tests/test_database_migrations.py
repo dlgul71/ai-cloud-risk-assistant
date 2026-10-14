@@ -189,10 +189,10 @@ def test_readonly_inspection_sees_committed_wal_history(tmp_path):
 
 
 def test_default_catalogs_do_not_bless_fixture_registry(tmp_path):
-    assert all(migrations.get_migrations(name) == () for name in SQLITE_DATABASE_NAMES)
+    assert all(len(migrations.get_migrations(name)) == 1 for name in SQLITE_DATABASE_NAMES)
     path = tmp_path / "assets.db"
     make_registry(path, [record(BASELINE)])
-    assert migrations.inspect_database("assets.db", path)["status"] == "UNSUPPORTED_VERSION"
+    assert migrations.inspect_database("assets.db", path)["status"] == "HISTORY_MISMATCH"
 
 
 def test_cli_default_json_reports_all_nine_missing_without_creating_files(tmp_path, monkeypatch, capsys):

@@ -5,6 +5,7 @@ shared backup/health inventory update. This is a code-derived inventory of fresh
 schemas, not certification of a deployed database or an adopted migration
 baseline. Existing installations may differ after legacy inline upgrades.
 A shared registry contract and read-only history/checksum inspector now exist,
+and strict recognition of reviewed fresh shapes is available for all nine domains,
 but no domain has an approved migration catalog or an adopted version registry.
 See [migration status](../operations/DATABASE-MIGRATION-STATUS.md).
 
@@ -509,3 +510,7 @@ See [ADR-0001](ADR-0001-DATABASE-MIGRATION-STRATEGY.md) for the migration
 policy and [scan findings storage](../operations/SCAN-FINDINGS-STORAGE.md)
 and [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md)
 for cutover and rollback requirements.
+
+## Reviewed fresh-schema recognition
+
+The `baseline` command compares schema metadata and tokenized SQL to reviewed candidates at [database_migrations/baselines](../../database_migrations/baselines). These definitions also include tenant-key triggers absent from the illustrative SQL blocks above. Tests compare every candidate with its real fresh initializer. Historical inline upgrade variants remain UNKNOWN unless separately reviewed; matching fresh shape does not validate stored data or adopt a migration version. See [baseline recognition](../operations/DATABASE-BASELINE-RECOGNITION.md).
