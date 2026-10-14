@@ -1,6 +1,6 @@
 # ADR-0001: Database and Migration Strategy
 
-**Status:** Accepted for Phase 1; storage, backup inventory, and read-only registry inspection implemented; adoption/apply pending
+**Status:** Accepted for Phase 1; storage, backup inventory, registry inspection, and fresh-schema recognition implemented; adoption/apply pending
 **Decision date:** September 9, 2026
 **Decision owners:** DGS Sentinel AI maintainers
 **Applies to:** Persistent application data and schema evolution
@@ -173,7 +173,7 @@ Baseline adoption must:
 
 1. Create and verify a complete backup.
 2. Inspect required tables, columns, indexes, and constraints.
-3. Determine the verified legacy schema state.
+3. Determine the verified legacy schema state. The read-only `baseline` command recognizes only reviewed current fresh shapes; historical variants and data invariants still require separate review.
 4. Reject unknown or ambiguous schemas.
 5. Record the approved baseline version.
 6. Preserve existing tenant identifiers and relationships.
@@ -559,7 +559,7 @@ Reverse migrations can destroy data or create false confidence. Verified backup 
 6. Implement explicit status, plan, apply, and verify operations — read-only status implemented; other operations remain pending.
 7. Add migration locking.
 8. Add fresh-database tests.
-9. Add existing-database baseline adoption.
+9. Add existing-database baseline adoption — strict read-only fresh-schema recognition implemented; historical recognition and controlled adoption remain pending.
 10. Convert inline schema changes into ordered migrations.
 11. Validate complete deployment backup scope (all nine SQLite defaults are now included).
 12. Add migration and restoration CI tests.
@@ -599,3 +599,5 @@ Separate decisions are still required for:
 - Disaster-recovery architecture.
 
 Execution and audit storage now share the DGS_DATA_DIR default, with regressions for SQLite backup relocation, unchanged records and signed evidence, and read-only-container persistence. See [execution and audit storage](../operations/REMEDIATION-ACTIONS-STORAGE.md). Existing databases require explicit relocation; the default backup inventory now includes remediation_actions.db. This path change does not implement schema versioning or certify any production cutover.
+
+Read-only fresh-schema recognition covers all nine domains through reviewed definition checksums and schema fingerprints, including triggers and constraints. See [baseline recognition](../operations/DATABASE-BASELINE-RECOGNITION.md). Recognition is not data certification or version adoption; no migration catalog or startup compatibility enforcement is enabled by this step.

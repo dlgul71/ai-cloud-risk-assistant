@@ -84,3 +84,5 @@ table, index, foreign key, tenant boundary, authentication state, or signing
 evidence. Even a matching fixture catalog's CURRENT result only validates migration
 metadata. Plan/apply/adopt/verify commands, schema recognition, startup compatibility,
 locking, and recovery execution remain future work under ADR-0001.
+
+Read-only fresh-schema recognition is now available separately through `python -m scripts.database_migrations_cli baseline`. See [baseline recognition](DATABASE-BASELINE-RECOGNITION.md). It does not adopt registry versions or change the meaning of CURRENT.
