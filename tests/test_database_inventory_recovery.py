@@ -20,6 +20,7 @@ EXPECTED_DATABASES = (
     "caasm_alerts.db",
     "dgs_sentinel.db",
     "remediation_actions.db",
+    "linux_telemetry.db",
 )
 ADDED_DATABASES = EXPECTED_DATABASES[4:]
 
@@ -95,14 +96,14 @@ def test_default_backup_verifies_and_restores_every_database(data_directory, tmp
     package = Path(result["backup_directory"])
     manifest = json.loads((package / "manifest.json").read_text())
     assert result["status"] == "PASS"
-    assert result["database_count"] == 9
+    assert result["database_count"] == 10
     assert result["missing_databases"] == []
     assert [record["source_name"] for record in manifest["files"]] == list(EXPECTED_DATABASES)
-    assert backup_recovery.verify_backup(package)["verified_count"] == 9
+    assert backup_recovery.verify_backup(package)["verified_count"] == 10
 
     restored = tmp_path / "restored"
     recovery = backup_recovery.restore_backup(package, restored)
-    assert recovery["restored_count"] == 9
+    assert recovery["restored_count"] == 10
     for name in EXPECTED_DATABASES:
         assert snapshot(restored / name) == before[name]
         assert snapshot(data_directory / name) == before[name]
@@ -120,7 +121,7 @@ def test_missing_optional_files_are_reported_without_creation(data_directory, tm
     manifest = json.loads((package / "manifest.json").read_text())
     assert manifest["missing_databases"] == list(ADDED_DATABASES)
     checks = health_checks.check_databases()
-    assert [row["Status"] for row in checks] == ["PASS"] * 4 + ["WARN"] * 5
+    assert [row["Status"] for row in checks] == ["PASS"] * 4 + ["WARN"] * 6
     assert all(not (data_directory / name).exists() for name in ADDED_DATABASES)
 
     # Verification checks packaged files; it does not certify deployment completeness.

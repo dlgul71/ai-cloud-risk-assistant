@@ -2,7 +2,7 @@
 
 Backup and health defaults share storage_paths.SQLITE_DATABASE_NAMES:
 assets.db, clients.db, remediation.db, operational_monitoring.db, users.db,
-ai_assets.db, caasm_alerts.db, dgs_sentinel.db, and remediation_actions.db.
+ai_assets.db, caasm_alerts.db, dgs_sentinel.db, remediation_actions.db, and linux_telemetry.db.
 Paths resolve under DGS_DATA_DIR at call time; unset/blank settings retain
 working-directory behavior. Inventory resolution creates no databases.
 
@@ -33,7 +33,7 @@ missing_databases and verify actual deployment scope before accepting a backup.
 ## Backup and restore rehearsal
 
 Stop writers when a consistent point across multiple databases is required.
-The SQLite backup API captures committed WAL data for each file, but the nine
+The SQLite backup API captures committed WAL data for each file, but the ten
 files are backed up sequentially rather than in one global transaction.
 
 Create the default package:
@@ -65,9 +65,9 @@ See the [database inventory](../architecture/DATABASE-INVENTORY.md) for scope.
 
 ## Regression coverage
 
-Tests cover shared call-time defaults, nine-file verified restore with unchanged
+Tests cover shared call-time defaults, ten-file verified restore with unchanged
 schemas, records, composite tenant IDs, binary payloads and audit history;
 missing-file warnings without initialization; empty-package refusal; corruption
-in each of the five newly included stores; committed WAL recovery; and default
+in each of the six newly included stores; committed WAL recovery; and default
 versus explicit CLI scope. These are isolated temporary test databases and do
 not certify the completeness of an unseen production deployment.

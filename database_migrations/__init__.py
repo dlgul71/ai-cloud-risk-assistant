@@ -61,7 +61,7 @@ class Migration:
 def get_migrations(database_name: str) -> tuple[Migration, ...]:
     """Return the reviewed catalog for a known domain.
 
-    No baselines/migrations are approved yet; all nine catalogs are empty.
+    No baselines/migrations are approved yet; all ten catalogs are empty.
     """
 
     if database_name not in SQLITE_DATABASE_NAMES:

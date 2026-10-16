@@ -262,4 +262,5 @@ def test_default_database_files_use_data_directory(
         tmp_path / "caasm_alerts.db",
         tmp_path / "dgs_sentinel.db",
         tmp_path / "remediation_actions.db",
+        tmp_path / "linux_telemetry.db",
     )

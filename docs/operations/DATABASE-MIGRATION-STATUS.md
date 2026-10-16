@@ -7,7 +7,7 @@ initializers, enforce startup compatibility, or add migration locking.
 
 ## Commands
 
-Inspect all nine default SQLite paths resolved through DGS_DATA_DIR:
+Inspect all ten default SQLite paths resolved through DGS_DATA_DIR:
 
 ```bash
 python -m scripts.database_migrations_cli status
@@ -21,7 +21,7 @@ python -m scripts.database_migrations_cli status --database users.db=/path/to/us
 ```
 
 Repeat --database for multiple domains. These selections replace default scope.
-Each domain must be one of the nine filenames in storage_paths.SQLITE_DATABASE_NAMES
+Each domain must be one of the ten filenames in storage_paths.SQLITE_DATABASE_NAMES
 and may appear only once. Do not infer that module DB_NAME overrides are discovered.
 
 ## Registry contract and catalog
@@ -34,7 +34,7 @@ whitespace; timestamps must contain an explicit UTC offset. Applied SQL must rem
 immutable after release. This module never executes descriptor SQL.
 
 No domain currently has an approved migration or baseline: get_migrations returns
-an empty tuple for all nine domains. Existing files without a registry are
+an empty tuple for all ten domains. Existing files without a registry are
 UNVERSIONED; they are not recognized or adopted by status. A populated registry
 is UNSUPPORTED_VERSION with the current empty catalogs. Do not manually insert
 registry rows to suppress these results. Adoption must later validate deployed
