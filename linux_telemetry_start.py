@@ -4,6 +4,7 @@ import argparse
 import signal
 from pathlib import Path
 
+from linux_telemetry_credentials import load_credential_hashes
 from linux_telemetry_preflight import validate_receiver_configuration
 from linux_telemetry_receiver import LinuxTelemetryReceiver
 from linux_telemetry_service import create_local_server
@@ -42,6 +43,7 @@ def main(argv=None):
         store=store,
         clients_db_path=args.data_dir / "clients.db",
         credential_hashes=credentials,
+        credential_loader=lambda: load_credential_hashes(args.credentials_file),
     )
 
     server = create_local_server(receiver, port=args.port)

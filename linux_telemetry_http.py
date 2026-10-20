@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 from http.server import BaseHTTPRequestHandler
+from linux_telemetry_receiver import CredentialConfigurationUnavailable
 
 MAX_REQUEST_BYTES = 128 * 1024
 EVENT_PATH = "/v1/linux/events"
@@ -85,6 +86,8 @@ class LinuxTelemetryHTTPHandler(BaseHTTPRequestHandler):
 
             result = self.receiver.accept_event(token, payload)
 
+        except CredentialConfigurationUnavailable:
+            return self.respond(503, {"error": "Service unavailable"})
         except PermissionError:
             return self.respond(401, {"error": "Unauthorized"})
         except (ValueError, TypeError, UnicodeError):

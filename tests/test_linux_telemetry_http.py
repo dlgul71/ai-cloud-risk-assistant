@@ -63,12 +63,12 @@ def server_fixture(tmp_path, monkeypatch):
     thread.join(timeout=3)
 
 
-def send_event(url, token=TOKEN, uid=UID):
+def send_event(url, token=TOKEN, uid=UID, event_uid=UID):
     payload = {
         "schema_version": "1.0",
-        "event_uid": UID,
+        "event_uid": event_uid,
         "event": {
-            "event_uid": UID,
+            "event_uid": event_uid,
             "event_id": "1791905968.182:446",
             "source": "linux_audit",
         },
@@ -143,3 +143,135 @@ def test_http_storage_failure_does_not_confirm(server_fixture):
 
     assert error.value.code == 503
     assert store.get_for_client(client_key) == []
+
+
+def test_http_rotates_and_revokes_credentials(server_fixture, tmp_path):
+    from linux_telemetry_credentials import load_credential_hashes
+
+    url, store, receiver, client_key = server_fixture
+    new_token = "replacement-test-token-" + "y" * 40
+
+    old_hash = hashlib.sha256(TOKEN.encode()).hexdigest()
+    new_hash = hashlib.sha256(new_token.encode()).hexdigest()
+
+    credentials_file = tmp_path / "rotation-credentials.json"
+
+    def replace_credentials(mapping):
+        credentials_file.write_text(json.dumps(mapping))
+        credentials_file.chmod(0o600)
+
+    replace_credentials({old_hash: client_key})
+    receiver.credential_loader = lambda: load_credential_hashes(
+        credentials_file
+    )
+
+    assert send_event(url, token=TOKEN)[0] == 200
+
+    # Overlap during planned rotation.
+    replace_credentials({
+        old_hash: client_key,
+        new_hash: client_key,
+    })
+    assert send_event(url, token=new_token)[0] == 200
+
+    # Revoke old token without restarting the HTTP server.
+    replace_credentials({new_hash: client_key})
+
+    with pytest.raises(urllib.error.HTTPError) as error:
+        send_event(url, token=TOKEN)
+
+    assert error.value.code == 401
+    assert send_event(url, token=new_token)[0] == 200
+    assert len(store.get_for_client(client_key)) == 1
+
+
+def test_http_fails_closed_if_credentials_unavailable(
+    server_fixture, tmp_path
+):
+    from linux_telemetry_credentials import load_credential_hashes
+
+    url, store, receiver, client_key = server_fixture
+    credentials_file = tmp_path / "runtime-credentials.json"
+    credentials_file.write_text(json.dumps({
+        hashlib.sha256(TOKEN.encode()).hexdigest(): client_key
+    }))
+    credentials_file.chmod(0o600)
+
+    receiver.credential_loader = lambda: load_credential_hashes(
+        credentials_file
+    )
+
+    credentials_file.unlink()
+
+    with pytest.raises(urllib.error.HTTPError) as error:
+        send_event(url, token=TOKEN)
+
+    assert error.value.code == 503
+    assert store.get_for_client(client_key) == []
+
+    # Restoring a valid protected file restores authentication.
+    credentials_file.write_text(json.dumps({
+        hashlib.sha256(TOKEN.encode()).hexdigest(): client_key
+    }))
+    credentials_file.chmod(0o600)
+
+    assert send_event(url, token=TOKEN)[0] == 200
+
+
+def test_revoking_one_client_preserves_other_client(
+    server_fixture, tmp_path
+):
+    from linux_telemetry_credentials import load_credential_hashes
+
+    url, store, receiver, first_client = server_fixture
+
+    second_client = client_db.add_client(
+        "Second Synthetic Client", None, None, "Testing"
+    )
+
+    second_token = "second-synthetic-token-" + "z" * 40
+    first_hash = hashlib.sha256(TOKEN.encode()).hexdigest()
+    second_hash = hashlib.sha256(second_token.encode()).hexdigest()
+
+    credentials_file = tmp_path / "isolation-credentials.json"
+
+    def install(mapping):
+        credentials_file.write_text(json.dumps(mapping))
+        credentials_file.chmod(0o600)
+
+    install({
+        first_hash: first_client,
+        second_hash: second_client,
+    })
+
+    receiver.credential_loader = lambda: load_credential_hashes(
+        credentials_file
+    )
+
+    assert send_event(url, token=TOKEN)[0] == 200
+
+    second_uid = "b" * 64
+    assert send_event(
+        url, token=second_token,
+        uid=second_uid, event_uid=second_uid
+    )[0] == 200
+
+    assert len(store.get_for_client(first_client)) == 1
+    assert len(store.get_for_client(second_client)) == 1
+
+    # Revoke Client A while preserving Client B.
+    install({second_hash: second_client})
+
+    with pytest.raises(urllib.error.HTTPError) as error:
+        send_event(url, token=TOKEN)
+
+    assert error.value.code == 401
+
+    next_uid = "c" * 64
+    assert send_event(
+        url, token=second_token,
+        uid=next_uid, event_uid=next_uid
+    )[0] == 200
+
+    assert len(store.get_for_client(first_client)) == 1
+    assert len(store.get_for_client(second_client)) == 2

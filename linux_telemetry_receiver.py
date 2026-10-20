@@ -8,6 +8,10 @@ from pathlib import Path
 from linux_telemetry_store import LinuxTelemetryStore
 
 
+class CredentialConfigurationUnavailable(Exception):
+    pass
+
+
 class LinuxTelemetryReceiver:
     def __init__(
         self,
@@ -15,10 +19,12 @@ class LinuxTelemetryReceiver:
         store: LinuxTelemetryStore,
         clients_db_path,
         credential_hashes,
+        credential_loader=None,
     ):
         self.store = store
         self.clients_db_path = Path(clients_db_path)
         self.credential_hashes = dict(credential_hashes)
+        self.credential_loader = credential_loader
 
     def _authenticate(self, token):
         if not isinstance(token, str) or len(token) < 32:
@@ -30,9 +36,20 @@ class LinuxTelemetryReceiver:
 
         client_key = None
 
-        for expected_hash, assigned_key in (
-            self.credential_hashes.items()
-        ):
+        credential_hashes = self.credential_hashes
+        if self.credential_loader is not None:
+            try:
+                credential_hashes = self.credential_loader()
+            except (OSError, ValueError, TypeError) as exc:
+                raise CredentialConfigurationUnavailable(
+                    'Credential configuration unavailable'
+                ) from exc
+            if not isinstance(credential_hashes, dict) or not credential_hashes:
+                raise CredentialConfigurationUnavailable(
+                    'Credential configuration unavailable'
+                )
+
+        for expected_hash, assigned_key in credential_hashes.items():
             if hmac.compare_digest(
                 supplied_hash, expected_hash
             ):
