@@ -123,3 +123,46 @@ def test_failed_replacement_preserves_original(
     }
 
     assert list(path.parent.iterdir()) == [path]
+
+
+def test_directory_sync_failure_reports_active_replacement(
+    credential_file, monkeypatch
+):
+    import os
+    import stat
+    import linux_telemetry_credential_updates as updates
+
+    path, old_hash = credential_file
+
+    new_hash = hashlib.sha256(
+        b"directory-sync-failure-test"
+    ).hexdigest()
+
+    real_fsync = os.fsync
+
+    def fail_directory_sync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode):
+            raise OSError("Simulated directory sync failure")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(
+        updates.os,
+        "fsync",
+        fail_directory_sync,
+    )
+
+    with pytest.raises(OSError, match="directory sync failure"):
+        replace_credential_hashes_atomically(
+            path,
+            {new_hash: "demo-client"},
+        )
+
+    # Rename already succeeded before directory sync failed.
+    assert load_credential_hashes(path) == {
+        new_hash: "demo-client"
+    }
+    assert old_hash not in load_credential_hashes(path)
+
+    # No abandoned temporary credential files.
+    assert list(path.parent.iterdir()) == [path]
