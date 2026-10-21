@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 
@@ -91,6 +92,32 @@ def test_real_process_ingests_and_shuts_down(tmp_path):
             method="POST",
         )
 
+        # Verify an invalid token cannot store an event.
+        invalid_request = urllib.request.Request(
+            f"http://127.0.0.1:{port}/v1/linux/events",
+            data=json.dumps(payload).encode(),
+            headers={
+                "Authorization": "Bearer invalid-token",
+                "Content-Type": "application/json",
+                "Idempotency-Key": uid,
+            },
+            method="POST",
+        )
+
+        try:
+            urllib.request.urlopen(invalid_request, timeout=5)
+        except urllib.error.HTTPError as error:
+            assert error.code == 401
+        else:
+            raise AssertionError("Invalid token was accepted")
+
+        with sqlite3.connect(data_dir / "linux_telemetry.db") as db:
+            unauthorized_count = db.execute(
+                "SELECT COUNT(*) FROM linux_events WHERE event_uid = ?",
+                (uid,),
+            ).fetchone()[0]
+
+        assert unauthorized_count == 0
         with urllib.request.urlopen(request, timeout=5) as response:
             result = json.loads(response.read())
             assert response.status == 200
