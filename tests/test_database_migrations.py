@@ -195,7 +195,7 @@ def test_default_catalogs_do_not_bless_fixture_registry(tmp_path):
     assert migrations.inspect_database("assets.db", path)["status"] == "UNSUPPORTED_VERSION"
 
 
-def test_cli_default_json_reports_all_nine_missing_without_creating_files(tmp_path, monkeypatch, capsys):
+def test_cli_default_json_reports_all_ten_missing_without_creating_files(tmp_path, monkeypatch, capsys):
     data = tmp_path / "missing-data"
     monkeypatch.setenv("DGS_DATA_DIR", str(data))
     assert cli.main(["status", "--json"]) == 2

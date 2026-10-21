@@ -21,6 +21,7 @@ See [migration status](../operations/DATABASE-MIGRATION-STATUS.md).
 | `caasm_alerts.db` | [`caasm_alert_db.py`](../../caasm_alert_db.py) | DGS_DATA_DIR | Yes | Global fingerprint uniqueness; no client_key column. |
 | `dgs_sentinel.db` | [`db.py`](../../db.py) | DGS_DATA_DIR | Yes | Legacy scan findings; no tenant or account identifier. |
 | `remediation_actions.db` | [`remediation_execution.py`](../../remediation_execution.py), [`remediation_audit.py`](../../remediation_audit.py) | DGS_DATA_DIR | Yes | Execution and audit records; no client_key column. |
+| `linux_telemetry.db` | [`linux_telemetry_store.py`](../../linux_telemetry_store.py) | DGS_DATA_DIR | Yes | Tenant-associated Linux security events. |
 
 DGS_DATA_DIR paths use the shared storage helper and resolve at call time.
 When DGS_DATA_DIR is unset, that helper preserves working-directory behavior.
@@ -31,7 +32,7 @@ the runtime user; modules do not all create missing directories identically.
 ## Backup and recovery scope
 
 Backup and health defaults share storage_paths.SQLITE_DATABASE_NAMES and resolve
-all nine paths under DGS_DATA_DIR at call time. Existing explicit backup lists
+all ten paths under DGS_DATA_DIR at call time. Existing explicit backup lists
 and health DATABASE_FILES overrides still replace the default scope. Module
 DB_NAME overrides and legacy working-directory copies require explicit paths;
 the inventory does not discover arbitrary external files.

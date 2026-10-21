@@ -1296,6 +1296,7 @@ with st.sidebar:
             "Client Accounts",
             "User Administration",
             "Client Security Dashboard",
+            "Linux Security Monitoring",
             "Asset Dashboard",
             "System Health",
         ],
@@ -1369,6 +1370,139 @@ if auto_refresh and AUTOREFRESH_AVAILABLE:
 # CLIENT ACCOUNTS PAGE
 # ============================================================
 
+
+
+if page == "Linux Security Monitoring":
+
+    import sqlite3
+    from linux_telemetry_store import LinuxTelemetryStore
+    from linux_security_dashboard import load_linux_security_summary
+    from tenant_authorization import can_access_client
+    from storage_paths import database_path
+
+    st.title("Linux Security Monitoring")
+    st.caption(
+        "Tenant-scoped Linux audit telemetry and security activity"
+    )
+
+    visible_clients = _get_visible_clients()
+
+    if not visible_clients:
+        st.info("No authorized client accounts are available.")
+
+    elif get_client_key is None:
+        st.error("Client tenant-key lookup is unavailable.")
+
+    else:
+        selection = st.selectbox(
+            "Select Client",
+            range(len(visible_clients)),
+            format_func=lambda i: sanitize_text(
+                str(visible_clients[i][1])
+            ),
+            key="linux_security_client_selector",
+        )
+
+        selected_client = visible_clients[selection]
+        client_key = get_client_key(selected_client[0])
+
+        if not client_key or not can_access_client(
+            st.session_state, client_key
+        ):
+            st.error("Access to this client is not authorized.")
+
+        else:
+            telemetry_path = database_path("linux_telemetry.db")
+
+            if not telemetry_path.is_file():
+                st.info(
+                    "No persistent Linux telemetry database "
+                    "has been configured yet."
+                )
+
+            else:
+                try:
+                    store = LinuxTelemetryStore(telemetry_path)
+
+                    summary = load_linux_security_summary(
+                        store,
+                        st.session_state,
+                        client_key,
+                    )
+
+                except (sqlite3.Error, OSError, ValueError):
+                    logger.exception(
+                        "Linux telemetry dashboard load failed"
+                    )
+                    st.error(
+                        "Linux telemetry is unavailable. "
+                        "Check application logs."
+                    )
+
+                else:
+                    c1, c2, c3, c4 = st.columns(4)
+
+                    c1.metric(
+                        "Total Events",
+                        summary["total_events"],
+                    )
+                    c2.metric(
+                        "Critical",
+                        summary["critical_events"],
+                    )
+                    c3.metric(
+                        "High",
+                        summary["high_events"],
+                    )
+                    c4.metric(
+                        "Medium / Low",
+                        (
+                            summary["medium_events"]
+                            + summary["low_events"]
+                        ),
+                    )
+
+                    st.subheader("Recent Linux Security Events")
+
+                    recent = summary["recent_events"]
+
+                    if not recent:
+                        st.info(
+                            "No Linux security events have "
+                            "been received for this client."
+                        )
+                    else:
+                        rows = [
+                            {
+                                "Timestamp": event.get(
+                                    "timestamp", ""
+                                ),
+                                "Event ID": event.get(
+                                    "event_id", ""
+                                ),
+                                "Severity": event.get(
+                                    "severity", "unknown"
+                                ),
+                                "Source": event.get(
+                                    "source", ""
+                                ),
+                                "Process": event.get(
+                                    "process", ""
+                                ),
+                                "File Path": event.get(
+                                    "file_path", ""
+                                ),
+                            }
+                            for event in recent
+                        ]
+
+                        st.dataframe(
+                            sanitize_dataframe(
+                                pd.DataFrame(rows)
+                            ),
+                            hide_index=True,
+                            use_container_width=True,
+                        )
 
 
 if page == "SOC Dashboard":
@@ -3156,39 +3290,45 @@ if page == "Client Security Dashboard":
 
         st.subheader("Client Security Report")
 
-        from client_analyst_report import (
-            generate_client_analyst_pdf
-        )
+        if not str(aws_account_id or "").strip():
+            st.info(
+                "AWS security reports require an AWS account ID. "
+                "Linux Security Monitoring remains available."
+            )
+        else:
+            from client_analyst_report import (
+                generate_client_analyst_pdf
+            )
 
-        client_security_pdf = generate_client_analyst_pdf(
-            client_name=client_name,
-            aws_account_id=aws_account_id,
-            client_keys=_current_user_client_keys(),
-            is_global_admin=_current_user_is_global_admin(),
-        )
+            client_security_pdf = generate_client_analyst_pdf(
+                client_name=client_name,
+                aws_account_id=aws_account_id,
+                client_keys=_current_user_client_keys(),
+                is_global_admin=_current_user_is_global_admin(),
+            )
 
-        report_safe_client_name = (
-            sanitize_text(client_name)
-            .lower()
-            .replace(" ", "_")
-            .replace("/", "_")
-        )
+            report_safe_client_name = (
+                sanitize_text(client_name)
+                .lower()
+                .replace(" ", "_")
+                .replace("/", "_")
+            )
 
-        demo_download_button(
-            label="Download Client Security Report PDF",
-            data=client_security_pdf,
-            file_name=(
-                f"dgs_sentinel_{report_safe_client_name}"
-                "_security_report.pdf"
-            ),
-            mime="application/pdf"
-        )
+            demo_download_button(
+                label="Download Client Security Report PDF",
+                data=client_security_pdf,
+                file_name=(
+                    f"dgs_sentinel_{report_safe_client_name}"
+                    "_security_report.pdf"
+                ),
+                mime="application/pdf"
+            )
 
-        demo_caption(
-            "This report is generated from saved read-only assessment "
-            "data for the selected AWS account. It includes executive "
-            "metrics, remediation priorities, and recommended focus areas."
-        )
+            demo_caption(
+                "This report is generated from saved read-only assessment "
+                "data for the selected AWS account. It includes executive "
+                "metrics, remediation priorities, and recommended focus areas."
+            )
 
 
 if page == "Asset Dashboard":

@@ -19,6 +19,7 @@ SQLITE_DATABASE_NAMES = (
     "caasm_alerts.db",
     "dgs_sentinel.db",
     "remediation_actions.db",
+    "linux_telemetry.db",
 )
 
 
